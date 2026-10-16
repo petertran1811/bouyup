@@ -1,0 +1,19 @@
+# BuoyUp v4 runtime (versions tested on 2026-10-14 with Python 3.12)
+fastapi==0.141.1
+starlette==1.6.0
+uvicorn[standard]==0.53.0
+pydantic==2.13.5
+pydantic-settings==2.15.0
+SQLAlchemy==2.0.54
+httpx==0.28.1
+anyio==4.15.1
+structlog==26.1.0
+cryptography==50.0.1
+# Only used when GEMINI_API_KEY is set instead of an OpenAI-compatible LLM_HOST
+google-genai==2.24.0
+
+# Law retrieval (RAG): local multilingual embeddings; without them search falls back to BM25.
+fastembed==0.4.2
+
+# Face authentication (BackEnd/src/Reid)
+-r Reid/requirements.txt

@@ -1,0 +1,49 @@
+{
+ "version": "challenger-v1",
+ "simulated": true,
+ "note": "Huấn luyện trên dữ liệu tổng hợp (mô phỏng) để trình diễn; phải huấn luyện lại trên nhãn trả nợ thật.",
+ "trained_on": {
+  "rows": 4800,
+  "holdout_rows": 1200,
+  "seed": 20261016,
+  "default_rate": 0.1118,
+  "holdout_auc": 0.6978
+ },
+ "features": [
+  "price_deviation",
+  "supplier_linked",
+  "supplier_new",
+  "inventory_ratio",
+  "sales_spike_ratio",
+  "b2b_sales_share",
+  "statement_deviation"
+ ],
+ "mean": {
+  "price_deviation": 0.093638,
+  "supplier_linked": 0.061458,
+  "supplier_new": 0.199167,
+  "inventory_ratio": 1.061653,
+  "sales_spike_ratio": 1.047329,
+  "b2b_sales_share": 0.170685,
+  "statement_deviation": 0.025173
+ },
+ "std": {
+  "price_deviation": 0.085444,
+  "supplier_linked": 0.240169,
+  "supplier_new": 0.399374,
+  "inventory_ratio": 0.383911,
+  "sales_spike_ratio": 0.322905,
+  "b2b_sales_share": 0.134959,
+  "statement_deviation": 0.056037
+ },
+ "coef": {
+  "price_deviation": 0.294015,
+  "supplier_linked": 0.36868,
+  "supplier_new": 0.22315,
+  "inventory_ratio": 0.356048,
+  "sales_spike_ratio": 0.311339,
+  "b2b_sales_share": 0.262876,
+  "statement_deviation": 0.164793
+ },
+ "intercept": -2.317103
+}

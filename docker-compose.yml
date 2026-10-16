@@ -1,0 +1,24 @@
+# BuoyUp v4. Start:  cp BackEnd/API_config/.env.example BackEnd/API_config/.env  (fill it)
+#                    docker compose up -d --build
+# Open http://<host>:8000/  (see HANDOVER.md)
+services:
+  buoyup:
+    build: .
+    image: buoyup:v4
+    container_name: buoyup
+    env_file: BackEnd/API_config/.env
+    environment:
+      # fixed inside the container; everything else comes from the .env file
+      FRONTEND_DIR: /srv/Frontend
+      DATABASE_URL: sqlite:////data/buoyup.db
+    ports:
+      - "${BUOYUP_PORT:-8000}:8000"
+    volumes:
+      - buoyup-data:/data
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "5" }
+
+volumes:
+  buoyup-data:

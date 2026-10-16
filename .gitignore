@@ -1,0 +1,75 @@
+# secrets and local state
+BackEnd/API_config/.env
+*.db
+*.db-shm
+*.db-wal
+.buoyup-autopilot.lock
+data/
+backups/
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.omc/
+# OS and tool caches
+.DS_Store
+.gradio/
+# demo feedback (local data)
+gradio_demo/feedback/
+# face authentication: downloaded buffalo_l pack (Reid/data is covered by data/ above)
+BackEnd/src/Reid/models/
+
+# env files (keep examples)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# python extras
+venv/
+env/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# node / frontend build
+node_modules/
+dist/
+build/
+.cache/
+playwright-report/
+test-results/
+
+# generated test output
+TestBench/results/
+
+# logs and temp
+*.log
+logs/
+tmp/
+*.tmp
+*.swp
+
+# large binaries / model weights
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+*.h5
+*.zip
+*.tar
+*.tar.gz
+*.7z
+
+# editors / tools
+.idea/
+.vscode/
+.claude/
+Thumbs.db

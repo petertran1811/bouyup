@@ -1,0 +1,8 @@
+# Face authentication (Reid): InsightFace buffalo_l on onnxruntime. insightface builds a small
+# C extension, so the machine/image needs a C/C++ compiler (build-essential).
+# On a CUDA machine replace onnxruntime with onnxruntime-gpu of the same version.
+# onnxruntime stays below 1.20: fastembed 0.4.2 (law RAG, ../requirements.txt) requires <1.20.
+insightface==0.7.3
+onnxruntime==1.19.2
+opencv-python-headless==5.0.0.93
+numpy==2.5.4

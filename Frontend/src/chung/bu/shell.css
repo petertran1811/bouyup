@@ -1,0 +1,50 @@
+/* Shell-specific composition; shared controls live in components.css. */
+.bu-brand { display:flex; gap:10px; align-items:center; font-size:24px; font-weight:700; text-decoration:none; color:var(--bu-text); }
+.bu-brand img { border-radius:50%; background:white; padding:6px; }
+.bu-brand-dot,.bu-status-dot { width:8px; height:8px; border-radius:50%; background:var(--bu-primary); }
+.bu-shell-nav { display:grid; gap:8px; }
+.bu-sidebar-foot { margin-top:auto; font-size:12px; color:var(--bu-muted); display:flex; align-items:center; gap:8px; }
+.bu-topbar-actions { display:flex; align-items:center; gap:12px; margin-left:auto; }
+.bu-topbar-title { font-weight:500; }
+.bu-shell-menu { display:none; }
+.bu-shell-main { max-width:1440px; padding:40px; margin-inline:auto; }
+.bu-skip-link { position:fixed; left:16px; top:-100px; z-index:100; padding:12px 20px; background:var(--bu-surface); color:var(--bu-text); border-radius:12px; }
+.bu-skip-link:focus { top:16px; }
+.bu-user-menu { position:relative; }
+.bu-user-menu summary { display:flex; gap:10px; align-items:center; cursor:pointer; list-style:none; }
+.bu-user-menu summary::-webkit-details-marker { display:none; }
+.bu-user-dropdown { position:absolute; top:calc(100% + 16px); right:0; z-index:40; min-width:240px; max-width:calc(100vw - 32px); padding:20px; display:grid; gap:10px; border:1px solid var(--bu-border); background:var(--bu-surface); border-radius:16px; box-shadow:0 16px 40px #0002; overflow-wrap:anywhere; }
+.bu-user-dropdown>span,.bu-logout-error { font-size:12px; color:var(--bu-muted); }
+.bu-user-menu:not([open]) .bu-user-dropdown { display:none; }
+.bu-sidebar-backdrop { position:fixed; inset:0; background:#0008; border:0; z-index:55; }
+.bu-bank-welcome { position:relative; overflow:hidden; padding:clamp(24px,5vw,64px); display:grid; grid-template-columns:1.3fr 1fr; gap:24px; isolation:isolate; }
+.bu-bank-welcome::before { content:""; position:absolute; inset:0; z-index:-1; background:radial-gradient(ellipse at 100% 10%,#9b4d6b22,transparent 60%); }
+.bu-bank-copy { display:grid; gap:20px; }
+.bu-bank-copy h1 { font-size:clamp(32px,4vw,56px); line-height:1.2; margin:0; }
+.bu-bank-copy>p { margin:0; }
+.bu-bank-copy>p:not(.bu-eyebrow),.bu-bank-next>p { color:var(--bu-muted); }
+.bu-bank-code { width:fit-content; }
+.bu-bank-note { display:flex; align-items:center; gap:16px; border-top:1px solid var(--bu-border); padding-top:24px; max-width:440px; font-size:13px; color:var(--bu-muted); }
+.bu-bank-note>span:first-child { font-size:40px; color:var(--bu-primary); }
+.bu-bank-art { position:relative; min-height:280px; display:grid; place-items:center; perspective:800px; }
+.bu-bank-orbit { position:absolute; width:280px; height:280px; border:1px solid var(--bu-border); border-radius:50%; transform:rotateX(55deg) rotateZ(-25deg); box-shadow:0 0 60px #9b4d6b15; }
+.bu-bank-orbit--inner { width:220px; height:220px; transform:rotateY(55deg) rotateZ(25deg); }
+.bu-bank-vault { position:relative; display:grid; place-items:center; width:170px; height:210px; border-radius:32px; border:1px solid #ffffff50; transform:rotateY(-16deg) rotateX(7deg) rotateZ(-8deg); background:linear-gradient(135deg,#f2bfd1,#9b4d6b 65%,#2b1d26); color:#f5edf2; font-size:80px; box-shadow:16px 24px 30px #0003,inset 1px 1px 2px #fff8; }
+.bu-bank-vault span { font-size:16px; font-weight:600; }
+.bu-bank-spark { position:absolute; top:20px; right:28px; font-size:60px; color:var(--bu-primary); }
+.bu-bank-next { margin-top:24px; display:grid; gap:16px; padding:32px; }
+.bu-bank-next .bu-btn { width:fit-content; }
+@media(max-width:900px) {
+  .bu-shell-menu { display:inline-flex; }
+  .bu-sidebar { z-index:60; }
+  .bu-topbar { gap:8px; }
+  .bu-topbar-actions { gap:4px; }
+  .bu-user-name { display:none; }
+  .bu-topbar-title { font-size:12px; }
+  .bu-bank-welcome { grid-template-columns:1fr; }
+  .bu-bank-art { min-height:220px; }
+  .bu-bank-orbit { width:230px; height:230px; }
+  .bu-bank-vault { width:130px; height:160px; font-size:56px; }
+  .bu-bank-next { padding:24px; }
+  .bu-shell-main { padding:24px 16px; }
+}

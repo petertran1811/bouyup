@@ -1,0 +1,1556 @@
+{
+ "application": {
+  "id": "app_1cbb0245a89b418a",
+  "code": "APP-2026-1014-0001",
+  "status": "disbursed",
+  "tier": 2,
+  "currency": "CNY",
+  "region": "CN"
+ },
+ "seller": {
+  "id": "usr_10907adfe2f8958a",
+  "name": "Lâm Lan",
+  "email": "lan@buoyup.vn",
+  "store": "Hộ kinh doanh Lâm Lan",
+  "platform": "douyin"
+ },
+ "params_version": "v4.0",
+ "params_rebuilt": false,
+ "error": null,
+ "sources": [
+  {
+   "tool": "lookup_public_store",
+   "id": "TC-101",
+   "simulated": true
+  },
+  {
+   "tool": "lookup_business_registry",
+   "id": "TC-102",
+   "simulated": true
+  },
+  {
+   "tool": "verify_identity",
+   "id": "TC-103",
+   "simulated": true
+  },
+  {
+   "tool": "request_consent",
+   "id": "TC-104",
+   "simulated": true
+  },
+  {
+   "tool": "pull_revenue",
+   "id": "TC-105",
+   "simulated": true
+  },
+  {
+   "tool": "pull_tax_data",
+   "id": "TC-106",
+   "simulated": true
+  },
+  {
+   "tool": "get_credit_report",
+   "id": "TC-107",
+   "simulated": true
+  },
+  {
+   "tool": "get_interbank_score",
+   "id": "TC-108",
+   "simulated": true
+  },
+  {
+   "tool": "link_entities",
+   "id": "TC-109",
+   "simulated": true
+  },
+  {
+   "tool": "derive_financials",
+   "id": "TC-110",
+   "simulated": true
+  },
+  {
+   "tool": "compare_price",
+   "id": "TC-111",
+   "simulated": true
+  }
+ ],
+ "agent1": {
+  "state": "VERIFIED",
+  "steps": 10,
+  "record_hash": "sha256:10aa11833ab45385b1a56769c66b0555575952e25145225723ed0d8eea36c478"
+ },
+ "b10": {
+  "block": "B10",
+  "title": "Gian lận (cờ và cụm liên kết)",
+  "question": "Có dấu hiệu gian lận không?",
+  "checks": [
+   {
+    "name": "Đột biến doanh thu tháng gần nhất",
+    "value": 1.1,
+    "rule": "> 3 lần bình quân → RISK_SALES_SPIKE"
+   },
+   {
+    "name": "Ảnh doanh thu người vay nộp so với thuế",
+    "value": null,
+    "rule": "lệch > 15% → hỏi lại; > 30% → không dùng"
+   },
+   {
+    "name": "Cụm liên kết (union-find)",
+    "value": {
+     "groups": [],
+     "linked": []
+    },
+    "rule": "nhà cung cấp cùng cụm → RISK_SUPPLIER_LINKED"
+   }
+  ],
+  "flags": [
+   {
+    "code": "RISK_PRICE_DEVIATION",
+    "status": "resolved_by_check",
+    "note": "Tự đóng: B3 dùng giá hóa đơn",
+    "penalty": null,
+    "evidence_tool_call": "TC-111"
+   }
+  ],
+  "status": "done"
+ },
+ "blocks": [
+  {
+   "block": "B1",
+   "title": "Nhóm khách hàng",
+   "question": "Người này từng vay và trả thế nào?",
+   "inputs": [
+    {
+     "name": "Trễ hạn nặng nhất 24 tháng (ngày)",
+     "value": 0,
+     "shown": "0",
+     "source": "Báo cáo tín dụng · get_credit_report"
+    },
+    {
+     "name": "Lịch sử vay với BuoyUp",
+     "value": "none",
+     "shown": "chưa vay qua BuoyUp",
+     "source": "Lịch sử vay với BuoyUp (khoản vay đã ghi)"
+    },
+    {
+     "name": "Có tín dụng ở nơi khác",
+     "value": true,
+     "shown": "có",
+     "source": "Báo cáo tín dụng · get_credit_report"
+    },
+    {
+     "name": "Vỡ nợ trong 24 tháng",
+     "value": false,
+     "shown": "không",
+     "source": "Báo cáo tín dụng · get_credit_report"
+    },
+    {
+     "name": "Đang có nợ xấu",
+     "value": false,
+     "shown": "không",
+     "source": "Báo cáo tín dụng · get_credit_report"
+    }
+   ],
+   "steps": [
+    "Luật: có tín dụng ở nơi khác → nhóm 2"
+   ],
+   "output": {
+    "group": 2
+   },
+   "status": "done",
+   "matches": true
+  },
+  {
+   "block": "B3",
+   "title": "Giá nhập hợp lý, nhu cầu vốn",
+   "question": "Người vay thật sự thiếu bao nhiêu để nhập hàng?",
+   "inputs": [
+    {
+     "name": "Số lượng định nhập",
+     "value": 5000,
+     "shown": "5.000",
+     "source": "Biểu mẫu kế hoạch của người bán"
+    },
+    {
+     "name": "Giá khai",
+     "value": 80,
+     "shown": "80",
+     "source": "Biểu mẫu kế hoạch của người bán"
+    },
+    {
+     "name": "Giá nhập trên hóa đơn 3 tháng",
+     "value": 62,
+     "shown": "62",
+     "source": "Thuế 银税互动 · pull_revenue / pull_tax_data"
+    },
+    {
+     "name": "Tồn kho dùng được",
+     "value": 40000,
+     "shown": "40.000",
+     "source": "Biểu mẫu kế hoạch của người bán"
+    },
+    {
+     "name": "Vốn tự có",
+     "value": 60000,
+     "shown": "60.000",
+     "source": "Biểu mẫu kế hoạch của người bán"
+    },
+    {
+     "name": "Khoản vay khác",
+     "value": 0,
+     "shown": "0",
+     "source": "Biểu mẫu kế hoạch của người bán"
+    },
+    {
+     "name": "Hệ số nhà cung cấp",
+     "value": 1.0,
+     "shown": "1",
+     "source": "Hóa đơn với nhà cung cấp · supplier_info"
+    }
+   ],
+   "steps": [
+    "Giá dùng = số nhỏ hơn của (giá khai 80, giá hóa đơn 62) = 62",
+    "Giá trị kế hoạch = 5.000 × 62 × hệ số nhà cung cấp 1 = 310.000",
+    "Nhu cầu (vay vừa đủ) = 310.000 − tồn kho 40.000 − vốn tự có 60.000 − vay khác 0 = 210.000"
+   ],
+   "output": {
+    "unit_price_used": 62,
+    "price_declared": 80,
+    "plan_value": 310000,
+    "need": 210000
+   },
+   "status": "done",
+   "matches": true
+  },
+  {
+   "block": "B4",
+   "title": "Doanh thu tháng dự báo thận trọng",
+   "question": "Mỗi tháng có bao nhiêu doanh thu để dựa vào?",
+   "inputs": [
+    {
+     "name": "Doanh thu bình quân 12 tháng (thuế)",
+     "value": 166700,
+     "shown": "166.700",
+     "source": "Thuế 银税互动 · pull_revenue / pull_tax_data"
+    },
+    {
+     "name": "Tăng trưởng 3 tháng",
+     "value": 0.2,
+     "shown": "20%",
+     "source": "Thuế 银税互动 · pull_revenue / pull_tax_data"
+    },
+    {
+     "name": "Trần tăng trưởng",
+     "value": 0.5,
+     "shown": "50%",
+     "source": "Bảng tham số"
+    },
+    {
+     "name": "Hệ số thận trọng ngành thời trang",
+     "value": 0.7,
+     "shown": "0,7",
+     "source": "Bảng tham số"
+    },
+    {
+     "name": "Ảnh doanh thu người vay nộp khớp thuế",
+     "value": false,
+     "shown": "không",
+     "source": "Ảnh doanh thu người vay nộp · verify_statements"
+    }
+   ],
+   "steps": [
+    "Tăng trưởng dùng = số nhỏ hơn của (20%, 50%) = 20%",
+    "Dự báo = 166.700 × (1 + 0,2) = 200.040",
+    "Thận trọng = 200.040 × 0,7 = 140.028"
+   ],
+   "output": {
+    "forecast": 200040,
+    "prudent": 140028,
+    "growth_used": 0.2,
+    "prudence": 0.7
+   },
+   "status": "done",
+   "matches": true
+  },
+  {
+   "block": "B5",
+   "title": "Phần doanh thu dành trả nợ",
+   "question": "Mỗi đồng doanh thu, dành trả nợ tối đa bao nhiêu?",
+   "inputs": [
+    {
+     "name": "Biên lãi gộp 12 tháng (hóa đơn)",
+     "value": 0.4,
+     "shown": "40%",
+     "source": "Thuế 银税互动 · pull_revenue / pull_tax_data"
+    },
+    {
+     "name": "Tỷ lệ phí sàn",
+     "value": 0.05,
+     "shown": "5%",
+     "source": "Thuế 银税互动 · pull_revenue / pull_tax_data"
+    }
+   ],
+   "steps": [
+    "Trần = (1 − 0,4) ÷ (1 − 0,05) = 63,16%",
+    "Dùng được (làm tròn xuống 1%) = 63%"
+   ],
+   "output": {
+    "sweep_cap": 0.6316,
+    "sweep_usable": 0.63
+   },
+   "status": "done",
+   "matches": true
+  },
+  {
+   "block": "B6",
+   "title": "Bảng điểm → hạng",
+   "question": "Rủi ro cỡ nào?",
+   "inputs": [
+    {
+     "name": "Trễ hạn nặng nhất 24 tháng",
+     "value": 0,
+     "shown": "0",
+     "source": "Báo cáo tín dụng · get_credit_report",
+     "points": 20
+    },
+    {
+     "name": "Số lần tra cứu 3 tháng",
+     "value": 2,
+     "shown": "2",
+     "source": "Báo cáo tín dụng · get_credit_report",
+     "points": 6
+    },
+    {
+     "name": "Nợ trên doanh thu",
+     "value": 0.15,
+     "shown": "0,15",
+     "source": "Báo cáo tín dụng · get_credit_report",
+     "points": 6
+    },
+    {
+     "name": "Điểm FATE (1 tốt nhất)",
+     "value": 3,
+     "shown": "3",
+     "source": "FATE liên ngân hàng · get_interbank_score",
+     "points": 11
+    },
+    {
+     "name": "Điểm cửa hàng",
+     "value": 4.6,
+     "shown": "4,6",
+     "source": "Trang công khai của cửa hàng · lookup_public_store",
+     "points": 8
+    },
+    {
+     "name": "Số tháng có doanh thu",
+     "value": 26,
+     "shown": "26",
+     "source": "Thuế 银税互动 · pull_revenue / pull_tax_data",
+     "points": 8
+    },
+    {
+     "name": "Độ dao động doanh thu (CV)",
+     "value": 0.445,
+     "shown": "0,445",
+     "source": "Thuế 银税互动 · pull_revenue / pull_tax_data",
+     "points": 7
+    },
+    {
+     "name": "Biên lãi gộp",
+     "value": 0.4,
+     "shown": "0,4",
+     "source": "Thuế 银税互动 · pull_revenue / pull_tax_data",
+     "points": 10
+    },
+    {
+     "name": "Doanh thu bình quân tháng",
+     "value": 166700,
+     "shown": "166.700",
+     "source": "Thuế 银税互动 · pull_revenue / pull_tax_data",
+     "points": 4
+    }
+   ],
+   "steps": [
+    "20 + 6 + 6 + 11 + 8 + 8 + 7 + 10 + 4 = 80 điểm",
+    "Ngưỡng hạng: A ≥ 85 · B ≥ 70 · C ≥ 55 · D ≥ 40 → hạng B",
+    "Không có cờ phạt"
+   ],
+   "output": {
+    "score": 80,
+    "grade_before": "B",
+    "grade": "B"
+   },
+   "status": "done",
+   "matches": true
+  },
+  {
+   "block": "B7",
+   "title": "Lãi suất",
+   "question": "Lãi bao nhiêu?",
+   "inputs": [
+    {
+     "name": "Hạng sau phạt",
+     "value": "B",
+     "shown": "B",
+     "source": "B6"
+    }
+   ],
+   "steps": [
+    "Bảng lãi: A 8% · B 10% · C 12% · D 15% · E từ chối",
+    "Hạng B → lãi 10% (là toàn bộ chi phí năm, không phí)",
+    "Sàn lãi = chi phí vốn 5% + chi phí xử lý ÷ (dư nợ bình quân × kỳ hạn) = 5,05% → đạt"
+   ],
+   "output": {
+    "rate": 0.1
+   },
+   "status": "done",
+   "matches": true
+  },
+  {
+   "block": "B8",
+   "title": "Hạn mức",
+   "question": "Cho vay tối đa bao nhiêu?",
+   "inputs": [
+    {
+     "name": "Doanh thu tháng thận trọng (B4)",
+     "value": 140028,
+     "shown": "140.028",
+     "source": "B4"
+    },
+    {
+     "name": "Phần doanh thu dành trả nợ (B5)",
+     "value": 0.63,
+     "shown": "63%",
+     "source": "B5"
+    },
+    {
+     "name": "Lãi năm (B7)",
+     "value": 0.1,
+     "shown": "10%",
+     "source": "B7"
+    },
+    {
+     "name": "Kỳ hạn dài nhất (tháng)",
+     "value": 12,
+     "shown": "12",
+     "source": "Bảng tham số"
+    },
+    {
+     "name": "Hệ số nhóm 2",
+     "value": 1.5,
+     "shown": "1,5",
+     "source": "Bảng tham số"
+    },
+    {
+     "name": "Doanh thu bình quân tháng",
+     "value": 166700,
+     "shown": "166.700",
+     "source": "Thuế 银税互动 · pull_revenue / pull_tax_data"
+    },
+    {
+     "name": "Trần loại người vay",
+     "value": 200000,
+     "shown": "200.000",
+     "source": "Bảng tham số"
+    },
+    {
+     "name": "Nhu cầu (B3)",
+     "value": 210000,
+     "shown": "210.000",
+     "source": "B3"
+    }
+   ],
+   "steps": [
+    "Khả năng trả = 140.028 × 12 × 0,63 ÷ (1 + 0,1 × 12 ÷ 12) = 962.374",
+    "Trần theo nhóm = 1,5 × 166.700 = 250.050",
+    "Số nhỏ nhất của (khả năng trả 962.374, trần theo nhóm 250.050, trần loại người vay 200.000) = trần loại người vay → làm tròn xuống trăm 200.000",
+    "Gợi ý vay vừa đủ = số nhỏ hơn của (hạn mức, nhu cầu) = 200.000"
+   ],
+   "output": {
+    "affordability": 962374,
+    "group_cap": 250050,
+    "type_cap": 200000,
+    "binding_cap": "type_cap",
+    "limit": 200000,
+    "suggested": 200000
+   },
+   "status": "done",
+   "matches": true
+  },
+  {
+   "block": "B9",
+   "title": "Kỳ hạn và hình thức trả",
+   "question": "Trả trong bao lâu, trả thế nào?",
+   "inputs": [
+    {
+     "name": "Hạn mức (B8)",
+     "value": 200000,
+     "shown": "200.000",
+     "source": "B8"
+    },
+    {
+     "name": "Khung kỳ hạn",
+     "value": "3, 6, 12",
+     "shown": "3, 6, 12",
+     "source": "Bảng tham số"
+    },
+    {
+     "name": "Doanh thu tháng thận trọng (B4)",
+     "value": 140028,
+     "shown": "140.028",
+     "source": "B4"
+    },
+    {
+     "name": "Phần trả gốc tối thiểu",
+     "value": 0.3,
+     "shown": "30%",
+     "source": "Bảng tham số"
+    }
+   ],
+   "steps": [
+    "Trả góp cố định: gốc chia đều mỗi kỳ + lãi theo ngày thực tế trên dư nợ",
+    "Trả theo doanh thu: tỷ lệ = (gốc + lãi ước tính) ÷ (doanh thu thận trọng × kỳ hạn), không vượt 63% → 14% ở kỳ hạn 12 tháng",
+    "Mỗi kỳ ít nhất = lãi kỳ + 30% gốc của một kỳ trả góp đều"
+   ],
+   "output": {
+    "tenors": [
+     3,
+     6,
+     12
+    ],
+    "tenor_max": 12,
+    "methods": [
+     "installment",
+     "revenue"
+    ],
+    "revenue_rate_max_tenor": 0.14,
+    "min_principal_share": 0.3
+   },
+   "status": "done",
+   "matches": true
+  }
+ ],
+ "matches": true,
+ "sheet_on_chain": true,
+ "agent2": {
+  "option_id": "full",
+  "rationale": [
+   {
+    "claim": "Nhu cầu vốn tính theo giá hóa đơn 62, không theo giá khai 80",
+    "evidence_ref": "sheet.B3.unit_price_used"
+   },
+   {
+    "claim": "Hạn mức do trần hộ kinh doanh quyết định, không phụ thuộc giá khai trong kế hoạch",
+    "evidence_ref": "sheet.B8.binding_cap"
+   },
+   {
+    "claim": "Tỷ lệ doanh thu cho hình thức trả theo doanh thu 14% không vượt trần giá vốn",
+    "evidence_ref": "sheet.B9.revenue_rate_max_tenor"
+   }
+  ],
+  "card": {
+   "option_id": "advice",
+   "amount": 200000,
+   "rate": 0.1,
+   "apr": 0.1,
+   "fees": 0,
+   "tenor_m": 12,
+   "method": "installment",
+   "method_label": "Trả góp cố định theo tháng",
+   "due_day": 10,
+   "first_payment": 18145,
+   "min_payment_first": 6479,
+   "revenue_rate": null,
+   "total_interest": 10613,
+   "total_due": 210613,
+   "first_due_date": "2026-11-10",
+   "final_due_date": "2027-10-10",
+   "payee": "100.000 vào tài khoản kinh doanh WeBank · 100.000 trả thẳng nhà cung cấp SUP-0091",
+   "payee_split": {
+    "kind": "split",
+    "to_account": 100000,
+    "to_supplier": 100000,
+    "supplier": "SUP-0091"
+   }
+  }
+ },
+ "agent3": {
+  "floor": "approve",
+  "phase1": "smaller",
+  "phase2": "approve"
+ },
+ "gate": {
+  "conditions": [
+   {
+    "text": "Biên bản VERIFIED; mỗi cờ resolved_by_check trỏ tới tool_calls đạt",
+    "ok": true
+   },
+   {
+    "text": "Không quy tắc hard nào vi phạm; sàn là Đồng ý",
+    "ok": true
+   },
+   {
+    "text": "Agent 3 approve trùng option_id Agent 2 (smaller: hạn mức gửi ngân hàng là phương án nhỏ hơn)",
+    "ok": true
+   },
+   {
+    "text": "Hash pha 1 có trên chuỗi và trước hash kết luận cuối",
+    "ok": true
+   },
+   {
+    "text": "Không có yêu cầu người xem; hạn mức dưới ngưỡng tự động; nhóm duyệt tự động chưa bị tắt",
+    "ok": true
+   }
+  ],
+  "decision": "approve",
+  "auto_group": "thời trang|t2",
+  "auto_enabled": true
+ },
+ "decision": {
+  "kind": "approve",
+  "option_id": "full",
+  "amount": 200000,
+  "by": "gate",
+  "reason": null,
+  "at": "2026-10-14T10:55:39.315887Z",
+  "chain_tx": "0x9f4e63cb218eb6cb74a53490c44a617eb8219900"
+ },
+ "selection": {
+  "option_id": "seller_200000",
+  "amount": 200000,
+  "rate": 0.1,
+  "apr": 0.1,
+  "fees": 0,
+  "tenor_m": 12,
+  "method": "installment",
+  "method_label": "Trả góp cố định theo tháng",
+  "due_day": 10,
+  "first_payment": 18145,
+  "min_payment_first": 6479,
+  "revenue_rate": null,
+  "total_interest": 10613,
+  "total_due": 210613,
+  "first_due_date": "2026-11-10",
+  "final_due_date": "2027-10-10",
+  "payee": "100.000 vào tài khoản kinh doanh WeBank · 100.000 trả thẳng nhà cung cấp SUP-0091",
+  "payee_split": {
+   "kind": "split",
+   "to_account": 100000,
+   "to_supplier": 100000,
+   "supplier": "SUP-0091"
+  },
+  "id": "seller_200000",
+  "schedule": [
+   {
+    "k": 1,
+    "due_date": "2026-11-10",
+    "days": 27,
+    "principal": 16666,
+    "interest": 1479,
+    "payment": 18145,
+    "outstanding_after": 183334
+   },
+   {
+    "k": 2,
+    "due_date": "2026-12-10",
+    "days": 30,
+    "principal": 16666,
+    "interest": 1507,
+    "payment": 18173,
+    "outstanding_after": 166668
+   },
+   {
+    "k": 3,
+    "due_date": "2027-01-10",
+    "days": 31,
+    "principal": 16666,
+    "interest": 1416,
+    "payment": 18082,
+    "outstanding_after": 150002
+   },
+   {
+    "k": 4,
+    "due_date": "2027-02-10",
+    "days": 31,
+    "principal": 16666,
+    "interest": 1274,
+    "payment": 17940,
+    "outstanding_after": 133336
+   },
+   {
+    "k": 5,
+    "due_date": "2027-03-10",
+    "days": 28,
+    "principal": 16666,
+    "interest": 1023,
+    "payment": 17689,
+    "outstanding_after": 116670
+   },
+   {
+    "k": 6,
+    "due_date": "2027-04-10",
+    "days": 31,
+    "principal": 16666,
+    "interest": 991,
+    "payment": 17657,
+    "outstanding_after": 100004
+   },
+   {
+    "k": 7,
+    "due_date": "2027-05-10",
+    "days": 30,
+    "principal": 16666,
+    "interest": 822,
+    "payment": 17488,
+    "outstanding_after": 83338
+   },
+   {
+    "k": 8,
+    "due_date": "2027-06-10",
+    "days": 31,
+    "principal": 16666,
+    "interest": 708,
+    "payment": 17374,
+    "outstanding_after": 66672
+   },
+   {
+    "k": 9,
+    "due_date": "2027-07-10",
+    "days": 30,
+    "principal": 16666,
+    "interest": 548,
+    "payment": 17214,
+    "outstanding_after": 50006
+   },
+   {
+    "k": 10,
+    "due_date": "2027-08-10",
+    "days": 31,
+    "principal": 16666,
+    "interest": 425,
+    "payment": 17091,
+    "outstanding_after": 33340
+   },
+   {
+    "k": 11,
+    "due_date": "2027-09-10",
+    "days": 31,
+    "principal": 16666,
+    "interest": 283,
+    "payment": 16949,
+    "outstanding_after": 16674
+   },
+   {
+    "k": 12,
+    "due_date": "2027-10-10",
+    "days": 30,
+    "principal": 16674,
+    "interest": 137,
+    "payment": 16811,
+    "outstanding_after": 0
+   }
+  ],
+  "at": "2026-10-14T10:55:39.328009Z"
+ },
+ "contract": {
+  "id": "HD-A73B0B9D",
+  "application": "APP-2026-1014-0001",
+  "borrower": "Hộ kinh doanh Lâm Lan",
+  "borrower_type": "individual_business",
+  "amount": 200000,
+  "rate": 0.1,
+  "apr": 0.1,
+  "fees": 0,
+  "penalty_rate": 0.15,
+  "tenor_m": 12,
+  "method": "installment",
+  "method_label": "Trả góp cố định theo tháng",
+  "due_day": 10,
+  "revenue_rate": null,
+  "first_due_date": "2026-11-10",
+  "final_due_date": "2027-10-10",
+  "total_interest": 10613,
+  "total_due": 210613,
+  "schedule": [
+   {
+    "k": 1,
+    "due_date": "2026-11-10",
+    "days": 27,
+    "principal": 16666,
+    "interest": 1479,
+    "payment": 18145,
+    "outstanding_after": 183334
+   },
+   {
+    "k": 2,
+    "due_date": "2026-12-10",
+    "days": 30,
+    "principal": 16666,
+    "interest": 1507,
+    "payment": 18173,
+    "outstanding_after": 166668
+   },
+   {
+    "k": 3,
+    "due_date": "2027-01-10",
+    "days": 31,
+    "principal": 16666,
+    "interest": 1416,
+    "payment": 18082,
+    "outstanding_after": 150002
+   },
+   {
+    "k": 4,
+    "due_date": "2027-02-10",
+    "days": 31,
+    "principal": 16666,
+    "interest": 1274,
+    "payment": 17940,
+    "outstanding_after": 133336
+   },
+   {
+    "k": 5,
+    "due_date": "2027-03-10",
+    "days": 28,
+    "principal": 16666,
+    "interest": 1023,
+    "payment": 17689,
+    "outstanding_after": 116670
+   },
+   {
+    "k": 6,
+    "due_date": "2027-04-10",
+    "days": 31,
+    "principal": 16666,
+    "interest": 991,
+    "payment": 17657,
+    "outstanding_after": 100004
+   },
+   {
+    "k": 7,
+    "due_date": "2027-05-10",
+    "days": 30,
+    "principal": 16666,
+    "interest": 822,
+    "payment": 17488,
+    "outstanding_after": 83338
+   },
+   {
+    "k": 8,
+    "due_date": "2027-06-10",
+    "days": 31,
+    "principal": 16666,
+    "interest": 708,
+    "payment": 17374,
+    "outstanding_after": 66672
+   },
+   {
+    "k": 9,
+    "due_date": "2027-07-10",
+    "days": 30,
+    "principal": 16666,
+    "interest": 548,
+    "payment": 17214,
+    "outstanding_after": 50006
+   },
+   {
+    "k": 10,
+    "due_date": "2027-08-10",
+    "days": 31,
+    "principal": 16666,
+    "interest": 425,
+    "payment": 17091,
+    "outstanding_after": 33340
+   },
+   {
+    "k": 11,
+    "due_date": "2027-09-10",
+    "days": 31,
+    "principal": 16666,
+    "interest": 283,
+    "payment": 16949,
+    "outstanding_after": 16674
+   },
+   {
+    "k": 12,
+    "due_date": "2027-10-10",
+    "days": 30,
+    "principal": 16674,
+    "interest": 137,
+    "payment": 16811,
+    "outstanding_after": 0
+   }
+  ],
+  "payee": {
+   "kind": "split",
+   "to_account": 100000,
+   "to_supplier": 100000,
+   "supplier": "SUP-0091",
+   "supplier_account": "88880001"
+  },
+  "banks": [
+   {
+    "bank": "WEBANK",
+    "name": "WeBank",
+    "pct": 0.4,
+    "role": "lead",
+    "amount": 80000
+   },
+   {
+    "bank": "CMB",
+    "name": "China Merchants Bank",
+    "pct": 0.3,
+    "role": "partner",
+    "amount": 60000
+   },
+   {
+    "bank": "ICBC",
+    "name": "Industrial and Commercial Bank of China",
+    "pct": 0.3,
+    "role": "partner",
+    "amount": 60000
+   }
+  ],
+  "terms": [
+   "Lãi suất năm 10.00% là toàn bộ chi phí; không có phí nào khác.",
+   "Lãi tính theo số ngày thực tế trên dư nợ gốc còn lại (năm 365 ngày).",
+   "Trả chậm: 3 ngày ân hạn, sau đó lãi phạt 15.00%/năm trên số tiền quá hạn.",
+   "Trả tối thiểu (chỉ hình thức trả góp, kỳ hạn từ 3 tháng): lãi kỳ + 30% gốc của một kỳ; tối đa 2 kỳ liên tiếp.",
+   "Trả trước bất cứ lúc nào, không mất phí; chỉ trả lãi cho số ngày đã dùng.",
+   "Quá hạn 30 ngày: báo trung tâm thông tin tín dụng; các bước xử lý do nhóm ngân hàng nắm từ 66.67% dư nợ quyết định.",
+   "Tiền hàng từ sàn về tài khoản kinh doanh WeBank cho đến khi tất toán; hệ thống tự trích vào ngày trả.",
+   "Không dùng vốn vay để mua chứng khoán, bất động sản hay cho vay lại."
+  ],
+  "complaint_channel": "Tổng đài WeBank 95384 · khieunai@buoyup.vn",
+  "read_seconds": 20,
+  "issued_at": "2026-10-14T10:55:09.331391Z",
+  "selection_at": "2026-10-14T10:55:39.328009Z",
+  "needs": {
+   "supplier_account": true,
+   "guarantee": false
+  },
+  "hash": "sha256:f731ce9ef5a78563d80cc2f7347a1888622e095c4c8ce0bd3a13be59e14cbecb",
+  "webank_account": "6222000012345",
+  "legs": [
+   {
+    "bank": "WEBANK",
+    "name": "WeBank",
+    "pct": 0.4,
+    "amount": 80000,
+    "contract_id": "BU-WEBANK-2026-B217AA",
+    "role": "lead"
+   },
+   {
+    "bank": "CMB",
+    "name": "China Merchants Bank",
+    "pct": 0.3,
+    "amount": 60000,
+    "contract_id": "BU-CMB-2026-6F283E",
+    "role": "partner"
+   },
+   {
+    "bank": "ICBC",
+    "name": "Industrial and Commercial Bank of China",
+    "pct": 0.3,
+    "amount": 60000,
+    "contract_id": "BU-ICBC-2026-584B1B",
+    "role": "partner"
+   }
+  ],
+  "sign_method": "face",
+  "guarantee": false,
+  "signed_at": "2026-10-14T10:55:39.339531Z",
+  "chain_tx": "0x0abac3fe6f9c86f7dd46398dd127870d3390cd55"
+ },
+ "b12": {
+  "block": "B12",
+  "title": "Các ngân hàng duyệt song song",
+  "question": "Ngân hàng nào đồng ý, mỗi bên bao nhiêu?",
+  "rounds": [
+   {
+    "amount": 200000,
+    "responses": [
+     {
+      "bank": "CMB",
+      "name": "China Merchants Bank",
+      "decision": "approve",
+      "reason": "Đồng ý cấp vốn",
+      "ms": 1200
+     },
+     {
+      "bank": "CCB",
+      "name": "China Construction Bank",
+      "decision": "decline",
+      "reason": "Khoản vay tối thiểu 300.000 CNY",
+      "ms": 1800
+     },
+     {
+      "bank": "ICBC",
+      "name": "Industrial and Commercial Bank of China",
+      "decision": "approve",
+      "reason": "Đồng ý cấp vốn",
+      "ms": 2500
+     },
+     {
+      "bank": "GZRCB",
+      "name": "Ngân hàng Nông thương Quảng Châu",
+      "decision": "decline",
+      "reason": "Chỉ nhận hạng A trở lên",
+      "ms": 3000
+     },
+     {
+      "bank": "BOC",
+      "name": "Bank of China",
+      "decision": "timeout",
+      "reason": "Không trả lời trong 30 giây: coi như từ chối",
+      "ms": 35000
+     }
+    ],
+    "agreed": [
+     "CMB",
+     "ICBC"
+    ]
+   }
+  ],
+  "result": "approved",
+  "limit": 200000,
+  "reduced": false,
+  "split": [
+   {
+    "bank": "WEBANK",
+    "pct": 0.4,
+    "role": "lead",
+    "name": "WeBank"
+   },
+   {
+    "bank": "CMB",
+    "pct": 0.3,
+    "role": "partner",
+    "name": "China Merchants Bank"
+   },
+   {
+    "bank": "ICBC",
+    "pct": 0.3,
+    "role": "partner",
+    "name": "Industrial and Commercial Bank of China"
+   }
+  ],
+  "expires_at": "2026-10-21T10:55:39.317496Z",
+  "legs": [
+   {
+    "bank": "WEBANK",
+    "name": "WeBank",
+    "pct": 0.4,
+    "amount": 80000,
+    "contract_id": "BU-WEBANK-2026-B217AA",
+    "role": "lead"
+   },
+   {
+    "bank": "CMB",
+    "name": "China Merchants Bank",
+    "pct": 0.3,
+    "amount": 60000,
+    "contract_id": "BU-CMB-2026-6F283E",
+    "role": "partner"
+   },
+   {
+    "bank": "ICBC",
+    "name": "Industrial and Commercial Bank of China",
+    "pct": 0.3,
+    "amount": 60000,
+    "contract_id": "BU-ICBC-2026-584B1B",
+    "role": "partner"
+   }
+  ],
+  "shares": [
+   {
+    "bank": "WEBANK",
+    "pct": 0.4,
+    "amount": 80000,
+    "repaid": 7258,
+    "contract_id": "BU-WEBANK-2026-B217AA"
+   },
+   {
+    "bank": "CMB",
+    "pct": 0.3,
+    "amount": 60000,
+    "repaid": 5444,
+    "contract_id": "BU-CMB-2026-6F283E"
+   },
+   {
+    "bank": "ICBC",
+    "pct": 0.3,
+    "amount": 60000,
+    "repaid": 5443,
+    "contract_id": "BU-ICBC-2026-584B1B"
+   }
+  ],
+  "status": "done"
+ },
+ "withdrawal": {
+  "id": "WD-CBB4B26F1F996ED9",
+  "tx": "0x7f49d5066e09b7c00b09e39ace84c701bcca1979803a49653968ba615536f2fb",
+  "block": 25,
+  "simulated": false,
+  "explorer_url": "https://fs.buoyup.app/explorer/#/tx/0x7f49d5066e09b7c00b09e39ace84c701bcca1979803a49653968ba615536f2fb",
+  "sealed_by": "node3",
+  "confirmed": 4,
+  "nodes": 4,
+  "legs_mismatch": false
+ },
+ "b11": {
+  "block": "B11",
+  "title": "Thu nợ và cảnh báo sớm (Agent 4)",
+  "question": "Sau giải ngân có ổn không?",
+  "loan": {
+   "id": "loan_7102348b9c366330",
+   "status": "active",
+   "amount": 200000,
+   "repaid": 18145,
+   "outstanding": 183334,
+   "method": "installment",
+   "tenor_m": 12,
+   "due_day": 10,
+   "first_due_date": "2026-11-10",
+   "final_due_date": "2027-10-10",
+   "clock": "2026-11-12",
+   "arrears": {
+    "penalty": 0,
+    "interest": 0,
+    "principal": 0,
+    "since": null,
+    "penalty_to": null
+   },
+   "overdue_days": 0,
+   "balance": 130855
+  },
+  "schedule": [
+   {
+    "k": 1,
+    "due_date": "2026-11-10",
+    "principal": 16666,
+    "interest_est": 1479,
+    "payment_est": 18145,
+    "status": "paid",
+    "choice": null,
+    "interest": 1479,
+    "principal_due": 16666,
+    "amount_due": 18145,
+    "processed_on": "2026-11-10",
+    "paid": 18145
+   },
+   {
+    "k": 2,
+    "due_date": "2026-12-10",
+    "principal": 16666,
+    "interest_est": 1507,
+    "payment_est": 18173,
+    "status": "upcoming",
+    "choice": null
+   },
+   {
+    "k": 3,
+    "due_date": "2027-01-10",
+    "principal": 16666,
+    "interest_est": 1416,
+    "payment_est": 18082,
+    "status": "upcoming",
+    "choice": null
+   },
+   {
+    "k": 4,
+    "due_date": "2027-02-10",
+    "principal": 16666,
+    "interest_est": 1274,
+    "payment_est": 17940,
+    "status": "upcoming",
+    "choice": null
+   },
+   {
+    "k": 5,
+    "due_date": "2027-03-10",
+    "principal": 16666,
+    "interest_est": 1023,
+    "payment_est": 17689,
+    "status": "upcoming",
+    "choice": null
+   },
+   {
+    "k": 6,
+    "due_date": "2027-04-10",
+    "principal": 16666,
+    "interest_est": 991,
+    "payment_est": 17657,
+    "status": "upcoming",
+    "choice": null
+   },
+   {
+    "k": 7,
+    "due_date": "2027-05-10",
+    "principal": 16666,
+    "interest_est": 822,
+    "payment_est": 17488,
+    "status": "upcoming",
+    "choice": null
+   },
+   {
+    "k": 8,
+    "due_date": "2027-06-10",
+    "principal": 16666,
+    "interest_est": 708,
+    "payment_est": 17374,
+    "status": "upcoming",
+    "choice": null
+   },
+   {
+    "k": 9,
+    "due_date": "2027-07-10",
+    "principal": 16666,
+    "interest_est": 548,
+    "payment_est": 17214,
+    "status": "upcoming",
+    "choice": null
+   },
+   {
+    "k": 10,
+    "due_date": "2027-08-10",
+    "principal": 16666,
+    "interest_est": 425,
+    "payment_est": 17091,
+    "status": "upcoming",
+    "choice": null
+   },
+   {
+    "k": 11,
+    "due_date": "2027-09-10",
+    "principal": 16666,
+    "interest_est": 283,
+    "payment_est": 16949,
+    "status": "upcoming",
+    "choice": null
+   },
+   {
+    "k": 12,
+    "due_date": "2027-10-10",
+    "principal": 16674,
+    "interest_est": 137,
+    "payment_est": 16811,
+    "status": "upcoming",
+    "choice": null
+   }
+  ],
+  "early_warning": {
+   "level": "green",
+   "score": 0,
+   "as_of": "2026-11-12",
+   "signals": []
+  },
+  "rule": "Trọng số: sales_low 0.3 · rating_low 0.2 · low_balance 0.15 · new_inquiry 0.15 · fate_worse 0.2 · large_personal 0.2; xanh < 0.2 · vàng 0.2–0.5 · đỏ ≥ 0.5; đỏ ngay khi dùng vốn sai mục đích hoặc quá hạn ≥ 7 ngày. Ân hạn 3 ngày rồi lãi phạt 1,5 × lãi; quá hạn 30 ngày báo trung tâm tín dụng.",
+  "repayments": [
+   {
+    "at": "2026-10-14T10:55:39.394710Z",
+    "amount": 18145,
+    "split": [
+     {
+      "bank": "WEBANK",
+      "amount": 7258
+     },
+     {
+      "bank": "CMB",
+      "amount": 5444
+     },
+     {
+      "bank": "ICBC",
+      "amount": 5443
+     },
+     {
+      "kind": "due",
+      "penalty": 0,
+      "interest": 1479,
+      "principal": 16666,
+      "as_of": "2026-11-10"
+     }
+    ],
+    "chain_tx": "0xbf0466cf9d06608ca6764410e8cba5e3eeec8427"
+   }
+  ],
+  "alerts": [],
+  "notices": [
+   {
+    "id": "nt_bc9a97fdeaa5",
+    "at": "2026-10-14T10:55:39.395132Z",
+    "level": "info",
+    "kind": "due",
+    "text": "Kỳ 1 ngày 10/11/2026: đã trích 18.145 (lãi 1.479 cho 27 ngày, gốc 16.666). Dư nợ gốc còn 183.334.",
+    "source": "code",
+    "answer": null
+   },
+   {
+    "id": "nt_053cedf78b2f",
+    "at": "2026-10-14T10:55:39.393282Z",
+    "level": "info",
+    "kind": "reminder",
+    "text": "Còn 1 ngày đến kỳ 1 (10/11/2026): khoảng 18.145. Số dư tài khoản kinh doanh 149.000.",
+    "source": "code",
+    "answer": null
+   },
+   {
+    "id": "nt_22ca3ad1dfde",
+    "at": "2026-10-14T10:55:39.386534Z",
+    "level": "info",
+    "kind": "reminder",
+    "text": "Còn 7 ngày đến kỳ 1 (10/11/2026): khoảng 18.145. Số dư tài khoản kinh doanh 149.000.",
+    "source": "code",
+    "answer": null
+   },
+   {
+    "id": "nt_685f40edc7d8",
+    "at": "2026-10-14T10:55:39.344504Z",
+    "level": "info",
+    "kind": "info",
+    "text": "Đã giải ngân 200.000 CNY. Kỳ trả đầu ngày 10/11/2026, khoảng 18.145. Chị để tiền hàng về tài khoản kinh doanh WeBank để hệ thống tự trích đúng hạn.",
+    "source": "code",
+    "answer": null
+   }
+  ],
+  "use_of_funds": {
+   "status": "ok",
+   "due": "2026-10-29",
+   "checked_at": "2026-10-15",
+   "supplier": "SUP-0091",
+   "invoiced": 200000
+  },
+  "reminders": [
+   {
+    "at": "2026-11-03T00:00:00Z",
+    "text": "Còn 7 ngày đến kỳ 1 (10/11/2026): khoảng 18.145. Số dư tài khoản kinh doanh 149.000."
+   },
+   {
+    "at": "2026-11-09T00:00:00Z",
+    "text": "Còn 1 ngày đến kỳ 1 (10/11/2026): khoảng 18.145. Số dư tài khoản kinh doanh 149.000."
+   }
+  ],
+  "transfers": [
+   {
+    "on": "2026-10-14",
+    "amount": 1000,
+    "kind": "supplier",
+    "label": "Trả nhà cung cấp",
+    "note": "",
+    "flag": null
+   }
+  ],
+  "bureau": [],
+  "bank_report": {
+   "as_of": "2026-11-12",
+   "status": "active",
+   "principal_outstanding": 183334,
+   "overdue": 0,
+   "overdue_days": 0,
+   "banks": [
+    {
+     "bank": "WEBANK",
+     "pct": 0.4,
+     "outstanding": 73334,
+     "repaid": 7258
+    },
+    {
+     "bank": "CMB",
+     "pct": 0.3,
+     "outstanding": 55000,
+     "repaid": 5444
+    },
+    {
+     "bank": "ICBC",
+     "pct": 0.3,
+     "outstanding": 55000,
+     "repaid": 5443
+    }
+   ]
+  },
+  "status": "done"
+ },
+ "chain": [
+  {
+   "seq": 4,
+   "kind": "consent",
+   "fingerprint": "sha256:a21040add1460a01e0acdd5500b3a942d65ced7d4b0ac489ec8310c933df876f",
+   "head": "c244843093aec92d005d150d4694ed0732cf6b1cd1a3b88adabb655817a4cbe6",
+   "tx": "0x834686de40cde01df6543e01ddb96ae2a5d1c573",
+   "block": 4,
+   "at": "2026-10-14T10:55:39.303021Z",
+   "remote": {
+    "tx": "0x6d18b6091345409a3a799fb6c4a1d5b63f20e0645f5b7e6709e4ab81b2598475",
+    "block": 8,
+    "status": "sent",
+    "explorer_url": "https://fs.buoyup.app/explorer/#/tx/0x6d18b6091345409a3a799fb6c4a1d5b63f20e0645f5b7e6709e4ab81b2598475"
+   }
+  },
+  {
+   "seq": 5,
+   "kind": "verification",
+   "fingerprint": "sha256:10aa11833ab45385b1a56769c66b0555575952e25145225723ed0d8eea36c478",
+   "head": "a24dc72a8f682d8dac91f6e257d5450d5097e36497f80650939d2ab1b4619633",
+   "tx": "0x65ae2f672963345713cbf1e1f660b44c50163f9e",
+   "block": 5,
+   "at": "2026-10-14T10:55:39.308926Z",
+   "remote": {
+    "tx": "0x2b3f20b48705396098f5f63fee4af74854d71c8db250b167fed65ee99ce92668",
+    "block": 9,
+    "status": "sent",
+    "explorer_url": "https://fs.buoyup.app/explorer/#/tx/0x2b3f20b48705396098f5f63fee4af74854d71c8db250b167fed65ee99ce92668"
+   }
+  },
+  {
+   "seq": 6,
+   "kind": "offer",
+   "fingerprint": "sha256:8115545a29871f09d2fd0ac35d27da162d1bd69c6f8f51d903248d2b75c3a6bf",
+   "head": "2a2ea5963d1cf1c0303942b05797e10224c76e71c28f8c43689a104618e2d8b5",
+   "tx": "0x4f23b4d4c6e3a998a2da9bb4687053c25d9d0667",
+   "block": 6,
+   "at": "2026-10-14T10:55:39.310389Z",
+   "remote": {
+    "tx": "0x9783f0ac2736c1b05b1270d6988dc81b1aea6a093df99341baa0ff25d192bfbf",
+    "block": 10,
+    "status": "sent",
+    "explorer_url": "https://fs.buoyup.app/explorer/#/tx/0x9783f0ac2736c1b05b1270d6988dc81b1aea6a093df99341baa0ff25d192bfbf"
+   }
+  },
+  {
+   "seq": 7,
+   "kind": "proposal",
+   "fingerprint": "sha256:0c512bacde99df94a50a8797b9bb9c6ac98aa6b856228cd5bd8f25cd40325b7b",
+   "head": "fcd3d56fc0648eaf5e0b672c4e9f5fc0c5a27a6f388f3ab114b5d40fb7454bdd",
+   "tx": "0x24f3f5d475c932ac1f75c4d577ca4dedc0ce6ddb",
+   "block": 7,
+   "at": "2026-10-14T10:55:39.311724Z",
+   "remote": {
+    "tx": "0x8585ac1af219731437d44e74f65c9951078db88ad5a645686753578ae79f07b1",
+    "block": 11,
+    "status": "sent",
+    "explorer_url": "https://fs.buoyup.app/explorer/#/tx/0x8585ac1af219731437d44e74f65c9951078db88ad5a645686753578ae79f07b1"
+   }
+  },
+  {
+   "seq": 8,
+   "kind": "agent3_phase1_seal",
+   "fingerprint": "sha256:9d880e6a9f4a746a2e0e9b2e2d19f286b4f756def7f02a799e4bcca304ef3190",
+   "head": "97b01e0f5d90e57cb8736bd397fe8846242723f58e727823c7bbfe41d5cae13e",
+   "tx": "0x692e6c1669c3a16f15d5b91cd4a56beb22c50db8",
+   "block": 8,
+   "at": "2026-10-14T10:55:39.313147Z",
+   "remote": {
+    "tx": "0x33462849530c252e0136841654ef521bbd4e9a60deb43a70d6f6608513ef82bc",
+    "block": 12,
+    "status": "sent",
+    "explorer_url": "https://fs.buoyup.app/explorer/#/tx/0x33462849530c252e0136841654ef521bbd4e9a60deb43a70d6f6608513ef82bc"
+   }
+  },
+  {
+   "seq": 9,
+   "kind": "agent3_conclusion",
+   "fingerprint": "sha256:382c505866cc3282054eebbb551d44e85a2e661c3ef274faf6abf1620bad9b12",
+   "head": "a87703cb715d93139556330c87b984e11748a4ce37c908040fbbc1c85015e97b",
+   "tx": "0x136e968c5d9a7eb1409ef2e2fe6cf9f0150a384f",
+   "block": 9,
+   "at": "2026-10-14T10:55:39.313655Z",
+   "remote": {
+    "tx": "0x7408efcab2c2618339a834050d4b9263b9df758b61bd3bb83f1c2f9100d1ba31",
+    "block": 13,
+    "status": "sent",
+    "explorer_url": "https://fs.buoyup.app/explorer/#/tx/0x7408efcab2c2618339a834050d4b9263b9df758b61bd3bb83f1c2f9100d1ba31"
+   }
+  },
+  {
+   "seq": 10,
+   "kind": "gate_decision",
+   "fingerprint": "sha256:0ad88e164fe95370736bbf0452d0719b1365eb1e2a33e338e9dec29ffc50e1a0",
+   "head": "611b6c8a9f67ccf9c7c1aefc00d3ce429703936ca0141619986f1ade7f742e04",
+   "tx": "0x9f4e63cb218eb6cb74a53490c44a617eb8219900",
+   "block": 10,
+   "at": "2026-10-14T10:55:39.315998Z",
+   "remote": {
+    "tx": "0x00ae5d218b1c51b16d546507fb456a735e2e42bb96e02505334cbdb947c6c440",
+    "block": 14,
+    "status": "sent",
+    "explorer_url": "https://fs.buoyup.app/explorer/#/tx/0x00ae5d218b1c51b16d546507fb456a735e2e42bb96e02505334cbdb947c6c440"
+   }
+  },
+  {
+   "seq": 11,
+   "kind": "syndicate",
+   "fingerprint": "sha256:f3f2b0be2831dcb16dae8d6478c93dfd56fe2d07cf6dd2ede1f6c0a98dd07cfd",
+   "head": "b4e59af40ec44167ab207828bd649361d2a9ff9de4b9aeb3c58df6d0a91d488d",
+   "tx": "0x9a1f9eda2fdfb7e18c65462d0e15fc9eddfe80f7",
+   "block": 11,
+   "at": "2026-10-14T10:55:39.317616Z",
+   "remote": {
+    "tx": "0x75f4d9eba961ed3e6ee2765797eba129337bd6e189061154a0836faee50a7854",
+    "block": 15,
+    "status": "sent",
+    "explorer_url": "https://fs.buoyup.app/explorer/#/tx/0x75f4d9eba961ed3e6ee2765797eba129337bd6e189061154a0836faee50a7854"
+   }
+  },
+  {
+   "seq": 12,
+   "kind": "contract_signed",
+   "fingerprint": "sha256:28ec0cb801a494fef8a470b89727f6c9d98f932241d1c2e7e7b0dec3eed00d62",
+   "head": "0aaff35394509385fc153c6fea105dab9b00a6122b4dc78f212e497d85d05e03",
+   "tx": "0x0abac3fe6f9c86f7dd46398dd127870d3390cd55",
+   "block": 12,
+   "at": "2026-10-14T10:55:39.339661Z",
+   "remote": {
+    "tx": "0x13e1f020ee2aecfd2fc251b2b97c67b7ba141fe2c89e897e47d931341ce0dc85",
+    "block": 16,
+    "status": "sent",
+    "explorer_url": "https://fs.buoyup.app/explorer/#/tx/0x13e1f020ee2aecfd2fc251b2b97c67b7ba141fe2c89e897e47d931341ce0dc85"
+   }
+  },
+  {
+   "seq": 13,
+   "kind": "escrow_funded",
+   "fingerprint": "sha256:22e004620ecb61230148a6822f27b1b754e61d6444e6bccce35bfda089a19c29",
+   "head": "7a4519b22e92761a0daee2febf5e0508ce839f8fee5b91a5a8d52692dec010a0",
+   "tx": "0x82972b643abc530b635f480897bacb408bae2b92",
+   "block": 13,
+   "at": "2026-10-14T10:55:39.341209Z",
+   "remote": {
+    "tx": "0xa1a5e94400ae7928fbddb44175e341314480f878f353113a2d9ae451c351a793",
+    "block": 17,
+    "status": "sent",
+    "explorer_url": "https://fs.buoyup.app/explorer/#/tx/0xa1a5e94400ae7928fbddb44175e341314480f878f353113a2d9ae451c351a793"
+   }
+  },
+  {
+   "seq": 14,
+   "kind": "disbursement",
+   "fingerprint": "sha256:5ad2508790542160402f050b4199404f1f08453b68899324acce85662a8e9052",
+   "head": "cd3767c12b44d0bbfbf0d43b14ca9df961638d128537644018468f559d97523b",
+   "tx": "0x062b67124be6467609954e6252c06acafaf45fee",
+   "block": 15,
+   "at": "2026-10-14T10:55:39.345306Z",
+   "remote": {
+    "tx": "0x6ff8c83b8af2e7a13e5d4f8c60f8c24868c09defaf9869e5d1e4d2ced8a180b6",
+    "block": 18,
+    "status": "sent",
+    "explorer_url": "https://fs.buoyup.app/explorer/#/tx/0x6ff8c83b8af2e7a13e5d4f8c60f8c24868c09defaf9869e5d1e4d2ced8a180b6"
+   }
+  },
+  {
+   "seq": 15,
+   "kind": "repayment",
+   "fingerprint": "sha256:bba2f4ee4a1ab8e4d308a3290611e9e37b2844a53505caa86ad5c5b65cc6b279",
+   "head": "851c9c3788b9f8c9266718582d81e3761cb012e12e9766e4dc497891d8b40eaf",
+   "tx": "0xbf0466cf9d06608ca6764410e8cba5e3eeec8427",
+   "block": 16,
+   "at": "2026-10-14T10:55:39.394072Z",
+   "remote": {
+    "tx": "0x4265e4f31ba78cb3f25a33b65242de229fb7555a6b6e1f22243aa5ccb43d3197",
+    "block": 19,
+    "status": "sent",
+    "explorer_url": "https://fs.buoyup.app/explorer/#/tx/0x4265e4f31ba78cb3f25a33b65242de229fb7555a6b6e1f22243aa5ccb43d3197"
+   }
+  }
+ ],
+ "chain_mode": "remote"
+}

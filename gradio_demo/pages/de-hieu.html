@@ -1,0 +1,327 @@
+<title>BuoyUp nói dễ hiểu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@500;600;700&family=Be+Vietnam+Pro:wght@400;500;600&display=swap">
+<style>
+/* Layout: one reading column. Part 1 is a flowchart drawn like a loan officer's whiteboard (boxes, yes/no
+   diamonds, side exits); part 2 is a scorecard against the contest rules, read like a report card. */
+:root{
+ --paper:#f5f7f6; --sheet:#ffffff; --ink:#13241f; --muted:#56675f; --rule:#d6e0db; --tint:#e9f0ec;
+ --teal:#0d6e5f; --teal-soft:#dcefe9; --gold:#a86a00; --gold-soft:#fbefd6; --red:#b3283a; --red-soft:#fae4e7;
+ --blue:#2c56b8; --blue-soft:#e2e9fb;
+ --display:"Lexend",system-ui,sans-serif; --body:"Be Vietnam Pro",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+ --paper:#0c1513; --sheet:#13201c; --ink:#e4eee9; --muted:#9db1a8; --rule:#27392f; --tint:#182924;
+ --teal:#5fd4bb; --teal-soft:#123a31; --gold:#f2c46a; --gold-soft:#372a10; --red:#ff9aa7; --red-soft:#3a1a20;
+ --blue:#93b2ff; --blue-soft:#1b2a4f; color-scheme:dark}}
+:root[data-theme="dark"]{
+ --paper:#0c1513; --sheet:#13201c; --ink:#e4eee9; --muted:#9db1a8; --rule:#27392f; --tint:#182924;
+ --teal:#5fd4bb; --teal-soft:#123a31; --gold:#f2c46a; --gold-soft:#372a10; --red:#ff9aa7; --red-soft:#3a1a20;
+ --blue:#93b2ff; --blue-soft:#1b2a4f; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font:16px/1.65 var(--body);padding-inline:16px;padding-block:28px 64px}
+.wrap{max-width:980px;margin:0 auto;display:grid;gap:48px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(1.9rem,4.5vw,2.7rem);font-weight:700}
+h2{font-size:1.5rem;font-weight:600}
+h3{font-size:1.05rem;font-weight:600}
+p{margin:0}
+.lede{color:var(--muted);max-width:64ch;font-size:1.04rem}
+.eyebrow{font-size:.75rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+section{display:grid;gap:18px;min-width:0}
+.top{display:grid;gap:12px}
+.toggle{justify-self:start;border:1px solid var(--rule);background:var(--sheet);color:var(--ink);border-radius:999px;padding:6px 14px;font:inherit;font-size:.86rem;cursor:pointer}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+/* the one-paragraph explanation */
+.plain{background:var(--sheet);border:1px solid var(--rule);border-radius:16px;padding:20px 22px;display:grid;gap:12px;font-size:1.05rem}
+.plain b{color:var(--teal)}
+/* flowchart */
+.chart{background:var(--sheet);border:1px solid var(--rule);border-radius:18px;padding:22px 18px;display:grid;gap:0}
+.row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.9fr);gap:0 18px;align-items:center}
+.row .main{display:grid;justify-items:center;min-width:0}
+.row .side{min-width:0}
+.node{width:min(100%,420px);border-radius:14px;border:1.5px solid var(--teal);background:var(--teal-soft);padding:10px 14px;display:grid;gap:2px;text-align:center}
+.node b{font-family:var(--display);font-weight:600;font-size:1rem}
+.node span{font-size:.86rem;color:var(--muted)}
+.node .who{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--teal);font-weight:600}
+.node.start,.node.end{border-radius:999px;background:var(--teal);color:var(--sheet);border-color:var(--teal)}
+.node.start span,.node.end span{color:var(--sheet);opacity:.85}
+.node.bank{border-color:var(--blue);background:var(--blue-soft)}
+.node.bank .who{color:var(--blue)}
+.node.ai{border-color:var(--gold);background:var(--gold-soft)}
+.node.ai .who{color:var(--gold)}
+.ask{width:min(100%,420px);display:grid;place-items:center;padding:6px 0}
+.diamond{background:var(--sheet);border:1.5px dashed var(--ink);border-radius:10px;padding:8px 14px;font-weight:600;font-size:.92rem;text-align:center;position:relative}
+.diamond::before{content:"?";position:absolute;left:-12px;top:50%;transform:translateY(-50%);width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--sheet);display:grid;place-items:center;font-size:.75rem;line-height:22px}
+.link{height:26px;width:2px;background:var(--rule);justify-self:center;position:relative}
+.link::after{content:"";position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--rule);border-bottom:0}
+.yes{font-size:.75rem;font-weight:600;color:var(--teal);justify-self:center}
+.exit{border-left:3px solid var(--red);background:var(--red-soft);border-radius:0 10px 10px 0;padding:8px 12px;font-size:.88rem;display:grid;gap:2px}
+.exit b{color:var(--red);font-weight:600;font-size:.82rem}
+.exit.soft{border-left-color:var(--gold);background:var(--gold-soft)}
+.exit.soft b{color:var(--gold)}
+.stage{font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);justify-self:center;padding:14px 0 6px}
+@media (max-width:640px){
+ .row{grid-template-columns:minmax(0,1fr)}
+ .row .side:not(:empty){margin:6px 0 4px}
+}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:.85rem;color:var(--muted)}
+.legend i{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:6px;border:1.5px solid}
+/* agents */
+.agents{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(280px,100%),1fr));gap:12px}
+.agent{background:var(--sheet);border:1px solid var(--rule);border-radius:14px;padding:14px 16px;display:grid;gap:4px;min-width:0}
+.agent b{font-family:var(--display);font-weight:600}
+.agent span{color:var(--muted);font-size:.92rem}
+/* RAG */
+.ragflow{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:10px;counter-reset:st}
+.rstep{background:var(--sheet);border:1px solid var(--rule);border-radius:12px;padding:12px 14px;display:grid;gap:4px;align-content:start;position:relative;min-width:0}
+.rstep::before{counter-increment:st;content:counter(st);width:24px;height:24px;border-radius:50%;background:var(--gold);color:var(--sheet);display:grid;place-items:center;font-size:.8rem;font-weight:700}
+.rstep b{font-family:var(--display);font-weight:600;font-size:.95rem}
+.rstep span{color:var(--muted);font-size:.86rem}
+.rstep.end{border-color:var(--teal);background:var(--teal-soft)}
+.ex{display:grid;gap:8px}
+.exrow{background:var(--sheet);border:1px solid var(--rule);border-radius:12px;padding:10px 14px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:6px 16px;font-size:.9rem}
+.exrow .q{font-weight:600}
+.exrow .a{color:var(--muted)}
+.exrow .a b{color:var(--ink);font-weight:600}
+@media (max-width:640px){.exrow{grid-template-columns:minmax(0,1fr)}}
+.note{border-left:3px solid var(--gold);background:var(--gold-soft);border-radius:0 10px 10px 0;padding:10px 14px;font-size:.92rem}
+/* scorecard */
+.verdict{background:var(--sheet);border:1.5px solid var(--teal);border-radius:18px;padding:20px 22px;display:grid;gap:10px}
+.verdict h2{font-size:1.35rem}
+.score{display:grid;gap:12px}
+.crit{background:var(--sheet);border:1px solid var(--rule);border-radius:14px;padding:14px 16px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 16px;align-items:start}
+.crit .w{font-family:var(--display);font-size:1.6rem;font-weight:700;color:var(--teal);line-height:1;min-width:3.2ch;font-variant-numeric:tabular-nums}
+.crit .what{display:grid;gap:4px;min-width:0}
+.crit .what span{color:var(--muted);font-size:.92rem}
+.crit ul{margin:4px 0 0;padding-left:18px;font-size:.92rem;display:grid;gap:3px}
+.pill{border-radius:999px;padding:2px 11px;font-size:.78rem;font-weight:600;white-space:nowrap;justify-self:end}
+.p-good{background:var(--teal-soft);color:var(--teal)} .p-mid{background:var(--gold-soft);color:var(--gold)} .p-bad{background:var(--red-soft);color:var(--red)}
+@media (max-width:640px){.crit{grid-template-columns:auto minmax(0,1fr)}.crit .pill{grid-column:2;justify-self:start}}
+.tbl{overflow-x:auto;background:var(--sheet);border:1px solid var(--rule);border-radius:14px}
+table{border-collapse:collapse;width:100%;font-size:.92rem;min-width:620px}
+th,td{text-align:left;vertical-align:top;padding:10px 14px;border-bottom:1px solid var(--rule)}
+th{font-size:.74rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);background:var(--tint);font-weight:600}
+tr:last-child td{border-bottom:0}
+td:first-child{font-weight:600}
+ol.todo{margin:0;padding-left:22px;display:grid;gap:8px}
+ol.todo li b{font-family:var(--display);font-weight:600}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:14px}
+.box{background:var(--sheet);border:1px solid var(--rule);border-radius:14px;padding:16px 18px;display:grid;gap:8px;min-width:0}
+.box ul{margin:0;padding-left:18px;display:grid;gap:5px;font-size:.94rem}
+.foot{color:var(--muted);font-size:.84rem;border-top:1px solid var(--rule);padding-top:14px}
+</style>
+
+<div class="wrap">
+ <header class="top">
+  <span class="eyebrow">BuoyUp · FinTechathon 2026 · Bảng Quốc tế</span>
+  <h1>BuoyUp nói dễ hiểu</h1>
+  <p class="lede">Phần 1 kể lại toàn bộ sản phẩm bằng lời thường và một sơ đồ. Phần 2 đặt BuoyUp cạnh thể lệ cuộc thi để xem đang mạnh ở đâu, còn thiếu gì trước hạn nộp 20/10/2026.</p>
+  <button class="toggle" id="theme" type="button">Đổi nền sáng / tối</button>
+ </header>
+
+ <section aria-labelledby="h1a">
+  <span class="eyebrow">Phần 1 · Sản phẩm</span>
+  <h2 id="h1a">BuoyUp làm gì, trong ba câu</h2>
+  <div class="plain">
+   <p>Người bán hàng online (ví dụ chị Lan bán quần áo trên Douyin) cần tiền nhập hàng trước mùa sale, nhưng ngân hàng ít khi cho cửa hàng nhỏ vay vì không có tài sản thế chấp.</p>
+   <p>BuoyUp để <b>các AI agent</b> kiểm tra cửa hàng thật hay giả, đọc doanh thu khai thuế và lịch sử tín dụng, rồi tính ra <b>chị vay được tối đa bao nhiêu</b>. Sau đó <b>nhiều ngân hàng cùng xem và tự quyết trong 30 giây</b>, cùng góp tiền cho một khoản vay.</p>
+   <p>Chị Lan tự chọn vay bao nhiêu, bao lâu, trả kiểu nào, ký trên điện thoại và nhận tiền. Sau đó hệ thống nhắc trả, tự trích tiền, xử lý khi trả chậm. Mọi bước quan trọng đều được ghi dấu lên blockchain để không ai sửa lén được.</p>
+  </div>
+ </section>
+
+ <section aria-labelledby="h1b">
+  <h2 id="h1b">Sơ đồ một khoản vay</h2>
+  <div class="legend"><span><i style="border-color:var(--teal);background:var(--teal-soft)"></i>người vay làm</span><span><i style="border-color:var(--gold);background:var(--gold-soft)"></i>AI và hệ thống làm</span><span><i style="border-color:var(--blue);background:var(--blue-soft)"></i>ngân hàng làm</span><span><i style="border-color:var(--red);background:var(--red-soft)"></i>lối ra khi không ổn</span></div>
+  <div class="chart" id="chart"></div>
+ </section>
+
+ <section aria-labelledby="h1c">
+  <h2 id="h1c">Năm AI agent, mỗi người một việc</h2>
+  <p class="lede">Không agent nào được tự bịa con số hay tự chuyển tiền. Con số do công thức cố định tính; tiền do hệ thống ngân hàng chuyển theo hợp đồng.</p>
+  <div class="agents">
+   <div class="agent"><b>Agent 1 · Người thẩm tra</b><span>Kiểm tra cửa hàng có thật, đúng chủ, đọc thuế và tín dụng. Thấy lạ thì hỏi lại người vay.</span></div>
+   <div class="agent"><b>Agent 2 · Người tư vấn</b><span>Giải thích hạn mức, gợi ý vay vừa đủ, trả lời chat. Không được hứa hay đổi số.</span></div>
+   <div class="agent"><b>Agent 3 · Người kiểm soát</b><span>Soát lại toàn bộ hồ sơ theo luật và quy tắc, không nghe lời thuyết phục của Agent 2. Kết luận được niêm phong lên blockchain.</span></div>
+   <div class="agent"><b>Agent 4 · Người quản lý khoản vay</b><span>Giải ngân, nhắc trả, theo dõi tiền vay dùng đúng việc, xử lý trả chậm, báo cho ngân hàng mỗi ngày.</span></div>
+   <div class="agent"><b>Agent 5 · Người hậu kiểm</b><span>Xem lại các khoản đã vay, đề xuất chỉnh tham số. Người duyệt mới được áp dụng.</span></div>
+  </div>
+ </section>
+
+ <section aria-labelledby="h1d">
+  <h2 id="h1d">Tra luật bằng RAG</h2>
+  <p class="lede">RAG nghĩa là "tìm rồi mới trả lời": trước khi kết luận, hệ thống tìm đúng điều luật liên quan trong kho luật đã nạp sẵn, rồi đưa nguyên văn điều đó ra để người và AI cùng đối chiếu. Không ai phải nhớ luật, và không AI nào được bịa điều luật.</p>
+  <div class="ragflow">
+   <div class="rstep"><b>Đặt câu hỏi</b><span>Từ hồ sơ (mặt hàng, giấy phép, nhãn hiệu, chủ sở hữu, đồng ý dữ liệu, mục đích vay) hoặc cán bộ tự gõ. Tiếng Việt, Anh hay Trung đều được.</span></div>
+   <div class="rstep"><b>Dịch thuật ngữ</b><span>"thuốc lá điện tử" thêm 电子烟; "beneficial owner" thêm "chủ sở hữu hưởng lợi". Gõ không dấu vẫn hiểu.</span></div>
+   <div class="rstep"><b>Tìm theo chữ</b><span>So khớp từng cặp chữ Hán hoặc từng âm tiết tiếng Việt (BM25).</span></div>
+   <div class="rstep"><b>Tìm theo nghĩa</b><span>Mô hình đa ngôn ngữ e5-large chạy ngay trên máy, không gửi dữ liệu ra ngoài: hỏi khác chữ trong luật vẫn ra.</span></div>
+   <div class="rstep"><b>Trộn kết quả</b><span>Gộp hai danh sách, chọn vài điều gần nhất, ghi rõ điều còn hiệu lực, chưa hiệu lực hay đã bãi bỏ.</span></div>
+   <div class="rstep end"><b>Đối chiếu</b><span>Agent 3 kiểm: quy tắc vừa bật có được truy xuất tìm thấy đúng điều luật nó trích không. Cán bộ đọc nguyên văn để quyết.</span></div>
+  </div>
+  <p class="note"><b>RAG không quyết định.</b> Duyệt hay từ chối vẫn do bộ quy tắc cố định và cán bộ. RAG chỉ tìm căn cứ; mọi câu trích dẫn vẫn phải khớp nguyên văn và còn hiệu lực ở ngày xét.</p>
+
+  <h3>Hai kho luật đang có</h3>
+  <div class="tbl"><table>
+   <thead><tr><th>Kho</th><th>Nội dung</th><th>Dùng cho</th></tr></thead>
+   <tbody>
+    <tr><td>Trung Quốc</td><td>794 điều, 14 văn bản, giữ nguyên tiếng Trung: chống rửa tiền, thương mại điện tử, bảo vệ thông tin cá nhân, cho vay qua internet, cho vay vốn lưu động, nhãn hiệu, chất lượng sản phẩm, thuốc lá điện tử, danh mục hàng cấm…</td><td>Hồ sơ người bán ở Trung Quốc (toàn bộ kịch bản demo)</td></tr>
+    <tr><td>Việt Nam</td><td>1.147 mục, 5 văn bản: Luật Phòng, chống rửa tiền 2022; Luật Đầu tư 2025 kèm phụ lục ngành nghề cấm và có điều kiện; Nghị định 98/2020 (xử phạt hàng giả, hàng cấm, thương mại điện tử, bản hợp nhất 2025); Nghị định 59/2006 và Nghị định 173/2024 (phần bị bãi bỏ được đánh dấu)</td><td>Hồ sơ người bán ở Việt Nam; cán bộ tra cứu</td></tr>
+   </tbody>
+  </table></div>
+
+  <h3>Cách dùng</h3>
+  <div class="cols">
+   <div class="box"><b>Trong một hồ sơ</b><ul>
+    <li>Cán bộ mở hồ sơ trên trang quản trị, tab <b>Agent 3</b> hoặc <b>Toàn bộ luồng</b>, mục "Truy xuất điều luật (RAG)".</li>
+    <li>Mỗi câu hỏi Agent 3 tự đặt có danh sách điều luật gần nhất kèm đoạn nguyên văn.</li>
+    <li>Dòng ✓ cho biết quy tắc đã bật được truy xuất xác nhận căn cứ.</li></ul></div>
+   <div class="box"><b>Tra tự do</b><ul>
+    <li>Trang quản trị, mục <b>"Tra cứu luật (RAG)"</b>: chọn kho Việt Nam hoặc Trung Quốc, gõ câu hỏi, bấm "Xem điều" để đọc toàn văn.</li>
+    <li>Hoặc tab <b>"Tra cứu luật"</b> trên bản demo Gradio.</li>
+    <li>Cho lập trình: <code>GET /v4/legal/search?q=…&amp;jurisdiction=VN</code>.</li></ul></div>
+  </div>
+
+  <h3>Ví dụ câu hỏi</h3>
+  <div class="ex">
+   <div class="exrow"><span class="q">thuốc lá điện tử vị hoa quả có được bán không</span><span class="a">Kho Trung Quốc → <b>Quy định quản lý thuốc lá điện tử, Điều 26</b>: cấm bán thuốc lá điện tử có hương vị khác vị thuốc lá</span></div>
+   <div class="exrow"><span class="q">customer due diligence beneficial owner</span><span class="a">Kho Trung Quốc → <b>Luật Chống rửa tiền 2024, Điều 19</b> (chủ sở hữu hưởng lợi); kho Việt Nam → <b>Luật Phòng, chống rửa tiền 2022, Điều 10</b> (thông tin nhận biết khách hàng)</span></div>
+   <div class="exrow"><span class="q">báo cáo giao dịch đáng ngờ</span><span class="a">Kho Việt Nam → <b>Luật Phòng, chống rửa tiền 2022, Điều 26</b></span></div>
+   <div class="exrow"><span class="q">kinh doanh dịch vụ cầm đồ có điều kiện không</span><span class="a">Kho Việt Nam → <b>Luật Đầu tư 2025, Phụ lục IV</b> (ngành nghề kinh doanh có điều kiện)</span></div>
+   <div class="exrow"><span class="q">nhan biet khach hang (gõ không dấu)</span><span class="a">Kho Việt Nam → <b>Luật Phòng, chống rửa tiền 2022, Điều 11, 9, 10</b> (cập nhật, nhận biết, thông tin nhận biết khách hàng)</span></div>
+  </div>
+
+  <h3>Độ chính xác đo được</h3>
+  <div class="tbl"><table>
+   <thead><tr><th>Kho</th><th>Bộ câu hỏi kiểm tra riêng</th><th>Chỉ tìm theo chữ</th><th>Tìm theo chữ + theo nghĩa</th></tr></thead>
+   <tbody>
+    <tr><td>Trung Quốc</td><td>22 câu</td><td>59% có đúng điều trong 5 kết quả đầu</td><td><b>82%</b></td></tr>
+    <tr><td>Việt Nam</td><td>20 câu</td><td>100%</td><td><b>100%</b> (90% đúng ngay kết quả đầu)</td></tr>
+   </tbody>
+  </table></div>
+  <p class="lede">Các bộ câu hỏi do đội tự soạn và chưa lớn; bộ "kiểm tra riêng" không được dùng khi chỉnh bảng thuật ngữ, nên phản ánh sát hơn chất lượng thật. Mô hình e5-large nặng 2,2 GB, chạy trên CPU; lần đầu lập chỉ mục mất khoảng 6 phút (kho Trung Quốc) và 14 phút (kho Việt Nam), sau đó nạp trong vài giây.</p>
+ </section>
+
+ <section aria-labelledby="h2a">
+  <span class="eyebrow">Phần 2 · Đối chiếu với thể lệ</span>
+  <h2 id="h2a">BuoyUp đứng ở đâu</h2>
+  <div class="verdict">
+   <h2>Kết luận: đúng đề tài, mạnh về an toàn, nhưng hồ sơ nộp bài chưa sẵn sàng</h2>
+   <p>BuoyUp thuộc <b>Topic E · SME Finance Copilot</b> (trợ lý tài chính cho doanh nghiệp nhỏ). Phần sản phẩm đã đủ sâu để cạnh tranh, đặc biệt ở 30% điểm an toàn và tuân thủ, nơi các đội thắng các năm trước đều mạnh. Rủi ro lớn nhất không nằm ở code mà ở <b>hồ sơ nộp</b>: tài liệu đang bằng tiếng Việt trong khi thể lệ bắt buộc tiếng Anh, chưa có slide, chưa có báo cáo tự đánh giá an toàn, chưa có kho GitHub. Còn 6 ngày.</p>
+  </div>
+ </section>
+
+ <section aria-labelledby="h2b">
+  <h3 id="h2b">Đề tài E yêu cầu ba việc</h3>
+  <div class="tbl"><table>
+   <thead><tr><th>Thể lệ yêu cầu</th><th>BuoyUp đang có</th><th>Mức</th></tr></thead>
+   <tbody>
+    <tr><td>Ghép phương án vay vốn (financing-option matching)</td><td>Tính hạn mức theo hồ sơ, gợi ý vay vừa đủ, nhiều ngân hàng tự duyệt và chia vốn, người vay so sánh từng kỳ hạn và hai cách trả trước khi ký</td><td><span class="pill p-good">mạnh</span></td></tr>
+    <tr><td>Quản lý và cảnh báo dòng tiền</td><td>Nhắc trước 7 và 1 ngày, báo khi số dư không đủ trả kỳ tới, cảnh báo sớm khi doanh số giảm hoặc tiền bị chuyển sai mục đích</td><td><span class="pill p-mid">khá</span></td></tr>
+    <tr><td>Phân tích tài chính kinh doanh</td><td>Doanh thu 12 tháng, tăng trưởng, biên lãi gộp, nhu cầu vốn cho kế hoạch nhập hàng, chat giải thích bằng số liệu thật của hồ sơ</td><td><span class="pill p-mid">khá</span></td></tr>
+   </tbody>
+  </table></div>
+ </section>
+
+ <section aria-labelledby="h2c">
+  <h3 id="h2c">Thang điểm</h3>
+  <div class="score">
+   <div class="crit"><span class="w">40%</span><div class="what"><b>Hoàn thành tác vụ</b><span>Agent làm trọn việc thật trong tình huống tài chính.</span><ul><li>Đi trọn 10 giai đoạn, từ dán link đến tất toán và vay lại; 11 kịch bản mẫu ra đúng kết quả.</li><li>256 bài kiểm thử tự động và 4 bộ kiểm giao diện đều đạt.</li><li>Điểm yếu: dữ liệu cửa hàng, thuế, tín dụng là mô phỏng; bản demo đang chạy với mô hình ngôn ngữ tắt, nên giám khảo có thể không thấy "AI" làm việc.</li></ul></div><span class="pill p-mid">khá, cần bằng chứng</span></div>
+   <div class="crit"><span class="w">30%</span><div class="what"><b>An toàn và tuân thủ</b><span>Phân quyền, kiểm soát rủi ro, tuân thủ pháp lý.</span><ul><li>Ba ô đồng ý riêng, ký bằng khuôn mặt hoặc OTP; rút đồng ý là dừng mọi tra cứu.</li><li>Agent 3 kiểm soát độc lập theo bộ quy tắc có trích dẫn điều luật; cổng duyệt 5 điều kiện; trên ngưỡng thì cán bộ duyệt.</li><li>Bộ lọc chặn AI bịa số, hứa hẹn, lời nhắm vào agent khác; mọi quyết định có hash trên chuỗi.</li><li>RAG trên kho luật Trung Quốc và Việt Nam: mỗi quy tắc bật được đối chiếu với điều luật truy xuất được, trích dẫn phải khớp nguyên văn.</li><li>Bốn vai (người vay, cán bộ, quản trị, ngân hàng) tách quyền; mỗi ngân hàng chỉ giải mã được phần của mình.</li></ul></div><span class="pill p-good">mạnh</span></div>
+   <div class="crit"><span class="w">30%</span><div class="what"><b>Đổi mới và tương tác</b><span>Ý tưởng mới, trải nghiệm người dùng.</span><ul><li>Nhiều ngân hàng tự duyệt song song trong 30 giây, ai trả lời trước vào trước.</li><li>Dùng đúng công nghệ của WeBank: FATE (học liên kết để chấm điểm mà không trao đổi dữ liệu gốc) và FISCO BCOS (blockchain).</li><li>Trang demo tương tác: tự điền hồ sơ trên điện thoại giả lập, xem vòng duyệt của ngân hàng.</li></ul></div><span class="pill p-good">mạnh</span></div>
+   <div class="crit"><span class="w">+5</span><div class="what"><b>Điểm thưởng on-chain</b><span>Khám phá blockchain (0–5 điểm).</span><ul><li>Hợp đồng, quyết định, giải ngân, thu nợ, báo tín dụng đều ghi hash lên FISCO BCOS; lệnh giải ngân mã hóa theo từng ngân hàng.</li><li>Cần chạy ở chế độ chuỗi thật và nộp mã giao dịch để lấy điểm.</li></ul></div><span class="pill p-mid">có cơ hội</span></div>
+  </div>
+ </section>
+
+ <section aria-labelledby="h2d">
+  <h3 id="h2d">Sáu thứ phải nộp</h3>
+  <div class="tbl"><table>
+   <thead><tr><th>Hạng mục</th><th>Hiện có</th><th>Trạng thái</th></tr></thead>
+   <tbody>
+    <tr><td>1. Tài liệu kỹ thuật (kiến trúc, thuật toán, thiết kế an toàn)</td><td>Có HANDOVER, thiết kế lõi, hợp đồng API, nhật ký thay đổi, nhưng bằng tiếng Việt</td><td><span class="pill p-mid">cần dịch, gom lại</span></td></tr>
+    <tr><td>2. Slide thuyết trình (≤ 10 phút)</td><td>Chưa có</td><td><span class="pill p-bad">chưa có</span></td></tr>
+    <tr><td>3. Video demo (≤ 5 phút, không bắt buộc)</td><td>Chưa có; trang demo và web chạy được để quay</td><td><span class="pill p-mid">nên làm</span></td></tr>
+    <tr><td>4. Mã nguồn kèm README, link GitHub, hướng dẫn triển khai, test</td><td>Có code, test, Docker, README tiếng Việt; thư mục chưa phải kho git</td><td><span class="pill p-mid">cần lên GitHub</span></td></tr>
+    <tr><td>5. Báo cáo tự đánh giá an toàn (phân quyền, danh sách rủi ro đã biết)</td><td>Nội dung có rải rác trong code và tài liệu, chưa thành báo cáo riêng</td><td><span class="pill p-bad">chưa có</span></td></tr>
+    <tr><td>6. Bằng chứng vận hành (log tài khoản mô phỏng và video)</td><td>Có thể xuất log thật từ các lần chạy sandbox và chuỗi (đã dùng để dựng trang demo)</td><td><span class="pill p-mid">cần xuất, đóng gói</span></td></tr>
+   </tbody>
+  </table></div>
+ </section>
+
+ <section aria-labelledby="h2e">
+  <h3 id="h2e">Điểm mạnh nên nhấn và rủi ro cần đỡ</h3>
+  <div class="cols">
+   <div class="box"><b>Nên nhấn khi thuyết trình</b><ul>
+    <li>"Hạ rào cản": cửa hàng nhỏ không thế chấp vẫn vay được, trong vài phút.</li>
+    <li>AI có người kiểm soát: Agent 3 độc lập, quyết định niêm phong, người thật duyệt khi vượt ngưỡng.</li>
+    <li>Dùng FATE và FISCO BCOS, đúng bộ công nghệ của WeBank, đơn vị tổ chức.</li>
+    <li>Ngân hàng giữ quyền quyết định, BuoyUp chỉ điều phối.</li></ul></div>
+   <div class="box"><b>Rủi ro và cách đỡ</b><ul>
+    <li>Dữ liệu mô phỏng: thể lệ cho phép log tài khoản mô phỏng; nói rõ từ đầu và chỉ ra chỗ thay bằng API thật.</li>
+    <li>"AI" không hiện rõ: quay demo và xuất log với mô hình ngôn ngữ bật, cho thấy bộ lọc chặn số bịa.</li>
+    <li>Tiếng Anh: giao diện và tài liệu đang tiếng Việt; tối thiểu cần slide, tài liệu, README, báo cáo an toàn bằng tiếng Anh.</li>
+    <li>Tài liệu đề xuất đề tài từng loại Topic E vì thiếu dữ liệu thật; cần câu trả lời sẵn cho giám khảo hỏi điều này.</li></ul></div>
+  </div>
+ </section>
+
+ <section aria-labelledby="h2f">
+  <h3 id="h2f">Việc nên làm trước 22:59 ngày 20/10 (giờ Việt Nam)</h3>
+  <ol class="todo">
+   <li><b>Đưa code lên GitHub</b> kèm README tiếng Anh: cài đặt, chạy, chạy test.</li>
+   <li><b>Viết báo cáo tự đánh giá an toàn</b> bằng tiếng Anh: bảng phân quyền bốn vai, các lớp kiểm soát, danh sách rủi ro đã biết.</li>
+   <li><b>Gom tài liệu kỹ thuật tiếng Anh</b>: kiến trúc 5 agent, lõi tính hạn mức, vòng duyệt ngân hàng, thiết kế an toàn.</li>
+   <li><b>Bật mô hình ngôn ngữ, chạy lại 11 kịch bản</b>, xuất log sandbox và mã giao dịch chuỗi làm bằng chứng vận hành.</li>
+   <li><b>Làm slide 10 phút</b> theo mạch: vấn đề, sơ đồ một khoản vay, an toàn, bằng chứng, giá trị.</li>
+   <li><b>Quay video demo 5 phút</b> từ web hoặc trang demo.</li>
+   <li><b>Xác nhận với ban tổ chức</b> (info@ican-x.com) về điểm thưởng on-chain cho đề tài không phải F, như tài liệu đề xuất đã nêu.</li>
+  </ol>
+ </section>
+
+ <p class="foot">Nguồn: thể lệ "International Track — Topics &amp; Rules" (docs/international-topics-rules-en.pages), tài liệu đề xuất đề tài, mã nguồn fintech_new sau khi chuyển sang loan circle (14/10/2026). Đánh giá mức "mạnh/khá" là nhận định của nhóm phát triển, không phải điểm chấm.</p>
+</div>
+
+<script>
+/* the flowchart: [kind, who, title, note, sideExit?] ; 'q' rows are yes/no questions with a "no" exit */
+const F = [
+ ['stage','Giai đoạn 1 · Nộp hồ sơ'],
+ ['start','Người vay','Mở BuoyUp, chọn hộ kinh doanh hoặc doanh nghiệp',''],
+ ['node','Người vay','Dán link cửa hàng','AI đọc tên chủ, số đăng ký, điểm cửa hàng'],
+ ['node','Người vay','Chụp căn cước, quét khuôn mặt',''],
+ ['q','Đúng là chủ cửa hàng?',['bad','Không','Từ chối: không cho vay hộ người khác']],
+ ['node','Người vay','Tích đủ 3 ô đồng ý, ký bằng khuôn mặt hoặc OTP','Tra cứu tín dụng · chuyển hồ sơ cho ngân hàng · xử lý dữ liệu'],
+ ['stage','Giai đoạn 2 · Thẩm định và duyệt'],
+ ['ai','Agent 1','Đọc doanh thu khai thuế, tín dụng, điểm liên ngân hàng','Người vay có thể nộp thêm ảnh doanh thu'],
+ ['q','Hồ sơ có điểm lạ?',['soft','Có','AI hỏi lại người vay; nghi gian lận thì chuyển cán bộ'],'Không'],
+ ['ai','Lõi quyết định','Tính hạn mức','Số nhỏ nhất của: khả năng trả · trần theo nhóm khách · trần 200.000 với hộ kinh doanh'],
+ ['ai','Agent 2 rồi Agent 3','Đề xuất, rồi kiểm soát độc lập theo luật',''],
+ ['q','Qua kiểm soát?',['bad','Không','Từ chối có nêu lý do, hoặc chuyển cán bộ xem']],
+ ['bank','Các ngân hàng','Cùng nhận hồ sơ, tự quyết trong 30 giây','2 ngân hàng đồng ý: chia 40/30/30 · 1 ngân hàng: 30/70'],
+ ['q','Có ngân hàng nhận?',['soft','Không','Thử lại ở 70%, rồi 50% hạn mức; vẫn không ai thì từ chối']],
+ ['stage','Giai đoạn 3–5 · Chọn, ký, nhận tiền'],
+ ['node','Người vay','Chọn số tiền, kỳ hạn, cách trả, ngày trả','Trong hạn mức, không cần duyệt lại; hạn mức giữ 7 ngày'],
+ ['node','Người vay','Đọc bảng chi phí ít nhất 20 giây, ký hợp đồng','Lãi năm là toàn bộ chi phí, không phí'],
+ ['bank','Các ngân hàng','Chuyển vốn vào tài khoản trung gian tại WeBank',''],
+ ['ai','Agent 4','Giải ngân','Tối đa 100.000 vào tài khoản người vay, phần vượt trả thẳng nhà cung cấp'],
+ ['stage','Giai đoạn 6–10 · Trong thời gian vay'],
+ ['ai','Agent 4','Theo dõi tài khoản, nhắc trước 7 và 1 ngày','Chuyển tiền mua chứng khoán, bất động sản thì báo động'],
+ ['q','Đến ngày trả, đủ tiền?',['soft','Không','3 ngày ân hạn, rồi tính lãi phạt; quá 30 ngày báo trung tâm tín dụng']],
+ ['node','Người vay','Trả đủ các kỳ, hoặc trả trước không mất phí','Được trả tối thiểu tối đa 2 kỳ liền'],
+ ['end','Tất toán','Báo tín dụng tốt, lần sau vay dễ hơn',''],
+];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const cls = {start:'node start', end:'node end', node:'node', ai:'node ai', bank:'node bank'};
+let h = '', prev = null, go = 'Có';
+for (const r of F) {
+ if (r[0] === 'stage') { h += `<div class="stage">${esc(r[1])}</div>`; prev = 'stage'; continue; }
+ if (prev && prev !== 'stage') h += `<div class="row"><div class="main">${prev === 'q' ? `<span class="yes">${esc(go)}</span>` : ''}<div class="link"></div></div><div class="side"></div></div>`;
+ if (r[0] === 'q') {
+  const [k, label, text] = r[2]; go = r[3] || 'Có';
+  h += `<div class="row"><div class="main"><div class="ask"><div class="diamond">${esc(r[1])}</div></div></div><div class="side"><div class="exit ${k === 'soft' ? 'soft' : ''}"><b>${esc(label)} →</b><span>${esc(text)}</span></div></div></div>`;
+ } else {
+  h += `<div class="row"><div class="main"><div class="${cls[r[0]]}"><span class="who">${esc(r[1])}</span><b>${esc(r[2])}</b>${r[3] ? `<span>${esc(r[3])}</span>` : ''}</div></div><div class="side"></div></div>`;
+ }
+ prev = r[0];
+}
+document.getElementById('chart').innerHTML = h;
+document.getElementById('theme').onclick = () => { const r = document.documentElement, dark = r.dataset.theme ? r.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches; r.dataset.theme = dark ? 'light' : 'dark'; };
+</script>

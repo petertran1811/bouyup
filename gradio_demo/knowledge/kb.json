@@ -1,0 +1,425 @@
+{
+ "hash": "sha256:851c8541c51ef19bf8c359799aaa762aa479860fcf9fd528d1a40fe8f6a79132",
+ "entries": [
+  {
+   "title": "BuoyUp là gì? BuoyUp làm gì?",
+   "source": "Hỏi đáp",
+   "text": "BuoyUp giúp người bán hàng online (ví dụ chị Lan bán quần áo trên Douyin) vay vốn nhập hàng mà không cần tài sản thế chấp.\n- Năm AI agent kiểm tra cửa hàng có thật không, đọc doanh thu khai thuế và lịch sử tín dụng, rồi một công thức cố định tính hạn mức.\n- Nhiều ngân hàng (WeBank dẫn đầu cùng các ngân hàng hợp tác) tự xem hồ sơ trong 30 giây và cùng góp vốn cho một khoản vay.\n- Người vay tự chọn số tiền, kỳ hạn, cách trả, ký trên điện thoại; hệ thống giải ngân, nhắc trả, tự trích nợ và xử lý trả chậm.\n- Các bước quan trọng được ghi dấu (hash) lên blockchain FISCO BCOS để không ai sửa lén được.\n\nĐây là bản demo dự thi FinTechathon 2026; số liệu cửa hàng, thuế, tín dụng và quyết định ngân hàng đều là mô phỏng.",
+   "weight": 1.5,
+   "id": "KB000"
+  },
+  {
+   "title": "Quy trình vay (vòng vay / loan circle) gồm những bước nào?",
+   "source": "Hỏi đáp",
+   "text": "Vòng vay có 10 giai đoạn:\n1. **Nộp hồ sơ:** chọn loại người vay, dán link cửa hàng, quét CCCD, đánh dấu ba ô đồng ý, ký bằng khuôn mặt hoặc OTP.\n2. **Thẩm định và duyệt:** Agent 1 xác minh, công thức tính hạn mức, Agent 2 đề xuất, Agent 3 kiểm soát, các ngân hàng tự duyệt song song trong 30 giây.\n3. **Chọn khoản vay:** số tiền trong hạn mức, kỳ hạn, cách trả (trả góp hoặc theo doanh thu), ngày trả 1–28.\n4. **Hợp đồng và ký:** đọc bảng chi phí ít nhất 20 giây rồi ký.\n5. **Giải ngân:** tiền các ngân hàng vào tài khoản trung gian ở WeBank, đủ thì chuyển một lần.\n6. **Giám sát:** theo dõi tiền vào, tiền ra của tài khoản kinh doanh, cảnh báo sớm.\n7. **Thu nợ** vào ngày trả. 8. **Xử lý quá hạn.** 9. **Tất toán.** 10. **Vay lại** dựa trên lịch sử với BuoyUp.",
+   "weight": 1.5,
+   "id": "KB001"
+  },
+  {
+   "title": "Ai được vay? Hộ kinh doanh và doanh nghiệp khác nhau thế nào?",
+   "source": "Hỏi đáp",
+   "text": "BuoyUp phục vụ người bán trên các sàn Douyin, Taobao, Tmall, JD, Pinduoduo, Kuaishou. Có hai loại người vay, chọn khi tạo hồ sơ và phải khớp đăng ký kinh doanh (lệch thì bị chặn):\n- **Hộ kinh doanh:** hạn mức tối đa 200.000 tệ; kỳ hạn 3, 6 hoặc 12 tháng.\n- **Doanh nghiệp:** hạn mức tối đa 2.000.000 tệ; kỳ hạn 3, 6, 12, 24 hoặc 36 tháng; người đại diện phải ký bảo lãnh.",
+   "weight": 1.5,
+   "id": "KB002"
+  },
+  {
+   "title": "Hạn mức được tính như thế nào? Tôi được vay tối đa bao nhiêu?",
+   "source": "Hỏi đáp",
+   "text": "Hạn mức = số nhỏ nhất trong ba con số:\n1. Khả năng trả nợ trong kỳ hạn dài nhất, tính trên doanh thu khai thuế đã nhân hệ số thận trọng theo ngành.\n2. Trần theo nhóm tín dụng (nhóm 1: gấp 3 lần, nhóm 2: 1,5 lần, nhóm 3: 0,5 lần, nhóm 4: không cho vay).\n3. Trần theo loại người vay (hộ kinh doanh 200.000 tệ, doanh nghiệp 2.000.000 tệ).\n\nHạn mức tối thiểu 10.000 tệ và có hiệu lực 7 ngày. Con số do công thức cố định B1–B9 tính, AI không được tạo hay sửa số.",
+   "weight": 1.5,
+   "id": "KB003"
+  },
+  {
+   "title": "Lãi suất bao nhiêu? Có mất phí không?",
+   "source": "Hỏi đáp",
+   "text": "Lãi năm theo hạng hồ sơ: A 8%, B 10%, C 12%, D 15%, không thấp hơn chi phí vốn cộng chi phí xử lý và không vượt trần 24%.\nPhí bằng 0: lãi năm trong bảng chi phí là toàn bộ chi phí. Lãi tính theo số ngày thực tế trên dư nợ gốc. Trả trước hạn không mất phí, chỉ trả lãi những ngày đã dùng tiền.",
+   "weight": 1.5,
+   "id": "KB004"
+  },
+  {
+   "title": "Nhiều ngân hàng cùng cho vay như thế nào? Tỷ lệ chia vốn ra sao?",
+   "source": "Hỏi đáp",
+   "text": "WeBank dẫn đầu. Bộ điều phối kiểm các quy tắc cứng rồi gửi hồ sơ song song cho các ngân hàng hợp tác; mỗi ngân hàng tự quyết theo chính sách của mình và danh mục trên chuỗi. Ngân hàng nào trả lời quá 30 giây coi như từ chối.\n- Hai ngân hàng đồng ý: WeBank 40%, mỗi ngân hàng 30%.\n- Một ngân hàng đồng ý: WeBank 30%, ngân hàng đó 70%.\n- Không ai đồng ý: thử lại ở 70% rồi 50% hạn mức; vẫn không ai nhận thì từ chối (NO_PARTNER). WeBank không cho vay một mình.\n\nTrong demo, chị Lan được hạn mức 200.000 tệ, chia WeBank 40% / CMB 30% / ICBC 30%. Tên ngân hàng chỉ là đối tác giả định.",
+   "weight": 1.5,
+   "id": "KB005"
+  },
+  {
+   "title": "Trả nợ theo doanh thu là gì? Khác trả góp thế nào?",
+   "source": "Hỏi đáp",
+   "text": "Người vay chọn một trong hai cách, chọn một lần khi chọn khoản vay:\n- **Trả góp đều:** mỗi kỳ trả gốc đều cộng lãi.\n- **Trả theo doanh thu:** số tiền mỗi kỳ tính theo hồ sơ, đủ trả hết gốc và lãi trong kỳ hạn trên doanh thu thận trọng.\n\nCó thể xem lịch trả của từng lựa chọn trước khi chọn. Kỳ trả đầu cách ngày giải ngân ít nhất 15 ngày; ngày trả chọn từ 1 đến 28.",
+   "weight": 1.5,
+   "id": "KB006"
+  },
+  {
+   "title": "Trả tối thiểu là gì? Nếu tháng này tôi không đủ tiền thì sao?",
+   "source": "Hỏi đáp",
+   "text": "Với khoản trả góp kỳ hạn từ 3 tháng, người vay có thể trả tối thiểu = lãi của kỳ + 30% gốc của một kỳ trả góp đều. Được trả tối thiểu tối đa 2 kỳ liền; phần gốc hoãn chia đều vào các kỳ sau.\nTrước ngày trả 7 ngày và 1 ngày hệ thống nhắc; nếu số dư không đủ cho kỳ tới thì có cảnh báo sớm.",
+   "weight": 1.5,
+   "id": "KB007"
+  },
+  {
+   "title": "Trả chậm hoặc quá hạn thì bị xử lý thế nào?",
+   "source": "Hỏi đáp",
+   "text": "- Có 3 ngày ân hạn sau ngày trả.\n- Sau đó tính lãi phạt bằng 1,5 lần lãi (không vượt 24%/năm). Tiền trả được phân bổ: lãi phạt trước, rồi lãi, rồi gốc, chia các ngân hàng theo tỷ lệ góp vốn.\n- Quá hạn 30 ngày thì báo trung tâm thông tin tín dụng; nhóm ngân hàng nắm từ 2/3 dư nợ trở lên quyết định bước tiếp.\n- Lần vay sau, người từng quá hạn từ 30 ngày bị xếp nhóm 4 (không được vay).",
+   "weight": 1.5,
+   "id": "KB008"
+  },
+  {
+   "title": "Tiền vay được giải ngân vào đâu? Trả thẳng nhà cung cấp là sao?",
+   "source": "Hỏi đáp",
+   "text": "Các ngân hàng chuyển phần vốn của mình vào tài khoản trung gian tại WeBank; đủ tiền mới giải ngân một lệnh:\n- Tối đa 100.000 tệ vào tài khoản kinh doanh WeBank của người vay.\n- Phần vượt 100.000 tệ trả thẳng cho nhà cung cấp (phải có hóa đơn, không liên kết với người vay).\n\nTrước khi chuyển, Agent 4 kiểm lại ủy quyền còn hiệu lực và người nhận đúng như hợp đồng. Hash hợp đồng, quyết định và lệnh giải ngân được ghi lên chuỗi.",
+   "weight": 1.5,
+   "id": "KB009"
+  },
+  {
+   "title": "Hợp đồng ký thế nào? Cần chuẩn bị gì khi ký?",
+   "source": "Hỏi đáp",
+   "text": "Hợp đồng hiện bảng chi phí: lãi năm (toàn bộ chi phí, phí 0), lãi phạt, quy tắc trả tối thiểu, các ngân hàng và phần vốn, kênh khiếu nại, lịch trả. Phải mở đọc ít nhất 20 giây mới ký được.\nKhi ký cần: tài khoản kinh doanh WeBank, cam kết dùng vốn đúng mục đích, tài khoản nhà cung cấp nếu vay trên 100.000 tệ, bảo lãnh của người đại diện nếu là doanh nghiệp. Lúc ký mới giữ chỗ hạn mức của từng ngân hàng; mỗi ngân hàng một số hợp đồng.",
+   "weight": 1.5,
+   "id": "KB010"
+  },
+  {
+   "title": "Ba ô đồng ý là gì? Tôi có rút lại sự đồng ý được không?",
+   "source": "Hỏi đáp",
+   "text": "Khi nộp hồ sơ có ba ô đồng ý riêng, không đánh sẵn, mỗi ô có văn bản giải thích: (1) xử lý khuôn mặt và dữ liệu tài chính, (2) ủy quyền tra cứu tín dụng, (3) chuyển hồ sơ cho các ngân hàng hợp tác. Thiếu ô nào thì không nộp được. Ký bằng khuôn mặt hoặc OTP.\nNgười vay rút đồng ý bất cứ lúc nào; khi đó mọi tra cứu dừng và không thể chọn hay ký khoản vay. Ủy quyền có hiệu lực 90 ngày.",
+   "weight": 1.5,
+   "id": "KB011"
+  },
+  {
+   "title": "Agent 1 làm gì?",
+   "source": "Hỏi đáp",
+   "text": "Agent 1 · Người thẩm tra: kiểm cửa hàng có thật và đúng chủ, lấy doanh thu từ dữ liệu thuế, báo cáo tín dụng, điểm FATE và lịch sử vay với BuoyUp.\nNgười vay có thể nộp thêm ảnh sao kê doanh thu (tối đa 6 tháng): lệch so với thuế ≤ 15% thì dùng và được cộng 5% hệ số thận trọng; 15–30% thì bỏ qua; trên 30% thì bật cờ RISK_STATEMENT_MISMATCH và chuyển cán bộ. Thấy điểm lạ thì hỏi lại người vay trước. Mọi kết luận thật/giả do công cụ cố định đưa ra, không do mô hình ngôn ngữ.",
+   "weight": 1.5,
+   "id": "KB012"
+  },
+  {
+   "title": "Agent 2 làm gì?",
+   "source": "Hỏi đáp",
+   "text": "Agent 2 · Người tư vấn: nhận phiếu hạn mức từ công thức, đề xuất hạn mức đầy đủ, gợi ý vay vừa đủ theo kế hoạch nhập hàng, báo giá từng lựa chọn kỳ hạn và cách trả, và trả lời chat của người bán. Agent 2 chỉ chọn và giải thích, không bao giờ tạo hay đổi con số, không được hứa hẹn.",
+   "weight": 1.5,
+   "id": "KB013"
+  },
+  {
+   "title": "Agent 3 làm gì?",
+   "source": "Hỏi đáp",
+   "text": "Agent 3 · Người kiểm soát: rà độc lập toàn bộ hồ sơ theo bộ quy tắc rủi ro và pháp lý có trích dẫn điều luật (bộ rules-v1.2), không nghe theo lời thuyết phục của Agent 2.\n- Pha 0: code chạy các quy tắc và tính \"sàn kết luận\".\n- Pha 1: Agent 3 tự đánh giá khi chưa thấy lập luận của Agent 2; kết luận được niêm phong bằng hash trên chuỗi.\n- Pha 2: đọc lập luận của Agent 2 rồi kết luận cuối, không bao giờ nhẹ hơn sàn.\n\nSau đó cổng duyệt quyết định; hạn mức trên 500.000 tệ thì cán bộ duyệt. Agent 3 dùng RAG để tìm điều luật làm căn cứ.",
+   "weight": 1.5,
+   "id": "KB014"
+  },
+  {
+   "title": "Agent 4 làm gì?",
+   "source": "Hỏi đáp",
+   "text": "Agent 4 · Người quản lý khoản vay: giải ngân qua tài khoản trung gian, nhắc trả trước 7 và 1 ngày, trích nợ vào ngày trả, xử lý trả tối thiểu, ân hạn, lãi phạt, quá hạn 30 ngày, trả trước, theo dõi tiền vay dùng đúng mục đích và báo cáo hằng ngày cho ngân hàng. Agent 4 tự chạy mỗi 5 phút. Các quyết định nặng (đòi nợ trước hạn, giãn nợ) chỉ cán bộ làm được.",
+   "weight": 1.5,
+   "id": "KB015"
+  },
+  {
+   "title": "Agent 5 làm gì?",
+   "source": "Hỏi đáp",
+   "text": "Agent 5 · Người hậu kiểm: không xử lý hồ sơ nào. Nó nhìn lại cả danh mục theo chu kỳ (mỗi 6 giờ): so quyết định lúc duyệt với kết quả trả nợ thật, theo dõi nợ xấu, phát hiện trôi dữ liệu, đo hành vi của Agent 2 và Agent 3, rồi đề xuất chỉnh tham số. Người duyệt mới được áp dụng; Agent 5 không có quyền sửa cấu hình.",
+   "weight": 1.5,
+   "id": "KB016"
+  },
+  {
+   "title": "AI có tự quyết định cho vay hay tự chuyển tiền không?",
+   "source": "Hỏi đáp",
+   "text": "Không. Mọi con số (hạn mức, lãi, hạng, lịch trả) do công thức cố định tính. Tiền do hệ thống ngân hàng chuyển theo hợp đồng. Mỗi ngân hàng tự duyệt phần của mình.\nMô hình ngôn ngữ chỉ điều phối, giải thích và soạn câu chữ; đầu ra đi qua bộ lọc chặn bịa số, hứa hẹn và lời nhắm vào agent khác. Máy mô hình ngôn ngữ ngừng thì hệ thống vẫn chạy bằng câu mẫu.",
+   "weight": 1.5,
+   "id": "KB017"
+  },
+  {
+   "title": "Giám sát tiền vay dùng đúng mục đích như thế nào?",
+   "source": "Hỏi đáp",
+   "text": "Agent 4 theo dõi tài khoản kinh doanh WeBank:\n- Chuyển tiền sang chứng khoán hoặc bất động sản: cảnh báo đỏ và ghi lên chuỗi.\n- Chuyển cho cá nhân trên 30% khoản vay: cảnh báo vàng.\n- Cảnh báo sớm khi doanh số thấp, điểm cửa hàng giảm, số dư thấp trước kỳ trả, có tra cứu tín dụng mới, điểm FATE xấu đi.",
+   "weight": 1.5,
+   "id": "KB018"
+  },
+  {
+   "title": "FATE là gì? BuoyUp dùng FATE thế nào?",
+   "source": "Hỏi đáp",
+   "text": "FATE là nền tảng học liên kết (federated learning) mã nguồn mở của WeBank: các bên cùng chấm điểm mà không trao đổi dữ liệu gốc. BuoyUp dùng điểm FATE liên ngân hàng như một nguồn của Agent 1 và trong bảng điểm hồ sơ. Trong bản demo, điểm FATE lấy từ dữ liệu mẫu và giao diện ghi rõ \"Dữ liệu mẫu\".",
+   "weight": 1.5,
+   "id": "KB019"
+  },
+  {
+   "title": "Blockchain FISCO BCOS dùng vào việc gì?",
+   "source": "Hỏi đáp",
+   "text": "BuoyUp ghi dấu vân tay (hash) của từng bước lên FISCO BCOS: ủy quyền, biên bản xác minh, niêm phong Agent 3, quyết định, hợp đồng, giải ngân, thu nợ, báo tín dụng. Lệnh giải ngân được mã hóa theo từng ngân hàng, mỗi ngân hàng chỉ giải mã được phần của mình. Danh mục chính sách của các ngân hàng cũng đọc từ chuỗi. Chạy không có chuỗi thật thì dùng sổ mô phỏng, giao diện ghi nhãn \"Mô phỏng\".",
+   "weight": 1.5,
+   "id": "KB020"
+  },
+  {
+   "title": "RAG là gì? Tra cứu luật hoạt động thế nào?",
+   "source": "Hỏi đáp",
+   "text": "RAG nghĩa là \"tìm rồi mới trả lời\": trước khi kết luận, hệ thống tìm đúng điều luật trong kho đã nạp và đưa nguyên văn ra để đối chiếu.\n- Hai kho: Trung Quốc (794 điều, 14 văn bản) và Việt Nam (1.147 mục, 5 văn bản).\n- Tìm theo chữ (BM25) và theo nghĩa (mô hình đa ngôn ngữ e5-large chạy trên máy), rồi trộn kết quả.\n- RAG không quyết định; duyệt hay từ chối vẫn do bộ quy tắc và cán bộ.\n\nThử ngay ở tab **Tra cứu luật (RAG)**: gõ câu hỏi, chọn kho Việt Nam hoặc Trung Quốc, bấm Tìm.",
+   "weight": 1.5,
+   "id": "KB021"
+  },
+  {
+   "title": "Dùng bản demo này thế nào?",
+   "source": "Hỏi đáp",
+   "text": "- Tab **Demo vòng vay**: chọn một trong 11 kịch bản có sẵn để xem từng bước, hoặc chọn **Tự điền** để tự nhập hồ sơ trên điện thoại giả lập, từ dán link cửa hàng đến giải ngân.\n- Tab **Luồng mới so với bản trước**: sơ đồ vòng vay và các thay đổi.\n- Tab **BuoyUp nói dễ hiểu**: giải thích bằng lời thường.\n- Tab **Tra cứu luật (RAG)**: tra điều luật Việt Nam và Trung Quốc.\n- Tab **Hỏi đáp BuoyUp**: hỏi chatbot về bất cứ phần nào của BuoyUp.\n- Tab **Góp ý**: ghi nhận xét của bạn; góp ý được lưu lại và hiện trong bảng.",
+   "weight": 1.5,
+   "id": "KB022"
+  },
+  {
+   "title": "Dữ liệu trong demo có thật không? Các ngân hàng có hợp tác thật không?",
+   "source": "Hỏi đáp",
+   "text": "Không. Mọi số liệu cửa hàng, thuế, tín dụng, điểm FATE và quyết định ngân hàng là mô phỏng. Tên WeBank, China Merchants Bank, ICBC… chỉ dùng làm đối tác giả định trong kịch bản, chưa có hợp tác thật.",
+   "weight": 1.5,
+   "id": "KB023"
+  },
+  {
+   "title": "BuoyUp dự thi đề tài nào?",
+   "source": "Hỏi đáp",
+   "text": "BuoyUp dự thi FinTechathon 2026, bảng Quốc tế, đề tài E · SME Finance Copilot (trợ lý tài chính cho doanh nghiệp nhỏ): ghép phương án vay vốn, quản lý và cảnh báo dòng tiền, phân tích tài chính kinh doanh. Thang điểm: hoàn thành tác vụ 40%, an toàn và tuân thủ 30%, đổi mới và tương tác 30%, cộng tối đa 5 điểm cho khám phá blockchain.",
+   "weight": 1.5,
+   "id": "KB024"
+  },
+  {
+   "title": "Tất toán và vay lại thế nào?",
+   "source": "Hỏi đáp",
+   "text": "Trả hết nợ thì khoản vay chuyển sang \"đã tất toán\", hệ thống báo trung tâm tín dụng, trả lại hạn mức cho các ngân hàng, và người vay được đổi tài khoản nhận tiền hàng. Mỗi người chỉ có một khoản vay đang mở. Khi vay lại, lịch sử với BuoyUp được dùng: đã tất toán tốt thì xếp nhóm 1, từng quá hạn từ 30 ngày thì nhóm 4.",
+   "weight": 1.5,
+   "id": "KB025"
+  },
+  {
+   "title": "Vì sao hồ sơ bị từ chối hoặc hạn mức bị giảm?",
+   "source": "Hỏi đáp",
+   "text": "Một số lý do thường gặp:\n- Không ngân hàng nào đồng ý ngay cả ở 70% và 50% hạn mức (NO_PARTNER).\n- Nhóm tín dụng 4 (ví dụ từng quá hạn từ 30 ngày).\n- Loại người vay không khớp đăng ký kinh doanh.\n- Mặt hàng bị cấm hoặc cần giấy phép mà không có (Agent 3 kiểm theo luật, ví dụ thuốc lá điện tử vị hoa quả).\n- Sao kê tự nộp lệch thuế trên 30%.\n- Cổng duyệt ra \"nhỏ hơn\": ngân hàng nhận phương án hạn mức nhỏ hơn, người vay không phải xác nhận lại.",
+   "weight": 1.5,
+   "id": "KB026"
+  },
+  {
+   "title": "Hệ thống được xây bằng công nghệ gì?",
+   "source": "Hỏi đáp",
+   "text": "Backend Python FastAPI một tiến trình, dữ liệu trong SQLite; giao diện web tĩnh (người bán, cán bộ/quản trị, ngân hàng). Năm agent trong `app/agents/`, công thức B1–B9 trong `app/core/algorithm.py`, bộ điều phối ngân hàng `app/banks/syndicate.py`, RAG `app/core/rag.py`, chuỗi FISCO BCOS qua dịch vụ riêng. Chạy bằng Docker; có hơn 250 bài kiểm thử tự động. Bản demo này dựng bằng Gradio.",
+   "weight": 1.5,
+   "id": "KB027"
+  },
+  {
+   "title": "Có những vai trò người dùng nào?",
+   "source": "Hỏi đáp",
+   "text": "Bốn vai, tách quyền: người bán (trang workspace, có chat với Agent 2), cán bộ tín dụng và quản trị (trang admin: hồ sơ, toàn bộ luồng, chuỗi, hậu kiểm, tra cứu luật), ngân hàng đối tác (cổng ngân hàng: xem hồ sơ của mình, giải mã lệnh giải ngân phần của mình).",
+   "weight": 1.5,
+   "id": "KB028"
+  },
+  {
+   "title": "Bạn là ai? Chatbot này trả lời được những gì?",
+   "source": "Hỏi đáp",
+   "text": "Mình là trợ lý hỏi đáp của bản demo BuoyUp. Mình tìm câu trả lời trong tài liệu của đội (hỏi đáp, trang \"BuoyUp nói dễ hiểu\", nhật ký vòng vay, tài liệu bàn giao, đặc tả năm agent) và trích lại nguyên văn, kèm nguồn. Bạn có thể hỏi về quy trình vay, hạn mức, lãi, cách trả nợ, các agent, ngân hàng, FATE, blockchain, RAG hay cách dùng demo. Câu hỏi về luật sẽ kèm các điều luật gần nhất. Câu nào mình chưa trả lời được, bạn ghi ở tab **Góp ý**.",
+   "weight": 1.5,
+   "id": "KB029"
+  },
+  {
+   "title": "BuoyUp làm gì, trong ba câu",
+   "source": "BuoyUp nói dễ hiểu",
+   "text": "Người bán hàng online (ví dụ chị Lan bán quần áo trên Douyin) cần tiền nhập hàng trước mùa sale, nhưng ngân hàng ít khi cho cửa hàng nhỏ vay vì không có tài sản thế chấp.\nBuoyUp để các AI agent kiểm tra cửa hàng thật hay giả, đọc doanh thu khai thuế và lịch sử tín dụng, rồi tính ra chị vay được tối đa bao nhiêu. Sau đó nhiều ngân hàng cùng xem và tự quyết trong 30 giây, cùng góp tiền cho một khoản vay.\nChị Lan tự chọn vay bao nhiêu, bao lâu, trả kiểu nào, ký trên điện thoại và nhận tiền. Sau đó hệ thống nhắc trả, tự trích tiền, xử lý khi trả chậm. Mọi bước quan trọng đều được ghi dấu lên blockchain để không ai sửa lén được.",
+   "weight": 1.25,
+   "id": "KB030"
+  },
+  {
+   "title": "Năm AI agent, mỗi người một việc",
+   "source": "BuoyUp nói dễ hiểu",
+   "text": "Không agent nào được tự bịa con số hay tự chuyển tiền. Con số do công thức cố định tính; tiền do hệ thống ngân hàng chuyển theo hợp đồng.\nAgent 1 · Người thẩm traKiểm tra cửa hàng có thật, đúng chủ, đọc thuế và tín dụng. Thấy lạ thì hỏi lại người vay.\nAgent 2 · Người tư vấnGiải thích hạn mức, gợi ý vay vừa đủ, trả lời chat. Không được hứa hay đổi số.\nAgent 3 · Người kiểm soátSoát lại toàn bộ hồ sơ theo luật và quy tắc, không nghe lời thuyết phục của Agent 2. Kết luận được niêm phong lên blockchain.\nAgent 4 · Người quản lý khoản vayGiải ngân, nhắc trả, theo dõi tiền vay dùng đúng việc, xử lý trả chậm, báo cho ngân hàng mỗi ngày.\nAgent 5 · Người hậu kiểmXem lại các khoản đã vay, đề xuất chỉnh tham số. Người duyệt mới được áp dụng.",
+   "weight": 1.25,
+   "id": "KB031"
+  },
+  {
+   "title": "Tra luật bằng RAG",
+   "source": "BuoyUp nói dễ hiểu",
+   "text": "RAG nghĩa là \"tìm rồi mới trả lời\": trước khi kết luận, hệ thống tìm đúng điều luật liên quan trong kho luật đã nạp sẵn, rồi đưa nguyên văn điều đó ra để người và AI cùng đối chiếu. Không ai phải nhớ luật, và không AI nào được bịa điều luật.\nĐặt câu hỏiTừ hồ sơ (mặt hàng, giấy phép, nhãn hiệu, chủ sở hữu, đồng ý dữ liệu, mục đích vay) hoặc cán bộ tự gõ. Tiếng Việt, Anh hay Trung đều được.\nDịch thuật ngữ\"thuốc lá điện tử\" thêm 电子烟; \"beneficial owner\" thêm \"chủ sở hữu hưởng lợi\". Gõ không dấu vẫn hiểu.\nTìm theo chữSo khớp từng cặp chữ Hán hoặc từng âm tiết tiếng Việt (BM25).\nTìm theo nghĩaMô hình đa ngôn ngữ e5-large chạy ngay trên máy, không gửi dữ liệu ra ngoài: hỏi khác chữ trong luật vẫn ra.\nTrộn kết quảGộp hai danh sách, chọn vài điều gần nhất, ghi rõ điều còn hiệu lực, chưa hiệu lực hay đã bãi bỏ.\nĐối chiếuAgent 3 kiểm: quy tắc vừa bật có được truy xuất tìm thấy đúng điều luật nó trích không. Cán bộ đọc nguyên văn để quyết.\nRAG không quyết định. Duyệt hay từ chối vẫn do bộ quy tắc cố định và cán bộ. RAG chỉ tìm căn cứ; mọi câu trích dẫn vẫn phải khớp nguyên văn và còn hiệu lực ở ngày xét.\n\nHai kho luật đang có\n|  | Kho | Nội dung | Dùng cho\n| Trung Quốc | 794 điều, 14 văn bản, giữ nguyên tiếng Trung: chống rửa tiền, thương mại điện tử, bảo vệ thông tin cá nhân, cho vay qua internet, cho vay vốn lưu động, nhãn hiệu, chất lượng sản phẩm, thuốc lá điện tử, danh mục hàng cấm… | Hồ sơ người bán ở Trung Quốc (toàn bộ kịch bản demo)\n| Việt Nam | 1.147 mục, 5 văn bản: Luật Phòng, chống rửa tiền 2022; Luật Đầu tư 2025 kèm phụ lục ngành nghề cấm và có điều kiện; Nghị định 98/2020 (xử phạt hàng giả, hàng cấm, thương mại điện tử, bản hợp nhất 2025); Nghị định 59/2006 và Nghị định 173/2024 (phần bị bãi bỏ được đánh dấu) | Hồ sơ người bán ở Việt Nam; cán bộ tra cứu\n\nCách dùng\nTrong một hồ sơ\nCán bộ mở hồ sơ trên trang quản trị, tab Agent 3 hoặc Toàn bộ luồng, mục \"Truy xuất điều luật (RAG)\".\nMỗi câu hỏi Agent 3 tự đặt có danh sách điều luật gần nhất kèm đoạn nguyên văn.\nDòng ✓ cho biết quy tắc đã bật được truy xuất xác nhận căn cứ.\nTra tự do\nTrang quản trị, mục \"Tra cứu luật (RAG)\": chọn kho Việt Nam hoặc Trung Quốc, gõ câu hỏi, bấm \"Xem điều\" để đọc toàn văn.\nHoặc tab \"Tra cứu luật\" trên bản demo Gradio.\nCho lập trình: GET /v4/legal/search?q=…&jurisdiction=VN.\n\nVí dụ câu hỏi\nthuốc lá điện tử vị hoa quả có được bán khôngKho Trung Quốc → Quy định quản lý thuốc lá điện tử, Điều 26: cấm bán thuốc lá điện tử có hương vị khác vị thuốc lá\ncustomer due diligence beneficial ownerKho Trung Quốc → Luật Chống rửa tiền 2024, Điều 19 (chủ sở hữu hưởng lợi); kho Việt Nam → Luật Phòng, chống rửa tiền 2022, Điều 10 (thông tin nhận biết khách hàng)\nbáo cáo giao dịch đáng ngờKho Việt Nam → Luật Phòng, chống rửa tiền 2022, Điều 26\nkinh doanh dịch vụ cầm đồ có điều kiện khôngKho Việt Nam → Luật Đầu tư 2025, Phụ lục IV (ngành nghề kinh doanh có điều kiện)\nnhan biet khach hang (gõ không dấu)Kho Việt Nam → Luật Phòng, chống rửa tiền 2022, Điều 11, 9, 10 (cập nhật, nhận biết, thông tin nhận biết khách hàng)\n\nĐộ chính xác đo được\n|  | Kho | Bộ câu hỏi kiểm tra riêng | Chỉ tìm theo chữ | Tìm theo chữ + theo nghĩa\n| Trung Quốc | 22 câu | 59% có đúng điều trong 5 kết quả đầu | 82%\n| Việt Nam | 20 câu | 100% | 100% (90% đúng ngay kết quả đầu)\nCác bộ câu hỏi do đội tự soạn và chưa lớn; bộ \"kiểm tra riêng\" không được dùng khi chỉnh bảng thuật ngữ, nên phản ánh sát hơn chất lượng thật. Mô hình e5-large nặng 2,2 GB, chạy trên CPU; lần đầu lập chỉ mục mất khoảng 6 phút (kho Trung Quốc) và 14 phút (kho Việt Nam), sau đó nạp trong vài giây.",
+   "weight": 1.25,
+   "id": "KB032"
+  },
+  {
+   "title": "Quyết định của đội: Không đối tác nào đồng ý trong 30 giây",
+   "source": "Nhật ký chuyển sang vòng vay",
+   "text": "WeBank không cho vay một mình: thử lại ở 70%, 50% hạn mức, vẫn không ai nhận → từ chối (`NO_PARTNER`)\n(Trong code: `app/banks/syndicate.py` `run()`; tham số `syndicate.retry_steps`)",
+   "weight": 1.1,
+   "id": "KB033"
+  },
+  {
+   "title": "Quyết định của đội: Tỷ lệ trả theo doanh thu",
+   "source": "Nhật ký chuyển sang vòng vay",
+   "text": "Giải thuật tính theo hồ sơ: đủ trả gốc + lãi trong kỳ hạn trên doanh thu thận trọng, không vượt trần B5. Tối thiểu = lãi kỳ + 30% gốc một kỳ trả góp đều\n(Trong code: `algorithm.revenue_rate()`, `algorithm.min_payment()`; Agent 4 `_process_due()`)",
+   "weight": 1.1,
+   "id": "KB034"
+  },
+  {
+   "title": "Quyết định của đội: Ngưỡng trả thẳng nhà cung cấp",
+   "source": "Nhật ký chuyển sang vòng vay",
+   "text": "Phần vượt 100.000 tệ\n(Trong code: `repay.supplier_direct_threshold`; `advise.payee_for()`; POL-05)",
+   "weight": 1.1,
+   "id": "KB035"
+  },
+  {
+   "title": "Giai đoạn 1 – nộp hồ sơ",
+   "source": "Nhật ký chuyển sang vòng vay",
+   "text": "Loại người vay chọn khi tạo hồ sơ, phải khớp đăng ký (lệch → `POL_BORROWER_TYPE`). Ba ô đồng ý riêng, không đánh sẵn, mỗi ô có văn bản (`Frontend/giaodien/van-ban/*.html`); thiếu ô → 400. Ký bằng khuôn mặt hoặc OTP (`consent.sign_method`). Không còn khai tài khoản nhận tiền.",
+   "weight": 1.1,
+   "id": "KB036"
+  },
+  {
+   "title": "Giai đoạn 2 – thẩm định và duyệt",
+   "source": "Nhật ký chuyển sang vòng vay",
+   "text": "Agent 1 lấy doanh thu từ thuế (`pull_revenue`), báo cáo tín dụng, FATE, lịch sử với BuoyUp (`network_history`: từng quá hạn ≥ 30 ngày → nhóm 4; đã tất toán tốt → nhóm 1). Ảnh doanh thu tự nộp (≤ 6 tháng): lệch thuế ≤ 15% → dùng, hệ số thận trọng +5%; 15–30% → không dùng; > 30% → cờ `RISK_STATEMENT_MISMATCH`, chuyển cán bộ. Bỏ toàn bộ dữ liệu dòng tiền ngân hàng khác (cờ inflow gap, pass-through, cửa hàng không khai).\nHạn mức = min(khả năng trả trong kỳ hạn dài nhất, trần theo nhóm, trần loại người vay 200.000 cho hộ kinh doanh). Agent 2 đề xuất ngay hạn mức đầy đủ; Agent 3 rà và cổng duyệt **hạn mức** (cổng ra \"nhỏ hơn\" thì gửi ngân hàng phương án nhỏ hơn, người vay không phải nhận lại). Bộ điều phối kiểm quy tắc cứng (danh sách trắng, địa bàn, tập trung 25%/50%, ngân sách tháng, hạn mức còn lại) rồi hỏi các ngân hàng song song; mỗi ngân hàng tự quyết theo chính sách của mình và danh mục trên chuỗi (hạng, số tiền, ngành, loại người vay, trễ hạn, điểm và tuổi cửa hàng, trần lãi), trả lời quá 30 giây = từ chối. Kỳ hạn tối đa của các ngân hàng tham gia giới hạn khung kỳ hạn. Hạn mức hiệu lực 7 ngày (`expired`).",
+   "weight": 1.1,
+   "id": "KB037"
+  },
+  {
+   "title": "Giai đoạn 3 – chọn khoản vay",
+   "source": "Nhật ký chuyển sang vòng vay",
+   "text": "`/select`: số tiền ≤ hạn mức, kỳ hạn, hình thức (trả góp / theo doanh thu, chọn một lần), ngày trả 1–28; `/quote` xem lịch từng lựa chọn; không duyệt lại. Một người một khoản vay (POL-07 ở Agent 3 và kiểm lại khi chọn, ký).",
+   "weight": 1.1,
+   "id": "KB038"
+  },
+  {
+   "title": "Giai đoạn 4 – hợp đồng và ký",
+   "source": "Nhật ký chuyển sang vòng vay",
+   "text": "`/contract`: bảng chi phí (lãi năm = toàn bộ chi phí, phí 0, lãi phạt, quy tắc trả tối thiểu, ngân hàng và phần vốn, kênh khiếu nại, lịch trả); đọc ít nhất 20 giây (`READ_TIME`). `/sign`: tài khoản kinh doanh WeBank, cam kết dùng vốn, tài khoản nhà cung cấp khi > 100.000, bảo lãnh người đại diện nếu là doanh nghiệp. Khi ký mới giữ chỗ hạn mức và ngân sách của từng ngân hàng (`reserve_at_signing`), mỗi ngân hàng một số hợp đồng; hợp đồng lên chuỗi (`contract_signed`). Ủy quyền bị rút/hết hạn → không cho chọn, ký.",
+   "weight": 1.1,
+   "id": "KB039"
+  },
+  {
+   "title": "Giai đoạn 5 – giải ngân",
+   "source": "Nhật ký chuyển sang vòng vay",
+   "text": "Kiểm nhẹ trước khi chuyển tiền (ủy quyền còn hiệu lực, người nhận đúng như hợp đồng, nhà cung cấp có hóa đơn và không liên kết). Các ngân hàng chuyển vào tài khoản trung gian (`escrow_funded`), đủ tiền mới giải ngân một lệnh: ≤ 100.000 vào tài khoản kinh doanh, phần còn lại trả nhà cung cấp; hash hợp đồng, quyết định, lệnh lên chuỗi. Dừng giải ngân → trả lại hạn mức đã giữ.",
+   "weight": 1.1,
+   "id": "KB040"
+  },
+  {
+   "title": "Giai đoạn 6 – giám sát",
+   "source": "Nhật ký chuyển sang vòng vay",
+   "text": "Tiền hàng về tài khoản kinh doanh (`simulate-inflow`); chi ra (`simulate-transfer`): chứng khoán/bất động sản → cảnh báo đỏ và ghi chuỗi; chuyển cá nhân > 30% khoản vay → vàng. Cảnh báo sớm: doanh số thấp, điểm cửa hàng, số dư thấp trước kỳ trả, tra cứu mới, FATE xấu đi, chuyển lớn ra cá nhân. Báo cáo trạng thái hằng ngày cho ngân hàng (`bank_report`).",
+   "weight": 1.1,
+   "id": "KB041"
+  },
+  {
+   "title": "Giai đoạn 7–8 – thu nợ, quá hạn",
+   "source": "Nhật ký chuyển sang vòng vay",
+   "text": "Nhắc trước 7 và 1 ngày. Ngày trả: lãi theo ngày thực tế trên dư nợ gốc, phân bổ lãi phạt → lãi → gốc, chia các ngân hàng theo tỷ lệ. Trả tối thiểu (trả góp, kỳ hạn ≥ 3, tối đa 2 kỳ liền; gốc hoãn chia đều các kỳ sau). 3 ngày ân hạn rồi lãi phạt 1,5 × lãi (≤ 24%). Quá hạn 30 ngày → báo trung tâm tín dụng, ghi nhóm ngân hàng nắm ≥ 2/3 dư nợ quyết định. Trả trước không phí, chỉ trả lãi số ngày đã dùng. `simulate-advance` cho thời gian trôi trong demo.",
+   "weight": 1.1,
+   "id": "KB042"
+  },
+  {
+   "title": "Giai đoạn 9–10 – tất toán, vay lại",
+   "source": "Nhật ký chuyển sang vòng vay",
+   "text": "Trả hết → `closed`, báo trung tâm tín dụng, trả hạn mức ngân hàng, Agent 5 được báo; người vay đổi được tài khoản nhận tiền hàng. Vay lại dùng lịch sử với BuoyUp (nhóm 1 hoặc 4).",
+   "weight": 1.1,
+   "id": "KB043"
+  },
+  {
+   "title": "Các tham số đội tự đặt",
+   "source": "Nhật ký chuyển sang vòng vay",
+   "text": "Hạn mức tối thiểu 10.000; hệ số trần nhóm 3,0/1,5/0,5/0; bước 70%/50%; kỳ đầu cách giải ngân ≥ 15 ngày; ngày trả ≤ 28; ngưỡng ảnh doanh thu 15%/30% và thưởng +5%; 3 ngày ân hạn; lãi phạt 1,5×; nhắc 7 và 1 ngày; chuyển cá nhân > 30%; đọc hợp đồng 20 giây; chính sách mô phỏng từng ngân hàng (thời gian trả lời, ngành loại trừ, ngân sách, vốn cấp một) trong `seed.py`.",
+   "weight": 1.0,
+   "id": "KB044"
+  },
+  {
+   "title": "Hệ thống BuoyUp là gì",
+   "source": "Tài liệu bàn giao (HANDOVER)",
+   "text": "BuoyUp cho người bán trên sàn thương mại điện tử vay vốn theo quy trình **loan circle** (`docs/BuoyUp loan circle .docx`, chi tiết thay đổi ở `LOAN_CIRCLE_CHANGES.md`). Người vay chọn loại (hộ kinh doanh / doanh nghiệp), dán link cửa hàng, quét CCCD, đánh dấu ba ô đồng ý và ký bằng khuôn mặt hoặc OTP. Lõi quyết định tính hạn mức; WeBank dẫn đầu, các ngân hàng hợp tác **tự duyệt song song trong 30 giây** (hai đối tác: 40/30/30; một đối tác: 30/70; không ai: thử 70%, 50% rồi từ chối). Người vay chọn số tiền, kỳ hạn, hình thức trả và ngày trả trong hạn mức (hiệu lực 7 ngày), đọc bảng chi phí ít nhất 20 giây rồi ký; vốn đi qua tài khoản trung gian tại WeBank, phần vượt 100.000 tệ trả thẳng nhà cung cấp. Năm AI agent xử lý phần còn lại:",
+   "weight": 1.0,
+   "id": "KB045"
+  },
+  {
+   "title": "Năm AI agent và mã nguồn",
+   "source": "Tài liệu bàn giao (HANDOVER)",
+   "text": "| Agent | Việc | Mã nguồn |\n|---|---|---|\n| 1 · Xác minh | Cửa hàng có thật, doanh thu theo thuế, ảnh doanh thu tự nộp (tùy chọn), báo cáo tín dụng, FATE, lịch sử với BuoyUp; bật và đóng cờ (B10) | `app/agents/agent1_verify.py` |\n| 2 · Tư vấn | Nhận phiếu hạn mức, gợi ý vay vừa đủ, báo giá từng lựa chọn, chat với người bán | `app/agents/agent2_advise.py` |\n| 3 · Kiểm soát | Pha 0–2 trên gói hồ sơ ở mức hạn mức; cổng duyệt; gửi bộ điều phối các ngân hàng | `app/agents/agent3_control.py`, `app/banks/syndicate.py` |\n| Hợp đồng | Chọn khoản vay, bảng chi phí, ký, giữ chỗ hạn mức ngân hàng | `app/agents/contract.py` |\n| 4 · Giải ngân & quản lý | Tài khoản trung gian, giải ngân, trích vào ngày trả, trả tối thiểu, lãi phạt, quá hạn 30 ngày, trả trước, giám sát tài khoản kinh doanh; tự chạy mỗi 5 phút | `app/agents/agent4_*.py`, `app/autopilot/loop.py` |\n| 5 · Hậu kiểm | Thống kê sau cho vay, LLM tóm tắt và đề xuất chỉnh tham số (người duyệt) | `app/agents/agent5_*.py` |",
+   "weight": 1.0,
+   "id": "KB046"
+  },
+  {
+   "title": "Hệ thống BuoyUp là gì",
+   "source": "Tài liệu bàn giao (HANDOVER)",
+   "text": "Mọi con số (hạn mức, lãi, hạng, lịch trả) do giải thuật cố định B1–B9 tính (`app/core/algorithm.py`); agent không tạo số. Thiết kế đầy đủ: `docs/thiet-ke-loi-ky-thuat-v4.html` (mở bằng trình duyệt).",
+   "weight": 1.0,
+   "id": "KB047"
+  },
+  {
+   "title": "Hệ thống BuoyUp là gì",
+   "source": "Tài liệu bàn giao (HANDOVER)",
+   "text": "**Một tiến trình** (FastAPI/uvicorn) phục vụ cả API (`/v4/...`, 70 đường dẫn) và giao diện web tĩnh (`/app/...`). Dữ liệu nằm trong **một file SQLite**. Không cần Node, Redis hay Postgres để chạy.",
+   "weight": 1.0,
+   "id": "KB048"
+  },
+  {
+   "title": "Vai trò người dùng và trang",
+   "source": "Tài liệu bàn giao (HANDOVER)",
+   "text": "| Vai trò | Trang | Tài khoản demo (khi `APP_ENV=dev/demo`) |\n|---|---|---|\n| Người bán | `/app/giaodien/workspace.html` | `lan@buoyup.vn` (hồ sơ mẫu chị Lan) |\n| Cán bộ tín dụng | `/app/giaodien/admin.html` | `officer@buoyup.vn` |\n| Quản trị | `/app/giaodien/admin.html` | `admin@buoyup.vn` |\n| Ngân hàng đối tác | `/app/giaodien/bank.html` | `webank@buoyup.vn`, `cmb@`, `icbc@`, `vcb@` |",
+   "weight": 1.0,
+   "id": "KB049"
+  },
+  {
+   "title": "Hệ thống BuoyUp là gì",
+   "source": "Tài liệu bàn giao (HANDOVER)",
+   "text": "Mật khẩu demo: giá trị `BUOYUP_DEMO_PASSWORD` (mặc định `<mật khẩu demo>`). Trang chủ: `/` (tự chuyển tới `/app/giaodien/index.html`). Tài liệu API tương tác: `/docs`.",
+   "weight": 1.0,
+   "id": "KB050"
+  },
+  {
+   "title": "Chuỗi FISCO BCOS (dịch vụ của team)",
+   "source": "Tài liệu bàn giao (HANDOVER)",
+   "text": "- URL `https://fs.buoyup.app`. Tài liệu: `/docs/`; explorer công khai: `/explorer/`; OpenAPI lưu tại `BackEnd/API_config/fisco-chain-service.openapi.json`.\n- BuoyUp dùng các endpoint:\n\n| Endpoint | Dùng cho |\n|---|---|\n| `POST /v1/audit/anchors` | Neo dấu vân tay của từng bước hồ sơ (ủy quyền, biên bản xác minh, phiếu, niêm phong Agent 3, quyết định, giải ngân, trích nợ…) |\n| `GET /v1/audit/anchors/{hồ sơ}/verify` | Kiểm tra chuỗi hash của một hồ sơ |\n| `POST /v1/withdrawals` | Agent 4 giải ngân: số tiền tính bằng fen/đồng, `bankSplit` theo %, `requestId = disburse:<mã hồ sơ>` (gửi lại không chi hai lần) |\n| `GET /v1/withdrawals/{id}` và `/verify` | Đọc và kiểm tra một lệnh giải ngân |\n| `POST /explorer/api/decrypt` | Ngân hàng giải mã phần của mình |\n| `GET /v1/banks`, `/v1/banks/{code}`, `/v1/overview` | Đồng bộ danh mục: hạn mức, chính sách, hợp đồng, khóa của 10 ngân hàng |\n| `GET /v1/chain`, `/v1/regions` | Trạng thái nút, tỉnh/thành |\n\n- Chuỗi không truy cập được:\n  - **Anchor không quan trọng** được xếp hàng (outbox), Agent 4 tự gửi lại mỗi 5 phút.\n  - **Anchor quan trọng** (niêm phong Agent 3, quyết định cổng) bị từ chối với lỗi 503 `CHAIN_UNAVAILABLE`, để không có hồ sơ nào được duyệt mà thiếu niêm phong.\n  - **Giải ngân** xếp hàng chờ rồi gửi lại với cùng `requestId`, nên không chi hai lần.\n- Quy tắc chia vốn B12 lấy hạn mức thật từ danh mục trên chuỗi:\n  - tỷ lệ tối đa mỗi ngân hàng;\n  - số tiền tối đa mỗi ngân hàng cho một khoản (đọc từ `maxLoanAmount`, xem mục 17);\n  - phần tối thiểu mỗi lệnh;\n  - khung lãi;\n  - kỳ hạn tối đa;\n  - điểm và tuổi cửa hàng tối thiểu.\n\n  Trong vòng duyệt song song mỗi ngân hàng hợp tác áp các quy tắc này cùng chính sách riêng (`app/banks/syndicate.py`, `bank_decides`); kỳ hạn tối đa của các ngân hàng tham gia giới hạn khung kỳ hạn chào người vay. Ví dụ với danh mục trên chuỗi: chị Lan (điểm 4,6, 26 tháng) bị CMB (cần 4,7) và ICBC (cần 36 tháng) từ chối, BOC quá 30 giây, CCB đồng ý → WeBank 30% / CCB 70%, kỳ hạn chỉ còn 3 tháng (CCB cho vay tối đa 120 ngày).\n- Muốn chạy không cần chuỗi thật thì đặt `BUOYUP_CHAIN_BACKEND=local`: sổ mô phỏng trong DB, giao diện ghi nhãn \"Mô phỏng\".",
+   "weight": 1.0,
+   "id": "KB051"
+  },
+  {
+   "title": "FATE",
+   "source": "Tài liệu bàn giao (HANDOVER)",
+   "text": "Chưa nối. Điểm liên ngân hàng lấy từ dữ liệu mẫu, và giao diện ghi rõ \"Dữ liệu mẫu\".",
+   "weight": 1.0,
+   "id": "KB052"
+  },
+  {
+   "title": "Nguồn dữ liệu người bán",
+   "source": "Tài liệu bàn giao (HANDOVER)",
+   "text": "Sáu nguồn (trang cửa hàng, đăng ký kinh doanh, dòng tiền, thuế 银税互动, tín dụng, FATE) hiện là **dữ liệu mẫu** (`app/data_sources/`). Hồ sơ chị Lan sinh tất định bằng `scripts/gen_lan_profile.py` và nằm trong `profiles/lan.json`. Nối nguồn thật thì thay các hàm trong `app/data_sources/sources.py`; agent và giải thuật không phải đổi.",
+   "weight": 1.0,
+   "id": "KB053"
+  },
+  {
+   "title": "Truy xuất điều luật (RAG)",
+   "source": "Tài liệu bàn giao (HANDOVER)",
+   "text": "- Kho: 794 điều tiếng Trung từ 14 văn bản trong `docs/agents/TQ` (`app/core/laws/corpus.json`). Kho được trích bằng `scripts/extract_laws.py`, hash ghi lên chuỗi.\n- Tìm kiếm lai (`app/core/rag.py`):\n  - BM25 theo cặp ký tự Trung, cộng bảng thuật ngữ Việt/Anh → Trung.\n  - Embedding đa ngôn ngữ chạy trên máy (`fastembed`, mặc định `intfloat/multilingual-e5-large`, 2,2 GB).\n  - Hai kết quả trộn bằng RRF. Không có mô hình thì tự lùi về BM25.\n- Agent 3 tự đặt câu hỏi theo từng hồ sơ (mặt hàng, giấy phép, nhãn hiệu, chủ sở hữu hưởng lợi, đồng ý dữ liệu, mục đích vay, thanh toán ủy thác) và lưu kết quả ở `control.retrieval`.\n  - Mỗi quy tắc đã bật được kiểm xem truy xuất có tìm thấy điều luật nó trích không.\n  - Quyết định vẫn do quy tắc; trích dẫn vẫn phải khớp nguyên văn.\n- API cho cán bộ: `GET /v4/legal/search?q=…`, `GET /v4/legal/articles/{id}`.\n- Cấu hình trong `.env`:\n  - `BUOYUP_RAG_CACHE`: thư mục chứa mô hình và vector, ví dụ `data/rag-cache`. Với Docker, đặt trong volume `data` để không tải lại.\n  - `BUOYUP_RAG_MODEL`: tên mô hình embedding.\n  - `BUOYUP_RAG_DENSE=0`: chỉ dùng BM25.\n- Dựng sẵn bộ đệm: `cd BackEnd/src && ../.venv/bin/python scripts/build_rag_index.py`. Lần đầu tải mô hình và lập chỉ mục mất khoảng 6 phút; sau đó nạp trong vài giây.\n- Đo chất lượng: `scripts/eval_rag.py`.\n  - Bộ 42 câu `tests/rag_eval.json` dùng để viết bảng thuật ngữ.\n  - Bộ kiểm tra riêng 22 câu `tests/rag_eval_holdout.json` có recall@5: BM25 0,59 → lai 0,82.\n  - Test chất lượng có mô hình chỉ chạy khi đặt `BUOYUP_RAG_EVAL_DENSE=1`.",
+   "weight": 1.0,
+   "id": "KB054"
+  },
+  {
+   "title": "Agent 1 · Xác minh (đặc tả)",
+   "source": "docs/agents/agent1_xac_minh.md",
+   "text": "**Cập nhật 14/10/2026 (loan circle):** Agent 1 không còn đọc dòng tiền các tài khoản ngân hàng: doanh thu lấy từ thuế (`pull_revenue`), thêm ảnh doanh thu tự nộp (`verify_statements`), loại người vay phải khớp đăng ký, ba ô đồng ý ký bằng khuôn mặt hoặc OTP, lịch sử với BuoyUp (`network_history`). Bỏ cờ RISK_INFLOW_GAP, RISK_PASS_THROUGH, RISK_UNDECLARED_STORE. Chi tiết: `LOAN_CIRCLE_CHANGES.md`. Khi đặc tả dưới đây mâu thuẫn với loan circle, code theo loan circle.\n\nAgent 1 xác minh người bán **mà không cần kết nối vào cửa hàng và không cần\nngười bán nộp giấy tờ**. Người bán chỉ dán đường link cửa hàng, quét CCCD và\nkhuôn mặt, ký một màn hình ủy quyền; vay Tầng 2 thì điền thêm một biểu mẫu\nkế hoạch có sẵn giá trị gợi ý.\n\nÝ chính: **không hỏi sàn, mà nhìn vào nơi giấy phép và tiền để lại dấu vết.**\n\n| Câu hỏi | Trả lời bằng |\n|---|---|\n| Cửa hàng có tồn tại không | Thông tin giấy phép mà sàn buộc phải công khai trên trang cửa hàng, đối chiếu với hệ thống đăng ký doanh nghiệp quốc gia |\n| Cửa hàng lập lâu chưa | Ngày đầu tiên tiền thanh toán từ sàn về tài khoản người bán |\n| Doanh số có thật và tốt không | Tiền thanh toán từ sàn thực về tài khoản 24 tháng, đối chiếu doanh thu khai thuế |\n\nNguyên tắc giữ nguyên: **mô hình ngôn ngữ điều phối và giao tiếp; mọi phán\nquyết \"thật hay giả\" là kết quả của công cụ cố định.**\n\n### Thay đổi qua các phiên bản\n\n| | Phiên bản 1 | Phiên bản 2 | Phiên bản 3 |\n|---|---|---|---|\n| Cách lấy dữ liệu cửa hàng | Người bán xuất file và nộp | Kết nối cửa hàng qua ủy quyền của sàn | Không lấy dữ liệu trong cửa hàng; dùng dữ liệu công khai và dòng tiền |\n| Người bán làm gì | Nộp 6 loại giấy (Tầng 1), thêm 9 loại (Tầng 2) | 3 thao tác, Tầng 2 thêm biểu mẫu | Như phiên bản 2, thay \"kết nối cửa hàng\" bằng \"dán link cửa hàng\" |\n| Kiểm đơn có thật | Người bán nộp mã vận đơn, tra hãng vận chuyển | Lấy mã vận đơn từ sàn, tra hãng | Không có mã vận đơn; phát hiện thổi đơn qua dòng tiền ra |\n| Rủi ro kết nối (pháp lý 断直连, điều khoản sàn, bảo mật mã truy cập) | Không có | Có | Không có |",
+   "weight": 0.9,
+   "id": "KB055"
+  },
+  {
+   "title": "Agent 2 · Tư vấn & Đề xuất (đặc tả)",
+   "source": "docs/agents/agent2_tu_van_de_xuat.md",
+   "text": "**Cập nhật 14/10/2026 (loan circle):** Agent 2 nhận phiếu **hạn mức** (min khả năng trả, trần nhóm, trần loại người vay), gợi ý vay vừa đủ và tự đề xuất hạn mức đầy đủ ngay sau VERIFIED; người vay chọn số tiền, kỳ hạn, hình thức (trả góp / theo doanh thu) và ngày trả trong hạn mức ở giai đoạn 3 (`/quote`, `/select`), không duyệt lại. Không còn `/accept`, tỷ lệ trích, ân hạn. Chi tiết: `LOAN_CIRCLE_CHANGES.md`. Khi đặc tả dưới đây mâu thuẫn với loan circle, code theo loan circle.\n\nAgent 2 nhận phiếu đề xuất của giải thuật, chọn một phương án trong danh sách\ngiải thuật đã tính, viết lập luận có tham chiếu cho Agent 3, và nói chuyện với\nngười bán: gửi thẻ đề xuất, giải thích từng yếu tố, trả lời câu hỏi \"nếu tôi\nlàm X thì sao\", chuyển hồ sơ về Agent 1 khi có dữ liệu mới, chuyển cán bộ khi\nngười bán yêu cầu.\n\nNguyên tắc: **Agent 2 chỉ chọn và giải thích, không bao giờ tạo con số.**\nMọi con số người bán nhìn thấy do code điền.",
+   "weight": 0.9,
+   "id": "KB056"
+  },
+  {
+   "title": "Agent 3 · Kiểm soát (đặc tả)",
+   "source": "docs/agents/agent3_kiem_soat.md",
+   "text": "**Cập nhật 14/10/2026 (loan circle):** Agent 3 rà gói hồ sơ ở mức hạn mức trước khi gửi ngân hàng; cổng ra \"nhỏ hơn\" thì hạn mức gửi ngân hàng là phương án nhỏ hơn (không cần người vay nhận lại). Sau duyệt, bộ điều phối (`app/banks/syndicate.py`) hỏi các ngân hàng song song trong 30 giây. Bộ quy tắc `rules-v1.2`: POL-02 (nhóm 4), POL-04 (tỷ lệ doanh thu ≤ B5), POL-05 (phần vượt 100.000 trả nhà cung cấp), POL-07 mới (hộ kinh doanh ≤ 200.000, một khoản vay một lúc), AML-STR-01 chuyển sang giám sát sau giải ngân. Chi tiết: `LOAN_CIRCLE_CHANGES.md`. Khi đặc tả dưới đây mâu thuẫn với loan circle, code theo loan circle.\n\nAgent 3 là người kiểm soát độc lập. Trước khi Agent 3 chạy, code đã chạy toàn\nbộ quy tắc kiểm được bằng máy và tính ra một **sàn kết luận**. Agent 3 tự đánh\ngiá ở pha 1 mà chưa thấy lập luận của Agent 2; kết luận pha 1 bị **niêm\nphong** bằng hash ghi lên chuỗi. Ở pha 2 Agent 3 đọc lập luận của Agent 2, hỏi\nlại đúng một lần nếu khác ý, rồi kết luận cuối. Kết luận chỉ được nhẹ hơn pha\n1 khi có tham chiếu bằng chứng thật, và không bao giờ nhẹ hơn sàn.\n\nTừ 12/10/2026 Agent 3 còn kiểm **tính hợp pháp của mặt hàng** và **dấu hiệu rửa tiền** dựa trên bộ văn bản luật trong `docs/agents/TQ`, qua 10 quy tắc có trích dẫn tới đúng điều và đúng câu (mục 3.5).",
+   "weight": 0.9,
+   "id": "KB057"
+  },
+  {
+   "title": "Agent 4 · Giải ngân & Thu nợ (đặc tả)",
+   "source": "docs/agents/agent4_giai_ngan_thu_no.md",
+   "text": "**Cập nhật 14/10/2026 (loan circle):** Agent 4 không còn chia ngân hàng (tỷ lệ do vòng duyệt song song chốt: 40/30/30 hoặc 30/70) và không trích theo tỷ lệ mỗi lần tiền về. Giải ngân qua tài khoản trung gian tại WeBank; thu nợ vào ngày trả (lãi phạt → lãi → gốc, lãi theo ngày thực tế), trả tối thiểu, 3 ngày ân hạn rồi lãi phạt, quá hạn 30 ngày báo trung tâm tín dụng, trả trước không phí, giám sát chi tiêu tài khoản kinh doanh. Bỏ ký duyệt ngân hàng sau phê duyệt (`agent4_signoff`). Chi tiết: `LOAN_CIRCLE_CHANGES.md`. Khi đặc tả dưới đây mâu thuẫn với loan circle, code theo loan circle.\n\nAgent 4 lo ba việc sau phê duyệt: **giải ngân** một lần thẳng tới nhà cung\ncấp đã kiểm, **thu nợ** theo dòng tiền bán hàng và giải thích từng lần trích,\nvà **giám sát** cam kết hằng ngày với cảnh báo xanh, vàng, đỏ. Số tiền giải\nngân, số tiền mỗi lần trích, thứ tự phân bổ và điểm cảnh báo đều do code và\nhợp đồng thông minh tính. Agent 4 kích hoạt, theo dõi, giải thích, phân tích\nnguyên nhân và soạn phương án; các quyết định nặng (đòi nợ trước hạn, tuyên\nbố vỡ nợ, giãn nợ) chỉ khóa của cán bộ làm được trên chuỗi.\n\nLưu ý: bản v4 chưa có mục chi tiết cho Agent 4. Tài liệu này là thiết kế đầu\ntiên, dựng từ các khối giải ngân, thu nợ, giám sát, B9, B11 và Sổ khoản vay\ntrong v4. Các tham số mới đều gắn nhãn `[Đặt tay]`.",
+   "weight": 0.9,
+   "id": "KB058"
+  },
+  {
+   "title": "Agent 5 · Hậu kiểm (đặc tả)",
+   "source": "docs/agents/agent5_hau_kiem.md",
+   "text": "**Cập nhật 14/10/2026 (loan circle):** Agent 5 đo tỷ lệ đạt dự báo bằng tiền hàng về tài khoản kinh doanh WeBank trên dự báo tháng × số tháng quan sát; đề xuất `flags.inflow_gap` thay bằng `revenue.statement_bonus`. Chi tiết: `LOAN_CIRCLE_CHANGES.md`. Khi đặc tả dưới đây mâu thuẫn với loan circle, code theo loan circle.\n\nAgent 5 không xử lý hồ sơ nào. Nó nhìn toàn bộ danh mục theo chu kỳ: so quyết\nđịnh lúc duyệt với kết quả trả nợ thật, theo dõi nợ xấu của nhóm duyệt tự\nđộng, phát hiện trôi dữ liệu, đo xem Agent 2 và Agent 3 có còn hoạt động như\nthiết kế không, chạy bộ tấn công thử định kỳ, và viết đề xuất cải tiến cho\nhội đồng rủi ro. Agent 5 không có quyền ghi vào cấu hình, không bật tắt luồng\ntự động; công tắc tắt tự động là code.\n\nLưu ý: bản v4 chưa có mục chi tiết cho Agent 5. Tài liệu này là thiết kế đầu\ntiên dựng từ khối Agent 5 và phần hệ số thận trọng trong v4. Tham số mới gắn\nnhãn `[Đặt tay]`.",
+   "weight": 0.9,
+   "id": "KB059"
+  }
+ ]
+}

@@ -1,0 +1,475 @@
+<title>SellerGraph Core Tech</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: một đường ống dọc (pipeline) — mỗi hàng là một lớp kỹ thuật, bộ điều phối là xương sống ở giữa */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #16202b;
+  --muted: #5b6875;
+  --line: #d5dce3;
+  --accent: #0f6b5c;        /* xanh ngân hàng: dòng tiền, bước đang chạy */
+  --accent-soft: #e2f1ed;
+  --data: #2f5f9e;   --data-soft: #e7eef8;
+  --ml: #6b4a9e;     --ml-soft: #efe9f7;
+  --agent: #2f7a45;  --agent-soft: #e6f3e9;
+  --human: #b03a2e;  --human-soft: #fbe9e6;
+  --code: #3b4652;   --code-soft: #eceff2;
+  --spine: #1e2a36;  --spine-ink: #f1f4f7;
+  --ledger: #9a5b13; --ledger-soft: #f8eedf;
+  --f-display: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f151b; --surface: #17202a; --ink: #e6ebf0; --muted: #98a6b3; --line: #2b3643;
+    --accent: #4cc3a8; --accent-soft: #143a33;
+    --data: #7fa9e3; --data-soft: #17273b;
+    --ml: #b69be0; --ml-soft: #261d36;
+    --agent: #79c48f; --agent-soft: #16301f;
+    --human: #ef8a7e; --human-soft: #3a1c19;
+    --code: #b3c0cc; --code-soft: #1f2a35;
+    --spine: #dfe7ee; --spine-ink: #111a22;
+    --ledger: #e3aa63; --ledger-soft: #33240f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f151b; --surface: #17202a; --ink: #e6ebf0; --muted: #98a6b3; --line: #2b3643;
+  --accent: #4cc3a8; --accent-soft: #143a33;
+  --data: #7fa9e3; --data-soft: #17273b;
+  --ml: #b69be0; --ml-soft: #261d36;
+  --agent: #79c48f; --agent-soft: #16301f;
+  --human: #ef8a7e; --human-soft: #3a1c19;
+  --code: #b3c0cc; --code-soft: #1f2a35;
+  --spine: #dfe7ee; --spine-ink: #111a22;
+  --ledger: #e3aa63; --ledger-soft: #33240f;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--f-body); font-size: 15px; line-height: 1.5;
+  padding: 28px 16px 64px;
+}
+.wrap { max-width: 1080px; margin: 0 auto; display: grid; gap: 22px; }
+
+header h1 {
+  font-family: var(--f-display); font-weight: 800; font-size: clamp(26px, 4vw, 36px);
+  letter-spacing: -0.02em; line-height: 1.15; margin: 0; text-wrap: balance;
+}
+header p { margin: 6px 0 0; color: var(--muted); max-width: 68ch; }
+.eyebrow {
+  font-family: var(--f-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--accent); font-weight: 600;
+}
+
+/* ---- Bộ điều khiển flow ---- */
+.player {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 14px; display: grid; gap: 10px;
+  box-shadow: 0 6px 18px -12px rgba(0,0,0,.35);
+}
+.player-top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.btn {
+  font: 600 14px var(--f-body); color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 14px; cursor: pointer;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.btn:focus-visible, .dot:focus-visible, .block:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dots { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.dot {
+  width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--bg);
+  font: 600 13px var(--f-mono); color: var(--muted); cursor: pointer; font-variant-numeric: tabular-nums;
+}
+.dot[aria-current="step"] { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.caption { display: flex; gap: 12px; align-items: baseline; min-height: 44px; }
+.caption .num { font: 700 22px var(--f-mono); color: var(--accent); font-variant-numeric: tabular-nums; }
+.caption b { font-family: var(--f-display); }
+.caption span { color: var(--muted); }
+
+/* ---- Sơ đồ ---- */
+.diagram { display: grid; gap: 0; }
+.row { display: grid; gap: 14px; }
+.row.two { grid-template-columns: 1fr 1fr; }
+.row.three { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 760px) { .row.two, .row.three { grid-template-columns: 1fr; } }
+
+.block {
+  --c: var(--code); --soft: var(--code-soft);
+  background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--c);
+  border-radius: 10px; padding: 14px 16px; min-width: 0;
+  transition: box-shadow .25s, transform .25s, opacity .25s, border-color .25s;
+}
+.block h3 {
+  margin: 0 0 2px; font-family: var(--f-display); font-size: 17px; font-weight: 700; letter-spacing: -0.01em;
+}
+.block .tag { font: 600 11px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--c); }
+.block ul { margin: 8px 0 0; padding-left: 18px; color: var(--ink); }
+.block li { margin: 2px 0; }
+.block li::marker { color: var(--c); }
+.block .note { margin-top: 8px; font-size: 13px; color: var(--muted); }
+.data { --c: var(--data); --soft: var(--data-soft); }
+.ml { --c: var(--ml); --soft: var(--ml-soft); }
+.agent { --c: var(--agent); --soft: var(--agent-soft); }
+.human { --c: var(--human); --soft: var(--human-soft); }
+.money { --c: var(--accent); --soft: var(--accent-soft); }
+.ledger { --c: var(--ledger); --soft: var(--ledger-soft); }
+.models { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; margin: 10px 0 0; font-size: 14px; }
+.models dt { font-weight: 700; color: var(--ml); }
+.models dd { margin: 0; min-width: 0; }
+@media (max-width: 480px) { .models { grid-template-columns: 1fr; } .models dd { margin-bottom: 6px; } }
+.fate { margin-top: 10px; background: var(--ml-soft); border-radius: 8px; padding: 10px 12px; font-size: 13.5px; }
+.fate b { display: block; font-family: var(--f-display); color: var(--ml); }
+.optional { margin-top: 10px; border: 1px dashed var(--ledger); border-radius: 8px; padding: 10px 12px; font-size: 13.5px; }
+.optional b { display: block; font-family: var(--f-display); color: var(--ledger); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip {
+  font: 500 12.5px var(--f-body); background: var(--soft); color: var(--ink);
+  border-radius: 6px; padding: 4px 9px; border: 1px solid transparent;
+}
+.chip.warn { border-color: var(--human); }
+
+.spine {
+  background: var(--spine); color: var(--spine-ink); border-radius: 10px; padding: 12px 16px;
+  display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline;
+}
+.spine b { font-family: var(--f-display); font-size: 16px; }
+.spine span { font-size: 13.5px; opacity: .85; }
+
+/* mũi tên nối giữa các hàng */
+.arrow {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  height: 38px; color: var(--muted); font: 500 12.5px var(--f-mono);
+}
+.arrow::before {
+  content: ""; width: 2px; height: 100%; background: var(--line); order: 0;
+}
+.arrow::after { content: "▼"; font-size: 10px; order: 1; margin-left: -14px; transform: translateY(12px); color: var(--line); }
+.arrow em { order: 2; font-style: normal; }
+.arrow.money-flow::before { background: var(--accent); }
+.arrow.money-flow::after { color: var(--accent); }
+.arrow.money-flow em { color: var(--accent); font-weight: 600; }
+
+/* nối ML ↔ agent */
+.bridge {
+  grid-column: 1 / -1; text-align: center; font: 500 12.5px var(--f-mono); color: var(--ml);
+  padding: 4px 0 0;
+}
+
+/* chuỗi con trong một khối */
+.chain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.chain .chip + .sep { color: var(--muted); }
+.sep { color: var(--muted); font-size: 13px; }
+
+.loop {
+  margin-top: 10px; border: 1px dashed var(--accent); border-radius: 8px; padding: 8px 12px;
+  font-size: 13.5px; color: var(--accent); font-weight: 600;
+}
+
+.guard {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px;
+}
+@media (max-width: 760px) { .guard { grid-template-columns: 1fr; } }
+.guard div {
+  border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--surface); font-size: 13.5px;
+}
+.guard b { display: block; font-family: var(--f-display); font-size: 14px; }
+
+/* trạng thái khi chạy flow */
+.diagram.playing .block { opacity: .45; }
+.diagram.playing .block.on {
+  opacity: 1; border-color: var(--c); box-shadow: 0 0 0 3px var(--soft), 0 10px 24px -14px var(--c);
+  transform: translateY(-2px);
+}
+@media (prefers-reduced-motion: reduce) { .block { transition: none; } .diagram.playing .block.on { transform: none; } }
+
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+footer { color: var(--muted); font-size: 13px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">SellerGraph · cán bộ tín dụng AI của WeBank</div>
+    <h1>Sơ đồ khối lõi kỹ thuật</h1>
+    <p>Machine learning tính con số và đặt trần. Agent đọc hồ sơ, thẩm định, phản biện nhưng không vượt trần. Con người ký các khoản lớn. Tiền đi thẳng tới nhà cung cấp và được thu lại theo dòng tiền bán hàng.</p>
+  </header>
+
+  <section class="player" aria-label="Chạy flow từng bước">
+    <div class="player-top">
+      <button class="btn" id="prev" type="button">← Trước</button>
+      <button class="btn primary" id="next" type="button">Bắt đầu flow →</button>
+      <button class="btn" id="reset" type="button">Xem toàn bộ</button>
+      <div class="dots" id="dots" role="tablist" aria-label="Các bước"></div>
+    </div>
+    <div class="caption" aria-live="polite">
+      <div class="num" id="capNum">—</div>
+      <div><b id="capTitle">Toàn bộ hệ thống</b><br><span id="capText">Bấm “Bắt đầu flow” hoặc chọn số bước để xem hồ sơ đi qua các khối nào.</span></div>
+    </div>
+  </section>
+
+  <div class="diagram" id="diagram">
+    <!-- Đầu vào -->
+    <div class="row two">
+      <div class="block" data-steps="1" tabindex="0">
+        <div class="tag">Đầu vào</div>
+        <h3>Người bán nộp hồ sơ</h3>
+        <div class="chips">
+          <span class="chip">CCCD / GPKD</span><span class="chip">Dữ liệu cửa hàng ≥12 tháng</span>
+          <span class="chip">Kế hoạch chiến dịch (Tầng 2)</span><span class="chip">Ủy quyền tra cứu &amp; trích nợ</span>
+        </div>
+      </div>
+      <div class="block agent" data-steps="1" tabindex="0">
+        <div class="tag">Agent 1</div>
+        <h3>Tiếp nhận</h3>
+        <ul>
+          <li>Kiểm tra hồ sơ đủ và khớp, yêu cầu bổ sung</li>
+          <li>Gửi yêu cầu ủy quyền tra cứu tín dụng và dòng tiền ngay lúc nộp</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="arrow"><em>hồ sơ + ủy quyền</em></div>
+
+    <!-- Tầng dữ liệu -->
+    <div class="block data" data-steps="2" tabindex="0">
+      <div class="tag">Tầng dữ liệu · tuân thủ 断直连</div>
+      <h3>Thu thập và xác minh dữ liệu</h3>
+      <div class="chain">
+        <span class="chip">① Người bán tự nộp</span>
+        <span class="chip">② Dữ liệu WeBank</span>
+        <span class="chip">③ Báo cáo tín dụng</span>
+        <span class="chip">④ Nền tảng thông tin dòng tiền</span>
+        <span class="chip">⑤ FATE với đối tác</span>
+      </div>
+      <div class="chain">
+        <span class="chip">Trích xuất tài liệu → trường cố định</span><span class="sep">→</span>
+        <span class="chip">Đối chiếu: đơn ↔ vận đơn, thanh toán ↔ dòng tiền</span><span class="sep">→</span>
+        <span class="chip">Kho đặc trưng đã xác minh</span>
+      </div>
+      <p class="note">Nguồn ⑤ không chuyển dữ liệu về WeBank: mô hình được huấn luyện chung qua FATE (xem lõi ML), WeBank chỉ nhận điểm rủi ro và tín hiệu bất thường.</p>
+    </div>
+
+    <div class="arrow"><em>đặc trưng đã xác minh</em></div>
+
+    <!-- Bộ điều phối -->
+    <div class="spine">
+      <b>Bộ điều phối — code cố định, không phải AI</b>
+      <span>gọi ML và agent theo thứ tự · áp luật chuyển con người · ghi vết mọi đầu vào/đầu ra</span>
+    </div>
+
+    <div class="arrow"><em>gọi song song</em></div>
+
+    <!-- ML + Agent -->
+    <div class="row two">
+      <div class="block ml" data-steps="3" tabindex="0">
+        <div class="tag">Lõi machine learning · tính toán xác định</div>
+        <h3>Chấm điểm và đặt trần</h3>
+        <dl class="models">
+          <dt>Xác suất vỡ nợ</dt><dd>Scorecard logistic (WoE) làm chuẩn + LightGBM ràng buộc đơn điệu; hiệu chỉnh isotonic; SHAP → lý do từ chối</dd>
+          <dt>Dự báo mùa vụ</dt><dd>LightGBM toàn cục, mục tiêu quantile (P20 = kịch bản thận trọng); Chronos-2 cho hồ sơ ít lịch sử</dd>
+          <dt>Gian lận đồ thị</dt><dd>Luật + đặc trưng đồ thị (chung chủ, SĐT, địa chỉ) → GraphSAGE / RGCN</dd>
+          <dt>Định giá lãi</dt><dd>Công thức: chi phí vốn + PD × LGD / T + chi phí xử lý, có ngưỡng từ chối</dd>
+          <dt>Cảnh báo sớm</dt><dd>LightGBM hành vi theo tháng + mô hình sống sót (Cox / Random Survival Forest)</dd>
+        </dl>
+        <p class="note"><b>Hạn mức Tầng 1</b> = tiền đơn đã thanh toán chưa hoàn × tỷ lệ ứng × (1 − tỷ lệ hoàn). <b>Tầng 2</b> = MIN(nhu cầu chiến dịch, trần dòng tiền thận trọng, trần theo nhóm KH).</p>
+        <div class="fate">
+          <b>FATE · học liên kết dọc</b>
+          WeBank giữ nhãn trả nợ, đối tác logistics / hóa đơn giữ đặc trưng. Huấn luyện Hetero-SecureBoost và Hetero-LR mà dữ liệu gốc không rời khỏi đối tác; WeBank chỉ nhận điểm.
+        </div>
+        <div class="chips">
+          <span class="chip">Đầu ra: PD · nhóm KH · hạn mức · lãi · tỷ lệ trích · yếu tố giải thích</span>
+        </div>
+      </div>
+      <div class="block agent" data-steps="4" tabindex="0">
+        <div class="tag">Lớp AI agent · phán đoán</div>
+        <h3>Thẩm định và phản biện</h3>
+        <ul>
+          <li><b>Agent 2 Thẩm định:</b> đọc kế hoạch và hợp đồng (chỉ trường đã trích), đề xuất số tiền và covenants, viết tờ trình</li>
+          <li><b>Agent 3 Phản biện:</b> đánh giá độc lập trước khi đọc tờ trình, tìm lý do từ chối</li>
+        </ul>
+        <div class="chips">
+          <span class="chip warn">Không tự tính số</span><span class="chip warn">Không vượt trần ML</span><span class="chip warn">Không tự phê duyệt</span>
+        </div>
+      </div>
+      <div class="bridge">ML → agent: trần hạn mức và các yếu tố giải thích</div>
+    </div>
+
+    <div class="arrow"><em>điểm + tờ trình + phản biện</em></div>
+
+    <!-- Quyết định -->
+    <div class="row three">
+      <div class="block" data-steps="5" tabindex="0">
+        <div class="tag">Phân luồng</div>
+        <h3>Tầng 1 hay Tầng 2</h3>
+        <ul>
+          <li><b>Tầng 1:</b> vốn lưu động theo đơn đã có, tự động hoàn toàn</li>
+          <li><b>Tầng 2:</b> vốn tăng trưởng theo kế hoạch, cho vay trước khi có đơn</li>
+        </ul>
+      </div>
+      <div class="block human" data-steps="5" tabindex="0">
+        <div class="tag">Cổng con người</div>
+        <h3>Chuyển cán bộ khi</h3>
+        <ul>
+          <li>Số tiền vượt ngưỡng</li>
+          <li>Agent 2 và 3 bất đồng</li>
+          <li>PD sát ngưỡng, có tín hiệu gian lận</li>
+          <li>Người bán yêu cầu xem xét lại</li>
+        </ul>
+      </div>
+      <div class="block" data-steps="5" tabindex="0">
+        <div class="tag">Kết quả</div>
+        <h3>Đề xuất hoặc từ chối</h3>
+        <ul>
+          <li><b>Đề xuất:</b> hạn mức, lãi suất, lịch trả nợ</li>
+          <li><b>Từ chối:</b> giải thích theo Điều 24, gợi ý hạn mức thấp hơn hoặc lộ trình cải thiện</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="arrow money-flow"><em>one click = giải ngân</em></div>
+
+    <!-- Sau giải ngân -->
+    <div class="row three">
+      <div class="block money" data-steps="6" tabindex="0">
+        <div class="tag">Agent 4 · giải ngân</div>
+        <h3>Tiền đi thẳng nhà cung cấp</h3>
+        <ul>
+          <li>Chấm điểm nhà cung cấp trước cú bấm: tồn tại, không liên kết người bán, giá hợp lý</li>
+          <li>Giải ngân một lần, ngay khi người bán chấp nhận</li>
+        </ul>
+      </div>
+      <div class="block money" data-steps="7" tabindex="0">
+        <div class="tag">Thu hồi theo dòng tiền</div>
+        <h3>Trích nợ khi tiền hàng về</h3>
+        <ul>
+          <li>Tỷ lệ trích ≤ trần (phần giá vốn trong tiền thực nhận)</li>
+          <li>Dưới sàn lũy kế → trích TK WeBank, rồi TK đã ủy quyền</li>
+        </ul>
+      </div>
+      <div class="block agent" data-steps="7" tabindex="0">
+        <div class="tag">Agent 5 + 6 · giám sát</div>
+        <h3>Cảnh báo ba mức</h3>
+        <ul>
+          <li>Kiểm tra covenants hằng ngày</li>
+          <li>Xanh: tự theo dõi · Vàng: phân tích nguyên nhân · Đỏ: chuyển cán bộ</li>
+          <li>Nhắc lịch, giãn nợ nếu khó khăn thật</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="arrow money-flow"><em>tất toán</em></div>
+
+    <div class="block money" data-steps="8" tabindex="0">
+      <div class="tag">Vòng lặp</div>
+      <h3>Trả tốt thì hạn mức tăng</h3>
+      <div class="loop">↺ Lịch sử trả nợ tốt + dẫn dòng tiền về WeBank ổn định → hạn mức cao hơn, lãi thấp hơn → quay lại bước 1</div>
+    </div>
+
+    <div class="arrow"><em>mọi bước quan trọng đều để lại bằng chứng</em></div>
+
+    <div class="block ledger" data-steps="1,5,6,7" tabindex="0">
+      <div class="tag">Nhật ký kiểm toán chống sửa đổi · trong WeBank</div>
+      <h3>Ghi lại bằng chứng, không ai sửa được sau khi ký</h3>
+      <div class="chain">
+        <span class="chip">Bước 1 · Ủy quyền của người bán</span>
+        <span class="chip">Bước 5 · Hồ sơ + phiên bản mô hình + quyết định</span>
+        <span class="chip">Bước 6 · Lệnh giải ngân tới nhà cung cấp</span>
+        <span class="chip">Bước 7 · Biên nhận từng lần trích nợ</span>
+      </div>
+      <p class="note">Bảng chỉ ghi thêm, mỗi bản ghi có chữ ký số và chứa hash của bản ghi trước. Sửa một dòng là chuỗi hash gãy và bị phát hiện ngay. Tiền vẫn đi qua core banking.</p>
+      <div class="optional">
+        <b>Mở rộng tùy chọn · FISCO BCOS</b>
+        Chỉ cần khi có bên thứ ba cùng kiểm chứng: nhà cung cấp xác nhận nhận tiền, logistics ghi vận đơn, hội đồng trọng tài xem chứng cứ. Khi đó hash của nhật ký được ghi lên chuỗi liên minh của WeBank, không ghi dữ liệu cá nhân.
+      </div>
+    </div>
+  </div>
+
+  <div class="guard" aria-label="Lớp bảo vệ xuyên suốt">
+    <div><b>Chống tấn công qua tài liệu</b>Agent không đọc văn bản gốc, chỉ đọc trường đã trích xuất bởi mô hình không có công cụ.</div>
+    <div><b>Thiệt hại bị chặn</b>Dù agent bị thao túng, số tiền không vượt được trần machine learning.</div>
+    <div><b>Kiểm toán được</b>Mọi đầu vào, đầu ra của mô hình và agent đều được lưu vết, kèm phiên bản mô hình.</div>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:var(--data)"></i>Dữ liệu</span>
+    <span><i style="background:var(--ml)"></i>Machine learning</span>
+    <span><i style="background:var(--agent)"></i>AI agent</span>
+    <span><i style="background:var(--human)"></i>Con người</span>
+    <span><i style="background:var(--accent)"></i>Dòng tiền</span>
+    <span><i style="background:var(--code)"></i>Code cố định</span>
+    <span><i style="background:var(--ledger)"></i>Nhật ký kiểm toán</span>
+  </div>
+  <footer>Nguồn: “SellerGraph, toàn cảnh mô hình”, bản cập nhật 28.09.2026.</footer>
+</div>
+
+<script>
+(function () {
+  var STEPS = [
+    ["Nộp hồ sơ", "Người bán nộp hồ sơ và ủy quyền. Agent 1 kiểm tra đủ, khớp và gửi yêu cầu tra cứu ngay. Ủy quyền được ghi vào nhật ký kiểm toán."],
+    ["Thu thập dữ liệu", "Lấy dữ liệu từ 5 đường hợp pháp, trích xuất tài liệu thành trường cố định, đối chiếu tự động."],
+    ["Machine learning", "Tính chỉ số, xác suất vỡ nợ, hạn mức, lãi suất, tỷ lệ trích. Mô hình cần dữ liệu đối tác chạy qua FATE. Kết quả là trần cho agent."],
+    ["Thẩm định & phản biện", "Agent 2 viết tờ trình trong phạm vi trần. Agent 3 đánh giá độc lập để tìm lý do từ chối."],
+    ["Phê duyệt", "Tầng 1 tự động. Tầng 2 hoặc khi có điều kiện kích hoạt thì chuyển cán bộ ký. Kết quả là đề xuất hoặc từ chối có giải thích; quyết định được ghi vào nhật ký kiểm toán."],
+    ["Giải ngân", "Người bán bấm chấp nhận, Agent 4 phát lệnh: tiền đi một lần, thẳng tới nhà cung cấp đã qua kiểm tra. Lệnh giải ngân được ghi bằng chứng."],
+    ["Thu hồi & giám sát", "Trích nợ theo tỷ lệ khi tiền hàng về, giữ sàn lũy kế. Agent 5 và 6 theo dõi covenants, cảnh báo và xử lý sớm."],
+    ["Vòng vay mới", "Trả tốt và dẫn dòng tiền ổn định thì hạn mức tăng, lãi giảm, người bán quay lại bước 1."]
+  ];
+  var diagram = document.getElementById("diagram");
+  var blocks = Array.prototype.slice.call(diagram.querySelectorAll("[data-steps]"));
+  var dots = document.getElementById("dots");
+  var nextBtn = document.getElementById("next");
+  var cur = 0; // 0 = xem toàn bộ
+
+  STEPS.forEach(function (s, i) {
+    var b = document.createElement("button");
+    b.className = "dot"; b.type = "button"; b.textContent = i + 1;
+    b.setAttribute("aria-label", "Bước " + (i + 1) + ": " + s[0]);
+    b.addEventListener("click", function () { go(i + 1); });
+    dots.appendChild(b);
+  });
+
+  function go(n) {
+    cur = Math.max(0, Math.min(STEPS.length, n));
+    var playing = cur > 0;
+    diagram.classList.toggle("playing", playing);
+    var first = null;
+    blocks.forEach(function (el) {
+      var on = playing && el.getAttribute("data-steps").split(",").indexOf(String(cur)) !== -1;
+      el.classList.toggle("on", on);
+      if (on && !first) first = el;
+    });
+    Array.prototype.forEach.call(dots.children, function (d, i) {
+      if (i + 1 === cur) d.setAttribute("aria-current", "step"); else d.removeAttribute("aria-current");
+    });
+    document.getElementById("capNum").textContent = playing ? String(cur).padStart(2, "0") : "—";
+    document.getElementById("capTitle").textContent = playing ? STEPS[cur - 1][0] : "Toàn bộ hệ thống";
+    document.getElementById("capText").textContent = playing ? STEPS[cur - 1][1]
+      : "Bấm “Bắt đầu flow” hoặc chọn số bước để xem hồ sơ đi qua các khối nào.";
+    nextBtn.textContent = cur === 0 ? "Bắt đầu flow →" : (cur === STEPS.length ? "Làm lại ↺" : "Tiếp →");
+    if (first && first.scrollIntoView) {
+      var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      first.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+    }
+  }
+
+  nextBtn.addEventListener("click", function () { go(cur === STEPS.length ? 1 : cur + 1); });
+  document.getElementById("prev").addEventListener("click", function () { go(cur <= 1 ? 0 : cur - 1); });
+  document.getElementById("reset").addEventListener("click", function () { go(0); });
+  document.addEventListener("keydown", function (e) {
+    if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
+    if (e.key === "ArrowRight") go(cur === STEPS.length ? 1 : cur + 1);
+    if (e.key === "ArrowLeft") go(cur <= 1 ? 0 : cur - 1);
+  });
+})();
+</script>

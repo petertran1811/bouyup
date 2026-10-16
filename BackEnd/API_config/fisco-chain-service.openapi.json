@@ -1,0 +1,4477 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "BuoyUp Chain API — withdrawals, banks, audit trail, explorer",
+    "version": "2.0.0",
+    "description": "BuoyUp's blockchain service on **FISCO BCOS**. It does four things:\n\n| Section | What it is for | Who calls it |\n|---|---|---|\n| **Withdrawals** | Pay money to a user's account and record the payout on chain, **encrypted**, with the bank split | Agent 4, or a human for a manual payout |\n| **Banks & regions** | The demo bank catalog: regions and provinces, each bank's limits, its written credit policy and its contract with BuoyUp | Agent 3 (policies), Agent 4 (which banks to split across) |\n| **Audit trail** | Anchor hashes of documents (applications, algorithm output, agent traces, decisions) and check them later | Agents 1, 2, 3, 5 and the approval gate |\n| **Explorer** | Public, read-only view of the chain: blocks, transactions, encrypted withdrawals, node status, decryption with your own key. Page at `/explorer/` | Anyone (banks, auditors) |\n| **Overview** | `GET /v1/overview`: what this service does, its security design, every secret (demo keys), a step-by-step decryption guide | The team |\n\n### How a withdrawal works\n1. Agent 4 (or a person) sends the user, the account, the amount, the region and province, and the **bank split** (which banks fund it, in percent).\n2. The service checks the split: **at most 2 decimals per bank, total exactly 100.00%**, every bank exists, is active and belongs to the region.\n3. BuoyUp pays the account straight away (mock treasury: unlimited funds).\n4. The withdrawal is **encrypted in pieces**: a summary (readable by every bank of the withdrawal and BuoyUp) and one piece per bank (readable by that bank and BuoyUp only). X25519 + HKDF-SHA256 + AES-256-GCM.\n5. The encrypted envelope, a SHA-256 fingerprint (commitment) of each piece and their Merkle root are written to the `WithdrawalLedger` contract, which recomputes the root. Nothing readable is on chain.\n6. The response (to the caller only) carries the readable record plus the **transaction hash, block, block hash, the node that sealed it and how many nodes already hold it**.\n7. Each bank reads its own share from the chain with its private key (`POST /explorer/api/decrypt`, or the standalone `/explorer/decrypt_withdrawal.py`) and can prove it to anyone with the fingerprint. Its share stays `pending` until BuoyUp claims it (outside this service).\n\n### Conventions\n- **Amounts** are integers in the currency's smallest unit: **VND in đồng** (no decimals), **CNY in fen** (1 CNY = 100). Region `VN` pays in VND, `CN` in CNY.\n- **Percent** values in `bankSplit` may have up to 2 decimals (`60`, `25.5`, `33.33`). On chain they are stored as basis points (`ratioBps`, 100.00% = 10000).\n- **Privacy:** the chain holds only encrypted withdrawals. Inside them, `userId` + `accountNo` become a salted `accountRef` and a human's `staffId` a salted `staffRef`. `GET /v1/withdrawals/*` decrypts with the BuoyUp master key (token-protected); the public explorer shows only ciphertext.\n- **Auth:** `/v1/*` needs `Authorization: Bearer <token>` when the server sets `apiToken`. `/healthz`, `/docs/` and `/explorer/` are public.\n- **Errors** always look like `{\"error\": {\"kind\": \"...\", \"message\": \"...\", \"details\": {...}}}`. `kind` is stable; branch on it, not on the message.\n\n| kind | HTTP | When |\n|---|---|---|\n| `invalid` | 400 | Malformed JSON, unknown field, missing userId/accountNo |\n| `invalid_amount` | 400 | Amount missing, zero or negative |\n| `invalid_bank_ratio` | 400 | Split does not total 100.00%, a ratio has more than 2 decimals, is 0, negative or above 100 |\n| `unknown_bank` | 400 / 404 | Bank code not in the catalog |\n| `bank_region_mismatch` | 400 | Bank belongs to another region (e.g. VCB in a CN withdrawal) |\n| `bank_unavailable` | 400 | Bank inactive or its contract with BuoyUp is not active |\n| `unknown_region` / `unknown_province` / `currency_mismatch` | 400 | Region or province not in the catalog, or currency does not match the region |\n| `amount_too_small` | 400 | A bank's share would round to 0 |\n| `invalid_actor` | 400 | Actor missing or incomplete |\n| `actor_not_allowed` | 403 | An agent other than Agent 4 asked for a withdrawal |\n| `duplicate_request` | 409 | `requestId` reused for a different withdrawal |\n| `duplicate` | 409 | Audit anchor already exists for this subject |\n| `no_access` | 403 | Decrypt: the key opens no slot of that withdrawal |\n| `invalid_key` | 400 | A key is not 32 bytes of hex |\n| `not_found` | 404 | Withdrawal, transaction, block or anchor not found |\n| `payout_failed` / `chain` | 502 | Paying system or chain node error |\n| `unauthenticated` | 401 | Missing or wrong bearer token |\n\nAll bank data (policies, contracts, limits) is **mock data for the demo**, not the real terms of any bank."
+  },
+  "servers": [
+    {
+      "url": "..",
+      "description": "this server (relative, works behind a reverse-proxy sub-path)"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Withdrawals",
+      "description": "Pay a user's account and record the payout on FISCO BCOS, encrypted per bank. Called by **Agent 4** (or a human for a manual payout). These endpoints return the readable record (decrypted with the BuoyUp master key)."
+    },
+    {
+      "name": "Banks & regions",
+      "description": "Demo bank catalog. `policy` is written text for **Agent 3** (preferences, red flags, when to escalate); `limits` holds the numbers. Stored as YAML in `internal/catalog/data/`."
+    },
+    {
+      "name": "Audit trail",
+      "description": "Hash anchoring for Agents 1, 2, 3, 5 and the approval gate. Only hashes go on chain; each subject keeps a hash chain so deleting or reordering records is detectable."
+    },
+    {
+      "name": "Explorer",
+      "description": "Public JSON behind the `/explorer/` page (no token). Shows blocks, transactions, which nodes hold them, and withdrawals as stored: encrypted. Decrypt with your own key here or with the standalone script."
+    },
+    {
+      "name": "System",
+      "description": "Overview for the team (security design, secrets, decryption guide), health and chain information."
+    }
+  ],
+  "paths": {
+    "/v1/withdrawals": {
+      "post": {
+        "tags": [
+          "Withdrawals"
+        ],
+        "operationId": "createWithdrawal",
+        "summary": "Pay an account and record the withdrawal on chain",
+        "description": "Validates the request, pays the account (mock treasury), writes the record to `WithdrawalLedger` and returns the chain references.\n\n**Bank split rules:** at most 2 decimals per bank, total exactly 100.00%, banks from the request's region with an active contract. Limits in the bank catalog are *not* enforced here; checking them is the agents' job.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithdrawalRequest"
+              },
+              "examples": {
+                "agent_vn": {
+                  "summary": "Agent 4, Vietnam, 3 banks",
+                  "value": {
+                    "requestId": "agent4-req-0001",
+                    "userId": "U-778899",
+                    "accountNo": "0071000123456",
+                    "amount": 500000000,
+                    "region": "VN",
+                    "province": "VN-HN",
+                    "bankSplit": {
+                      "VCB": 60,
+                      "BIDV": 25.5,
+                      "TCB": 14.5
+                    },
+                    "actor": {
+                      "type": "agent",
+                      "agentId": "agent-4",
+                      "name": "Disbursement & Collection",
+                      "version": "4.2.0",
+                      "model": "claude-opus-5-5",
+                      "runId": "run-20261010-8812"
+                    }
+                  }
+                },
+                "human_cn": {
+                  "summary": "Manual payout by an officer, China, 2 banks",
+                  "value": {
+                    "userId": "U-102938",
+                    "accountNo": "6222020200112233",
+                    "amount": 13990000,
+                    "currency": "CNY",
+                    "region": "CN",
+                    "province": "CN-GD",
+                    "bankSplit": {
+                      "WEBANK": 70,
+                      "CMB": 30
+                    },
+                    "actor": {
+                      "type": "human",
+                      "staffId": "CO-17",
+                      "role": "credit_officer",
+                      "department": "SME Lending Ops",
+                      "reason": "Manual payout: agent run failed after approval",
+                      "approvalRef": "TICKET-4471"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Paid and recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Withdrawal"
+                },
+                "example": {
+                  "withdrawalId": "WD-0FE326452A1A54BE",
+                  "status": "paid_out",
+                  "amount": 500000000,
+                  "currency": "VND",
+                  "region": "VN",
+                  "province": "VN-HN",
+                  "provinceName": "Hà Nội",
+                  "accountRef": "0x96ca66dac8467c77b94694373e40c4135fdda787b5d36b02e340307b8a2acc70",
+                  "actor": {
+                    "type": "agent",
+                    "agentId": "agent-4",
+                    "version": "4.2.0",
+                    "hash": "0xda1d92a97b414c4b24bc63ef22975cf108ac195b34210dde97db386196dec9e5"
+                  },
+                  "actorRequest": {
+                    "type": "agent",
+                    "agentId": "agent-4",
+                    "name": "Disbursement & Collection",
+                    "version": "4.2.0",
+                    "model": "claude-opus-5-5",
+                    "runId": "run-20261010-8812"
+                  },
+                  "payout": {
+                    "ref": "MOCKPAY-0FE326452A1A54BE",
+                    "provider": "mock-treasury",
+                    "paidAt": "2026-10-10T20:42:48Z"
+                  },
+                  "payoutRef": "MOCKPAY-0FE326452A1A54BE",
+                  "legs": [
+                    {
+                      "bank": "VCB",
+                      "bankName": "Vietcombank",
+                      "percent": 60,
+                      "ratioBps": 6000,
+                      "amount": 300000000,
+                      "contractNo": "BU-VCB-2026-01",
+                      "reimbursement": "pending"
+                    },
+                    {
+                      "bank": "BIDV",
+                      "bankName": "BIDV",
+                      "percent": 25.5,
+                      "ratioBps": 2550,
+                      "amount": 127500000,
+                      "contractNo": "BU-BIDV-2026-01",
+                      "reimbursement": "pending"
+                    },
+                    {
+                      "bank": "TCB",
+                      "bankName": "Techcombank",
+                      "percent": 14.5,
+                      "ratioBps": 1450,
+                      "amount": 72500000,
+                      "contractNo": "BU-TCB-2026-01",
+                      "reimbursement": "pending"
+                    }
+                  ],
+                  "onChain": {
+                    "withdrawalId": "WD-0FE326452A1A54BE",
+                    "root": "0x295f51a9604feb79a859d44249233a3c23da7fff5ac8db8bcc76f0f9de5c93f1",
+                    "commitments": [
+                      "0x5e14b9313c8b5f07fb936972b49964ee68f34558c236b646601fcf15131950fe",
+                      "0x701ac35a68a4c276497636588fb86790977ca5372e2823461943b5e971dabe36",
+                      "0x34f59d21272a050c515cd371cfe28445f5e3f3560294fb9fa1ae6a12c51dfece",
+                      "0x3e59c0ededf356a8f4de913e11fae9797bd3764110f5a40af2e2fde16cc85f53"
+                    ],
+                    "pieces": 4,
+                    "slots": 4,
+                    "envelopeBytes": 3532,
+                    "timestamp": "2026-10-10T20:42:48Z",
+                    "blockNumber": 64,
+                    "txHash": "0x629a6c2975f30aaed60f1dacd0d0d5611742f8c6c0f8d02f5334803078b18675",
+                    "writer": "0xe1147113322ab9812a5157353c3d53dafc944f41"
+                  },
+                  "chain": {
+                    "backend": "fisco-bcos",
+                    "txHash": "0x629a6c2975f30aaed60f1dacd0d0d5611742f8c6c0f8d02f5334803078b18675",
+                    "blockNumber": 64,
+                    "blockHash": "0xddcc0914e9af6783090030499eff492bb9d81593dc31f25c654116ba299bffd5",
+                    "timestamp": "2026-10-10T20:42:48Z",
+                    "contract": "0xe30422f912b545ee2aa9d35c85d6bc03c49d1070",
+                    "submittedTo": "node0 (127.0.0.1:20200)",
+                    "sealedBy": "node3",
+                    "sealerNodeId": "dd2c2d42c44f9ea890561f26e24336995fbfb8919ae2b541a4d722e80fb9b976687a310fc24a1a49966462beb53f0cde63c4eb907c330f629670d562d5fd06df",
+                    "confirmedNodes": 3,
+                    "totalNodes": 4,
+                    "confirmations": [
+                      {
+                        "node": "node0",
+                        "url": "127.0.0.1:20200",
+                        "nodeId": "b4a8eed798036a756cf809a1a97ec6b22bb66049efd206ecf76ace861ad2813eaa784c6fc3e31c9596edb946ba2281b478f2c2087050c71528295ed8a745edcc",
+                        "confirmed": true
+                      },
+                      {
+                        "node": "node1",
+                        "url": "127.0.0.1:20201",
+                        "nodeId": "67b78d9b15eb2ab363885a7d31f9113b3e6e010dae8bde47e61b9ebd3b5f46c59d31baf21da796d5dd3020a405698158eba984857d7dc575099a897bd17b57f8",
+                        "confirmed": false,
+                        "error": "transaction 0x629a6c2975f30aaed60f1dacd0d0d5611742f8c6c0f8d02f5334803078b18675 is not on-chain"
+                      },
+                      {
+                        "node": "node2",
+                        "url": "127.0.0.1:20202",
+                        "nodeId": "8f48e787fabcf9274c2b707c3033bd5661d9340a33791622b4008002b1bd8b03edd032c80f8c4ecbd1f61f503bd9966a94da0e7bca43e61af056f6d3db64b90f",
+                        "confirmed": true
+                      },
+                      {
+                        "node": "node3",
+                        "url": "127.0.0.1:20203",
+                        "nodeId": "dd2c2d42c44f9ea890561f26e24336995fbfb8919ae2b541a4d722e80fb9b976687a310fc24a1a49966462beb53f0cde63c4eb907c330f629670d562d5fd06df",
+                        "confirmed": true
+                      }
+                    ],
+                    "explorerUrl": "/explorer/#/tx/0x629a6c2975f30aaed60f1dacd0d0d5611742f8c6c0f8d02f5334803078b18675",
+                    "verifyUrl": "/v1/withdrawals/WD-0FE326452A1A54BE/verify"
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Retry with the same requestId: the existing record (`replayed: true`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Withdrawal"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "details": {
+                      "sumPercent": "90.00"
+                    },
+                    "kind": "invalid_bank_ratio",
+                    "message": "bank ratios add up to 90.00%, they must add up to exactly 100%"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Actor not allowed (only agent-4 may withdraw)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "requestId reused for a different withdrawal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Chain node error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Withdrawals"
+        ],
+        "operationId": "listWithdrawals",
+        "summary": "List withdrawals, newest first",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Withdrawal"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Chain node error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/withdrawals/{id}": {
+      "get": {
+        "tags": [
+          "Withdrawals"
+        ],
+        "operationId": "getWithdrawal",
+        "summary": "Read one withdrawal back from the chain, decrypted with the master key",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Withdrawal id, or the hash of the transaction that recorded it",
+            "example": "WD-0FE326452A1A54BE"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Withdrawal"
+                },
+                "example": {
+                  "withdrawalId": "WD-0FE326452A1A54BE",
+                  "status": "paid_out",
+                  "amount": 500000000,
+                  "currency": "VND",
+                  "region": "VN",
+                  "province": "VN-HN",
+                  "provinceName": "Hà Nội",
+                  "accountRef": "0x96ca66dac8467c77b94694373e40c4135fdda787b5d36b02e340307b8a2acc70",
+                  "actor": {
+                    "type": "agent",
+                    "agentId": "agent-4",
+                    "version": "4.2.0",
+                    "hash": "0xda1d92a97b414c4b24bc63ef22975cf108ac195b34210dde97db386196dec9e5"
+                  },
+                  "payoutRef": "MOCKPAY-0FE326452A1A54BE",
+                  "legs": [
+                    {
+                      "bank": "VCB",
+                      "bankName": "Vietcombank",
+                      "percent": 60,
+                      "ratioBps": 6000,
+                      "amount": 300000000,
+                      "contractNo": "BU-VCB-2026-01",
+                      "reimbursement": "pending"
+                    },
+                    {
+                      "bank": "BIDV",
+                      "bankName": "BIDV",
+                      "percent": 25.5,
+                      "ratioBps": 2550,
+                      "amount": 127500000,
+                      "contractNo": "BU-BIDV-2026-01",
+                      "reimbursement": "pending"
+                    },
+                    {
+                      "bank": "TCB",
+                      "bankName": "Techcombank",
+                      "percent": 14.5,
+                      "ratioBps": 1450,
+                      "amount": 72500000,
+                      "contractNo": "BU-TCB-2026-01",
+                      "reimbursement": "pending"
+                    }
+                  ],
+                  "onChain": {
+                    "withdrawalId": "WD-0FE326452A1A54BE",
+                    "root": "0x295f51a9604feb79a859d44249233a3c23da7fff5ac8db8bcc76f0f9de5c93f1",
+                    "commitments": [
+                      "0x5e14b9313c8b5f07fb936972b49964ee68f34558c236b646601fcf15131950fe",
+                      "0x701ac35a68a4c276497636588fb86790977ca5372e2823461943b5e971dabe36",
+                      "0x34f59d21272a050c515cd371cfe28445f5e3f3560294fb9fa1ae6a12c51dfece",
+                      "0x3e59c0ededf356a8f4de913e11fae9797bd3764110f5a40af2e2fde16cc85f53"
+                    ],
+                    "pieces": 4,
+                    "slots": 4,
+                    "envelopeBytes": 3532,
+                    "timestamp": "2026-10-10T20:42:48Z",
+                    "blockNumber": 64,
+                    "txHash": "0x629a6c2975f30aaed60f1dacd0d0d5611742f8c6c0f8d02f5334803078b18675",
+                    "writer": "0xe1147113322ab9812a5157353c3d53dafc944f41"
+                  },
+                  "chain": {
+                    "backend": "fisco-bcos",
+                    "txHash": "0x629a6c2975f30aaed60f1dacd0d0d5611742f8c6c0f8d02f5334803078b18675",
+                    "blockNumber": 64,
+                    "blockHash": "0xddcc0914e9af6783090030499eff492bb9d81593dc31f25c654116ba299bffd5",
+                    "timestamp": "2026-10-10T20:42:48Z",
+                    "contract": "0xe30422f912b545ee2aa9d35c85d6bc03c49d1070",
+                    "submittedTo": "node0 (127.0.0.1:20200)",
+                    "sealedBy": "node3",
+                    "sealerNodeId": "dd2c2d42c44f9ea890561f26e24336995fbfb8919ae2b541a4d722e80fb9b976687a310fc24a1a49966462beb53f0cde63c4eb907c330f629670d562d5fd06df",
+                    "confirmedNodes": 4,
+                    "totalNodes": 4,
+                    "confirmations": [
+                      {
+                        "node": "node0",
+                        "url": "127.0.0.1:20200",
+                        "nodeId": "b4a8eed798036a756cf809a1a97ec6b22bb66049efd206ecf76ace861ad2813eaa784c6fc3e31c9596edb946ba2281b478f2c2087050c71528295ed8a745edcc",
+                        "confirmed": true
+                      },
+                      {
+                        "node": "node1",
+                        "url": "127.0.0.1:20201",
+                        "nodeId": "67b78d9b15eb2ab363885a7d31f9113b3e6e010dae8bde47e61b9ebd3b5f46c59d31baf21da796d5dd3020a405698158eba984857d7dc575099a897bd17b57f8",
+                        "confirmed": true
+                      },
+                      {
+                        "node": "node2",
+                        "url": "127.0.0.1:20202",
+                        "nodeId": "8f48e787fabcf9274c2b707c3033bd5661d9340a33791622b4008002b1bd8b03edd032c80f8c4ecbd1f61f503bd9966a94da0e7bca43e61af056f6d3db64b90f",
+                        "confirmed": true
+                      },
+                      {
+                        "node": "node3",
+                        "url": "127.0.0.1:20203",
+                        "nodeId": "dd2c2d42c44f9ea890561f26e24336995fbfb8919ae2b541a4d722e80fb9b976687a310fc24a1a49966462beb53f0cde63c4eb907c330f629670d562d5fd06df",
+                        "confirmed": true
+                      }
+                    ],
+                    "explorerUrl": "/explorer/#/tx/0x629a6c2975f30aaed60f1dacd0d0d5611742f8c6c0f8d02f5334803078b18675",
+                    "verifyUrl": "/v1/withdrawals/WD-0FE326452A1A54BE/verify"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Chain node error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/withdrawals/{id}/verify": {
+      "get": {
+        "tags": [
+          "Withdrawals"
+        ],
+        "operationId": "verifyWithdrawal",
+        "summary": "Check a withdrawal against the chain",
+        "description": "Recomputes the Merkle root from the on-chain commitments, checks the transaction, then decrypts every piece with the BuoyUp master key, matches each against its commitment and re-checks that the bank ratios total 100.00% and the bank amounts total the amount. Asks every node whether it holds the transaction (reported; does not change `valid`).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Withdrawal id or transaction hash",
+            "example": "WD-0FE326452A1A54BE"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Verification"
+                },
+                "example": {
+                  "withdrawalId": "WD-0FE326452A1A54BE",
+                  "valid": true,
+                  "checks": [
+                    {
+                      "name": "recorded_on_chain",
+                      "ok": true,
+                      "detail": "block 64, written by 0xe1147113322ab9812a5157353c3d53dafc944f41"
+                    },
+                    {
+                      "name": "root_matches_commitments",
+                      "ok": true,
+                      "detail": "Merkle root of 4 commitments = 0x295f51a9604feb79a859d44249233a3c23da7fff5ac8db8bcc76f0f9de5c93f1"
+                    },
+                    {
+                      "name": "transaction_succeeded",
+                      "ok": true,
+                      "detail": "0x629a6c2975f30aaed60f1dacd0d0d5611742f8c6c0f8d02f5334803078b18675 in block 64 (success)"
+                    },
+                    {
+                      "name": "master_key_decrypts",
+                      "ok": true,
+                      "detail": "4 of 4 pieces decrypted"
+                    },
+                    {
+                      "name": "pieces_match_commitments",
+                      "ok": true,
+                      "detail": "SHA-256 of every decrypted piece equals its on-chain commitment"
+                    },
+                    {
+                      "name": "ratios_total_100",
+                      "ok": true,
+                      "detail": "bank ratios total 100.00%"
+                    },
+                    {
+                      "name": "amounts_total",
+                      "ok": true,
+                      "detail": "bank amounts total 500000000 of 500000000"
+                    },
+                    {
+                      "name": "confirmed_on_nodes",
+                      "ok": true,
+                      "detail": "4 of 4 nodes hold the transaction"
+                    }
+                  ],
+                  "chain": {
+                    "backend": "fisco-bcos",
+                    "txHash": "0x629a6c2975f30aaed60f1dacd0d0d5611742f8c6c0f8d02f5334803078b18675",
+                    "blockNumber": 64,
+                    "blockHash": "0xddcc0914e9af6783090030499eff492bb9d81593dc31f25c654116ba299bffd5",
+                    "timestamp": "2026-10-10T20:42:48Z",
+                    "contract": "0xe30422f912b545ee2aa9d35c85d6bc03c49d1070",
+                    "submittedTo": "node0 (127.0.0.1:20200)",
+                    "sealedBy": "node3",
+                    "sealerNodeId": "dd2c2d42c44f9ea890561f26e24336995fbfb8919ae2b541a4d722e80fb9b976687a310fc24a1a49966462beb53f0cde63c4eb907c330f629670d562d5fd06df",
+                    "confirmedNodes": 4,
+                    "totalNodes": 4,
+                    "confirmations": [
+                      {
+                        "node": "node0",
+                        "url": "127.0.0.1:20200",
+                        "nodeId": "b4a8eed798036a756cf809a1a97ec6b22bb66049efd206ecf76ace861ad2813eaa784c6fc3e31c9596edb946ba2281b478f2c2087050c71528295ed8a745edcc",
+                        "confirmed": true
+                      },
+                      {
+                        "node": "node1",
+                        "url": "127.0.0.1:20201",
+                        "nodeId": "67b78d9b15eb2ab363885a7d31f9113b3e6e010dae8bde47e61b9ebd3b5f46c59d31baf21da796d5dd3020a405698158eba984857d7dc575099a897bd17b57f8",
+                        "confirmed": true
+                      },
+                      {
+                        "node": "node2",
+                        "url": "127.0.0.1:20202",
+                        "nodeId": "8f48e787fabcf9274c2b707c3033bd5661d9340a33791622b4008002b1bd8b03edd032c80f8c4ecbd1f61f503bd9966a94da0e7bca43e61af056f6d3db64b90f",
+                        "confirmed": true
+                      },
+                      {
+                        "node": "node3",
+                        "url": "127.0.0.1:20203",
+                        "nodeId": "dd2c2d42c44f9ea890561f26e24336995fbfb8919ae2b541a4d722e80fb9b976687a310fc24a1a49966462beb53f0cde63c4eb907c330f629670d562d5fd06df",
+                        "confirmed": true
+                      }
+                    ],
+                    "explorerUrl": "/explorer/#/tx/0x629a6c2975f30aaed60f1dacd0d0d5611742f8c6c0f8d02f5334803078b18675",
+                    "verifyUrl": "/v1/withdrawals/WD-0FE326452A1A54BE/verify"
+                  },
+                  "root": "0x295f51a9604feb79a859d44249233a3c23da7fff5ac8db8bcc76f0f9de5c93f1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Chain node error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/demo/withdrawals": {
+      "post": {
+        "tags": [
+          "Withdrawals"
+        ],
+        "operationId": "demoWithdrawal",
+        "summary": "Demo: a manual withdrawal with a step-by-step timing trace",
+        "description": "Used by the overview page's step-by-step demo. Exists only while `showDemoKeys` is on (otherwise 404 `demo_off`).\n\nThe withdrawal is real and permanent: it is paid by the mock treasury and written to the chain like any other. To keep demo records recognisable it is always recorded as a human actor with staff id `DEMO`, role `demo` and a reason starting with \"Demo:\", for a fixed demo user and account. Amounts are capped at 10,000,000 VND or 50,000.00 CNY.\n\nThe response is the usual withdrawal plus `trace`: how long each stage took, which node received the transaction, which node proposed the block and when each node reported writing it.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "amount",
+                  "region",
+                  "province",
+                  "bankSplit"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "amount": {
+                    "type": "integer",
+                    "description": "Minor units (VND: dong; CNY: fen). Max 10000000 VND / 5000000 CNY."
+                  },
+                  "region": {
+                    "type": "string"
+                  },
+                  "province": {
+                    "type": "string"
+                  },
+                  "bankSplit": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "number"
+                    }
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 120,
+                    "description": "Appended to the reason"
+                  }
+                }
+              },
+              "example": {
+                "amount": 5000000,
+                "region": "VN",
+                "province": "VN-HN",
+                "bankSplit": {
+                  "VCB": 60,
+                  "BIDV": 25.5,
+                  "TCB": 14.5
+                },
+                "note": "team walkthrough"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Paid, recorded and timed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Withdrawal"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "trace": {
+                          "$ref": "#/components/schemas/Trace"
+                        }
+                      }
+                    }
+                  ]
+                },
+                "example": {
+                  "withdrawalId": "WD-…",
+                  "status": "paid_out",
+                  "trace": {
+                    "backend": "fisco-bcos",
+                    "steps": [
+                      {
+                        "step": "checked",
+                        "atMs": 0.1
+                      },
+                      {
+                        "step": "paid",
+                        "atMs": 0.1
+                      },
+                      {
+                        "step": "sealed",
+                        "atMs": 0.4
+                      },
+                      {
+                        "step": "sent",
+                        "atMs": 0.4
+                      },
+                      {
+                        "step": "receipt",
+                        "atMs": 211.9
+                      }
+                    ],
+                    "submittedTo": "node0",
+                    "leader": "node2",
+                    "blockNumber": 89,
+                    "nodes": [
+                      {
+                        "node": "node1",
+                        "seen": true,
+                        "atMs": 207.6,
+                        "order": 1
+                      },
+                      {
+                        "node": "node2",
+                        "seen": true,
+                        "atMs": 207.6,
+                        "order": 2,
+                        "leader": true
+                      },
+                      {
+                        "node": "node0",
+                        "seen": true,
+                        "atMs": 208.7,
+                        "order": 3
+                      },
+                      {
+                        "node": "node3",
+                        "seen": true,
+                        "atMs": 211.5,
+                        "order": 4
+                      }
+                    ],
+                    "quorum": 3,
+                    "measured": "steps: timed by this service; nodes: when each node's block notice reached this service (loopback latency included)"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error, or `demo_amount_too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`demo_off`: showDemoKeys is false",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Chain node error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/regions": {
+      "get": {
+        "tags": [
+          "Banks & regions"
+        ],
+        "operationId": "listRegions",
+        "summary": "Regions (countries) and their provinces",
+        "description": "A region fixes the currency (VN → VND, CN → CNY) and which banks can share a withdrawal. Province codes are used in withdrawals and in bank policies.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "regions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Region"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "regions": [
+                    {
+                      "code": "VN",
+                      "name": "Vietnam",
+                      "currency": "VND",
+                      "minorUnit": 0,
+                      "note": "Amounts in đồng. Province list follows the July 2025 merger (34 provincial units); former provinces are named in each note.",
+                      "provinces": [
+                        {
+                          "code": "VN-HN",
+                          "name": "Hà Nội",
+                          "note": "Capital. Head offices of most banks; dense seller base for fashion, cosmetics and electronics accessories."
+                        },
+                        {
+                          "code": "VN-HCM",
+                          "name": "TP. Hồ Chí Minh",
+                          "cities": [
+                            "Thủ Đức",
+                            "Thủ Dầu Một",
+                            "Vũng Tàu"
+                          ],
+                          "note": "Largest e-commerce market. Includes former Bình Dương and Bà Rịa – Vũng Tàu (industrial parks, ports)."
+                        },
+                        {
+                          "code": "VN-HP",
+                          "name": "Hải Phòng",
+                          "note": "Port city. Includes former Hải Dương. Logistics, light manufacturing, garments."
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/banks": {
+      "get": {
+        "tags": [
+          "Banks & regions"
+        ],
+        "operationId": "listBanks",
+        "summary": "List banks",
+        "parameters": [
+          {
+            "name": "region",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "VN or CN; omit for all",
+            "example": "VN"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "banks": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BankSummary"
+                      }
+                    },
+                    "disclaimer": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "banks": [
+                    {
+                      "code": "AGRI",
+                      "name": "Agribank",
+                      "localName": "Ngân hàng Nông nghiệp và Phát triển Nông thôn Việt Nam",
+                      "region": "VN",
+                      "currency": "VND",
+                      "headquarters": "VN-HN",
+                      "type": "State-owned commercial bank (agriculture and rural development)",
+                      "active": true,
+                      "contractStatus": "active",
+                      "policyVersion": "2026.10-1",
+                      "mock": true
+                    },
+                    {
+                      "code": "BIDV",
+                      "name": "BIDV",
+                      "localName": "Ngân hàng TMCP Đầu tư và Phát triển Việt Nam",
+                      "region": "VN",
+                      "currency": "VND",
+                      "headquarters": "VN-HN",
+                      "type": "State-owned commercial bank",
+                      "active": true,
+                      "contractStatus": "active",
+                      "policyVersion": "2026.10-1",
+                      "mock": true
+                    },
+                    {
+                      "code": "MBB",
+                      "name": "MB Bank",
+                      "localName": "Ngân hàng TMCP Quân đội",
+                      "region": "VN",
+                      "currency": "VND",
+                      "headquarters": "VN-HN",
+                      "type": "Joint-stock commercial bank",
+                      "active": true,
+                      "contractStatus": "active",
+                      "policyVersion": "2026.10-1",
+                      "mock": true
+                    },
+                    {
+                      "code": "TCB",
+                      "name": "Techcombank",
+                      "localName": "Ngân hàng TMCP Kỹ thương Việt Nam",
+                      "region": "VN",
+                      "currency": "VND",
+                      "headquarters": "VN-HN",
+                      "type": "Private joint-stock commercial bank",
+                      "active": true,
+                      "contractStatus": "active",
+                      "policyVersion": "2026.10-1",
+                      "mock": true
+                    },
+                    {
+                      "code": "VCB",
+                      "name": "Vietcombank",
+                      "localName": "Ngân hàng TMCP Ngoại thương Việt Nam",
+                      "region": "VN",
+                      "currency": "VND",
+                      "headquarters": "VN-HN",
+                      "type": "State-owned commercial bank",
+                      "active": true,
+                      "contractStatus": "active",
+                      "policyVersion": "2026.10-1",
+                      "mock": true
+                    }
+                  ],
+                  "disclaimer": "Demo data for BuoyUp. Not the real policy, terms or limits of this bank."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown region",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/banks/{code}": {
+      "get": {
+        "tags": [
+          "Banks & regions"
+        ],
+        "operationId": "getBank",
+        "summary": "Full bank profile: limits, policy and contract",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Bank code (case-insensitive)",
+            "example": "VCB"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Bank"
+                },
+                "example": {
+                  "code": "VCB",
+                  "name": "Vietcombank",
+                  "localName": "Ngân hàng TMCP Ngoại thương Việt Nam",
+                  "region": "VN",
+                  "currency": "VND",
+                  "headquarters": "VN-HN",
+                  "type": "State-owned commercial bank",
+                  "active": true,
+                  "mock": true,
+                  "disclaimer": "Demo data for BuoyUp. Not the real policy, terms or limits of this bank.",
+                  "profile": "Large state-owned bank with the strongest foreign-exchange and trade-finance franchise in Vietnam. Conservative, documentation-heavy, cares a lot about reputation. Funds a share of a withdrawal when it is confident the seller is stable and will still be in business next year.",
+                  "limits": {
+                    "minWithdrawal": 5000000,
+                    "maxWithdrawal": 5000000000,
+                    "maxSharePercent": 70,
+                    "dailyCap": 20000000000,
+                    "reimbursementDays": 3,
+                    "feePercent": 0.15,
+                    "maxLoanAmount": 3000000000,
+                    "minAnnualRatePercent": 7.5,
+                    "maxAnnualRatePercent": 13,
+                    "maxTenorDays": 180,
+                    "minStoreAgeMonths": 24,
+                    "minStoreRating": 4.5
+                  },
+                  "policy": {
+                    "version": "2026.10-1",
+                    "updatedAt": "2026-10-01",
+                    "summary": "Vietcombank wants steady, well-documented sellers more than fast growers. It would rather fund a smaller amount it fully understands than stretch for a large ticket. It values clean paperwork, a real warehouse, invoices that match the declared purchase, and income that already flows through a Vietnamese bank account. Exporters and sellers with foreign-currency income are especially welcome.",
+                    "riskAppetite": "Low. Comfortable with thin margins on safe deals; uncomfortable with any story it cannot verify. When in doubt it prefers the smaller pre-computed option over a full rejection.",
+                    "sectors": {
+                      "prefer": [
+                        {
+                          "name": "Electronics and tech accessories",
+                          "why": "Stable demand, easy to verify suppliers and invoices, prices do not swing with fashion trends."
+                        },
+                        {
+                          "name": "Light manufacturing with own production",
+                          "why": "A seller who makes what it sells has assets and know-how; the bank sees less resale risk."
+                        },
+                        {
+                          "name": "Export-oriented sellers (cross-border e-commerce)",
+                          "why": "Brings foreign-currency income through Vietcombank, which the bank actively wants."
+                        },
+                        {
+                          "name": "Household goods and kitchenware",
+                          "why": "Repeat purchases, low return rates, predictable seasons."
+                        }
+                      ],
+                      "cautious": [
+                        {
+                          "name": "Fashion and apparel",
+                          "why": "Fine for established brands with two or more peak seasons of history; fast-trend resellers are not."
+                        },
+                        {
+                          "name": "Cosmetics and personal care",
+                          "why": "Counterfeit and grey-import risk. Needs distributor authorisation letters and import documents."
+                        },
+                        {
+                          "name": "Mother and baby products",
+                          "why": "Strong demand but heavy product-safety exposure; wants certificates for every imported item."
+                        }
+                      ],
+                      "avoid": [
+                        {
+                          "name": "Fresh agricultural produce and live seafood",
+                          "why": "Spoilage and weather make cash-flow forecasts unreliable; the bank leaves this to agricultural lenders."
+                        },
+                        {
+                          "name": "Health supplements and \"functional foods\"",
+                          "why": "Frequent advertising violations and licensing issues; reputational risk is too high."
+                        },
+                        {
+                          "name": "Anything crypto, betting or gambling-adjacent",
+                          "why": "Excluded by bank-wide policy."
+                        },
+                        {
+                          "name": "Products that depend on one viral trend",
+                          "why": "Demand can disappear before the loan is repaid."
+                        }
+                      ],
+                      "note": "When a seller spans several categories, judge by the category that takes most of the borrowed money."
+                    },
+                    "regions": {
+                      "prefer": [
+                        {
+                          "code": "VN-HN",
+                          "name": "Hà Nội",
+                          "why": "Densest branch network; staff can visit the warehouse quickly if something looks wrong."
+                        },
+                        {
+                          "code": "VN-BN",
+                          "name": "Bắc Ninh",
+                          "why": "Electronics supply chain the bank knows well through its corporate clients."
+                        },
+                        {
+                          "code": "VN-HP",
+                          "name": "Hải Phòng",
+                          "why": "Port and logistics hub; many exporters already bank with Vietcombank."
+                        },
+                        {
+                          "code": "VN-QNI",
+                          "name": "Quảng Ninh",
+                          "why": "Border-trade expertise; comfortable with sellers importing through Móng Cái when customs papers are clean."
+                        }
+                      ],
+                      "cautious": [
+                        {
+                          "code": "VN-HCM",
+                          "name": "TP. Hồ Chí Minh",
+                          "why": "Accepted case by case. Very competitive market where Vietcombank has less data on small sellers."
+                        },
+                        {
+                          "code": "VN-DN",
+                          "name": "Đà Nẵng",
+                          "why": "Fine for established sellers; tourism-linked products are seasonal."
+                        },
+                        {
+                          "code": "VN-CT",
+                          "name": "Cần Thơ",
+                          "why": "Only when the seller already holds a Vietcombank account with at least 12 months of history."
+                        },
+                        {
+                          "code": "VN-AG",
+                          "name": "An Giang",
+                          "why": "Same as Cần Thơ; most businesses there are agricultural, which the bank avoids."
+                        }
+                      ],
+                      "avoid": [],
+                      "note": "Location is a preference, not a rule. A strong seller from a cautious province can still be funded with a smaller share."
+                    },
+                    "customers": {
+                      "prefer": [
+                        {
+                          "name": "Sellers with an existing Vietcombank account",
+                          "why": "Income already visible to the bank; easier collection."
+                        },
+                        {
+                          "name": "Registered companies or household businesses with tax codes and e-invoices",
+                          "why": "Paperwork that can be checked against the tax portal."
+                        },
+                        {
+                          "name": "Sellers active for two or more years across at least two peak seasons",
+                          "why": "Enough history to trust the forecast."
+                        }
+                      ],
+                      "cautious": [
+                        {
+                          "name": "Sellers who moved platforms in the last 6 months",
+                          "why": "History is fragmented; ask why they moved."
+                        },
+                        {
+                          "name": "Owners who also run several other shops",
+                          "why": "Money can leak between shops; ask for all shops to be declared."
+                        }
+                      ],
+                      "avoid": [
+                        {
+                          "name": "Sellers with any bad debt in the credit report in the last 3 years",
+                          "why": "Bank-wide policy."
+                        }
+                      ]
+                    },
+                    "useOfFunds": [
+                      "Purchase of stock from a named supplier with invoices that match the quantities in the campaign plan.",
+                      "Not for paying off other loans, buying property, or marketing spend alone.",
+                      "The bank likes to see the supplier paid directly, never the seller's personal account."
+                    ],
+                    "positiveSignals": [
+                      "Foreign-currency income from cross-border sales.",
+                      "Long relationship with the same supplier (two or more years of invoices).",
+                      "Return rate clearly below the category average.",
+                      "Owner contributes a visible share of their own money to the campaign."
+                    ],
+                    "redFlags": [
+                      "Supplier and seller share an address, phone number or bank account.",
+                      "Declared purchase price well above the invoice price.",
+                      "A sudden switch of product category shortly before a big campaign.",
+                      "Sales spike in the month before applying with no matching marketing explanation.",
+                      "Many orders with waybills that cannot be found at the carrier."
+                    ],
+                    "escalateWhen": [
+                      "The seller cannot explain a large gap between declared and invoiced prices.",
+                      "The supplier is new and the order is more than half of the seller's usual monthly purchases.",
+                      "The seller asks to change the receiving account after approval."
+                    ],
+                    "dealBreakers": [
+                      "Unlicensed regulated goods (medicines, medical devices, alcohol or tobacco without a licence).",
+                      "Evidence of fake orders or brushing.",
+                      "Sanctioned counterparties anywhere in the supply chain."
+                    ],
+                    "reviewerNotes": "Agent 3 should treat Vietcombank as the conservative anchor of a split. When Vietcombank's preferences are not met it is usually better to lower its share and give the rest to a bank with a higher risk appetite than to exclude it entirely. Explain each concern in plain words; the bank reads the reasons, not a score.",
+                    "hash": "0x1a55358cefa6b7c5aafaa663173d76151d6ecc028a4b50250ce24676cb33abe5"
+                  },
+                  "contract": {
+                    "contractNo": "BU-VCB-2026-01",
+                    "title": "Payment facilitation and reimbursement agreement",
+                    "parties": [
+                      "Vietcombank",
+                      "BuoyUp"
+                    ],
+                    "status": "active",
+                    "effectiveFrom": "2026-01-01",
+                    "expiresOn": "2027-12-31",
+                    "creditLine": 100000000000,
+                    "reimbursementTerms": "BuoyUp pays the target account first. Vietcombank reimburses its share of each withdrawal within 3 business days after the withdrawal is recorded on the BuoyUp FISCO BCOS chain.",
+                    "feeTerms": "BuoyUp charges 0.15% of Vietcombank's share, deducted when the bank reimburses.",
+                    "evidenceTerms": "The on-chain withdrawal record (transaction hash, record hash and bank share) is accepted by both parties as evidence that BuoyUp paid. Either party can check it on any consortium node.",
+                    "dataTerms": "No personal data is written on chain. Account numbers and user ids appear only as salted references that BuoyUp can match on request. Processing follows Vietnam's personal data protection rules.",
+                    "governingLaw": "Laws of Vietnam",
+                    "disputeResolution": "Vietnam International Arbitration Centre (VIAC), Hà Nội",
+                    "termination": "Either party may stop new withdrawals with 5 business days' written notice; shares already paid out remain due.",
+                    "keyClauses": [
+                      "Vietcombank's outstanding reimbursements to BuoyUp may not exceed the credit line.",
+                      "Vietcombank may refuse to take a share of a future withdrawal but may not refuse one already recorded on chain.",
+                      "BuoyUp keeps the full withdrawal request for 10 years for audit."
+                    ],
+                    "hash": "0x643dfee52d6b79311853e6d01dc7183a6d0190ce76526e63ffe7f77ac07a4851"
+                  },
+                  "contractStatus": "active",
+                  "encryptionKey": {
+                    "publicKey": "a97656565786d482c5c589af749e224385f6594be9c1ed2c4c687281e3b71b26",
+                    "activeFrom": "2026-10-10T20:42:44Z",
+                    "algorithm": "X25519"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown bank",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/banks/{code}/policy": {
+      "get": {
+        "tags": [
+          "Banks & regions"
+        ],
+        "operationId": "getBankPolicy",
+        "summary": "The bank's written credit policy (for Agent 3)",
+        "description": "Text Agent 3 reasons over: what the bank likes and avoids (sectors, provinces, customers) and why, red flags, when to escalate, deal breakers and notes for the reviewer.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "AGRI"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bank": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "region": {
+                      "type": "string"
+                    },
+                    "mock": {
+                      "type": "boolean"
+                    },
+                    "disclaimer": {
+                      "type": "string"
+                    },
+                    "policy": {
+                      "$ref": "#/components/schemas/Policy"
+                    }
+                  }
+                },
+                "example": {
+                  "bank": "AGRI",
+                  "disclaimer": "Demo data for BuoyUp. Not the real policy, terms or limits of this bank.",
+                  "mock": true,
+                  "name": "Agribank",
+                  "policy": {
+                    "version": "2026.10-1",
+                    "updatedAt": "2026-10-01",
+                    "summary": "Agribank backs sellers who bring farm products to e-commerce: coffee, rice, fruit, dried seafood, herbs. It understands harvest seasons and accepts longer, uneven cash flows that other banks avoid, as long as the goods are real and the farmers or cooperatives behind them are identifiable. It is wary of urban resellers of imported consumer goods, which fall outside its mission.",
+                    "riskAppetite": "Moderate for agriculture (the bank knows the risks and prices them), low for everything else.",
+                    "sectors": {
+                      "prefer": [
+                        {
+                          "name": "Coffee, tea and pepper",
+                          "why": "Core rural value chains; the bank finances growers and can check volumes with local branches."
+                        },
+                        {
+                          "name": "Rice and specialty rice",
+                          "why": "Mekong Delta expertise; stable domestic demand."
+                        },
+                        {
+                          "name": "Dried fruit, dried seafood and specialty foods (đặc sản)",
+                          "why": "Adds value to farm output and travels well through e-commerce."
+                        },
+                        {
+                          "name": "Fresh fruit sold through cold-chain partners",
+                          "why": "Acceptable when the logistics partner and harvest calendar are documented."
+                        }
+                      ],
+                      "cautious": [
+                        {
+                          "name": "Handicrafts and rural products",
+                          "why": "Welcome, but demand is small; keep amounts modest."
+                        },
+                        {
+                          "name": "Agricultural inputs (seeds, fertiliser, tools)",
+                          "why": "Fine for licensed distributors only."
+                        }
+                      ],
+                      "avoid": [
+                        {
+                          "name": "Imported consumer electronics and fashion resale",
+                          "why": "Outside the bank's mission and expertise."
+                        },
+                        {
+                          "name": "Luxury goods",
+                          "why": "Not aligned with the rural development mandate."
+                        },
+                        {
+                          "name": "Pesticides or veterinary drugs without licences",
+                          "why": "Regulated goods."
+                        }
+                      ],
+                      "note": "Seasonality is expected. Judge the harvest calendar and storage plan, not month-to-month swings."
+                    },
+                    "regions": {
+                      "prefer": [
+                        {
+                          "code": "VN-DLK",
+                          "name": "Đắk Lắk",
+                          "why": "Coffee capital; strong local branch knowledge of growers."
+                        },
+                        {
+                          "code": "VN-LD",
+                          "name": "Lâm Đồng",
+                          "why": "Coffee, vegetables, flowers and dragon fruit; many cooperatives bank with Agribank."
+                        },
+                        {
+                          "code": "VN-AG",
+                          "name": "An Giang",
+                          "why": "Rice and pangasius; deep Mekong Delta network."
+                        },
+                        {
+                          "code": "VN-CT",
+                          "name": "Cần Thơ",
+                          "why": "Mekong Delta hub for fruit and rice processing."
+                        }
+                      ],
+                      "cautious": [
+                        {
+                          "code": "VN-HCM",
+                          "name": "TP. Hồ Chí Minh",
+                          "why": "Fine for sellers that source directly from farms; city resellers need proof of origin."
+                        },
+                        {
+                          "code": "VN-HN",
+                          "name": "Hà Nội",
+                          "why": "Same as TP. HCM."
+                        }
+                      ],
+                      "avoid": [],
+                      "note": "Rural sellers with weak online history but strong local reputation can still qualify; ask Agent 1 to check the cooperative."
+                    },
+                    "customers": {
+                      "prefer": [
+                        {
+                          "name": "Cooperatives and farmer groups selling under a shared brand",
+                          "why": "Spreads risk across many producers and supports the bank's mandate."
+                        },
+                        {
+                          "name": "Young rural entrepreneurs selling family farm products online",
+                          "why": "Exactly the customer the bank wants to grow with."
+                        }
+                      ],
+                      "cautious": [
+                        {
+                          "name": "Middlemen without contracts with growers",
+                          "why": "Ask for purchase agreements with named farms or cooperatives."
+                        }
+                      ],
+                      "avoid": [
+                        {
+                          "name": "Sellers with overdue Agribank farm loans",
+                          "why": "Bank-wide policy."
+                        }
+                      ]
+                    },
+                    "useOfFunds": [
+                      "Buying harvest from named growers or cooperatives, processing, packaging and storage.",
+                      "Cold-chain logistics for fresh goods when contracted in advance."
+                    ],
+                    "positiveSignals": [
+                      "OCOP (One Commune One Product) certification.",
+                      "Geographical indication or organic certification.",
+                      "Multi-year purchase agreements with the same growers."
+                    ],
+                    "redFlags": [
+                      "Claimed origin does not match the province of the supplier.",
+                      "Volumes larger than the region could plausibly produce for that season.",
+                      "No storage plan for goods that must be sold over several months."
+                    ],
+                    "escalateWhen": [
+                      "Weather events (drought, saline intrusion, storms) reported in the source area this season.",
+                      "The seller changes the source province after approval."
+                    ],
+                    "dealBreakers": [
+                      "Mislabelled origin (for example imported goods sold as local specialties).",
+                      "Products banned from export or domestic sale."
+                    ],
+                    "reviewerNotes": "Agribank is the natural home for agricultural sellers that every other bank avoids. When a split includes an agricultural seller, giving Agribank the largest share usually satisfies all policies.",
+                    "hash": "0x56f77f5965e2237cbe6d4ce4be12d0db14d1b072139d9bb2cf5519e57211b1df"
+                  },
+                  "region": "VN"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown bank",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/banks/{code}/contract": {
+      "get": {
+        "tags": [
+          "Banks & regions"
+        ],
+        "operationId": "getBankContract",
+        "summary": "The bank's service agreement with BuoyUp",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "WEBANK"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bank": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "region": {
+                      "type": "string"
+                    },
+                    "mock": {
+                      "type": "boolean"
+                    },
+                    "disclaimer": {
+                      "type": "string"
+                    },
+                    "contractStatus": {
+                      "type": "string"
+                    },
+                    "contract": {
+                      "$ref": "#/components/schemas/Contract"
+                    }
+                  }
+                },
+                "example": {
+                  "bank": "WEBANK",
+                  "contract": {
+                    "contractNo": "BU-WEBANK-2026-01",
+                    "title": "Payment facilitation and reimbursement agreement",
+                    "parties": [
+                      "WeBank",
+                      "BuoyUp"
+                    ],
+                    "status": "active",
+                    "effectiveFrom": "2026-01-01",
+                    "expiresOn": "2028-12-31",
+                    "creditLine": 5000000000,
+                    "reimbursementTerms": "WeBank reimburses its share on the next business day through the daily settlement.",
+                    "feeTerms": "0.10% of WeBank's share.",
+                    "evidenceTerms": "The FISCO BCOS withdrawal record is the evidence of payment. Records can be produced to the Guangzhou Arbitration Commission through the consortium's arbitration node.",
+                    "dataTerms": "Salted references only; processing follows the PRC Personal Information Protection Law.",
+                    "governingLaw": "Laws of the People's Republic of China",
+                    "disputeResolution": "Guangzhou Arbitration Commission",
+                    "termination": "30 days' notice.",
+                    "keyClauses": [
+                      "WeBank operates a consensus node of the consortium chain.",
+                      "Settlement files are reconciled daily against the on-chain records."
+                    ],
+                    "hash": "0x82ce01718083bec1f97572c30e18c44d700f5e6a3d9f813bcf090ec4c3752bd0"
+                  },
+                  "contractStatus": "active",
+                  "disclaimer": "Demo data for BuoyUp. Not the real policy, terms or limits of this bank.",
+                  "mock": true,
+                  "name": "WeBank",
+                  "region": "CN"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown bank",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/audit/anchors": {
+      "post": {
+        "tags": [
+          "Audit trail"
+        ],
+        "operationId": "anchor",
+        "summary": "Anchor a document hash",
+        "description": "Send `content.doc` (hashed canonically) or a precomputed `contentHash`. Anchoring the same content twice for one subject returns 409 `duplicate`.\n\nKinds: `application`, `algorithm_output`, `agent_io`, `credit_memo`, `risk_challenge`, `human_decision`, `offer_contract`, `explanation`, `sweep_notice`, `decision_package`, `other` (`ml_output` is still accepted as an alias of `algorithm_output`).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "subject",
+                  "kind"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "subject": {
+                    "type": "string",
+                    "description": "Application / case id, 1-32 chars of letters, digits, `. _ : -`"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "application",
+                      "algorithm_output",
+                      "agent_io",
+                      "credit_memo",
+                      "risk_challenge",
+                      "human_decision",
+                      "offer_contract",
+                      "explanation",
+                      "sweep_notice",
+                      "decision_package",
+                      "other"
+                    ]
+                  },
+                  "content": {
+                    "type": "object",
+                    "properties": {
+                      "doc": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "description": "Any JSON document. Hashed canonically (sorted keys, SHA-256)."
+                      }
+                    }
+                  },
+                  "contentHash": {
+                    "type": "string",
+                    "pattern": "^0x[0-9a-fA-F]{64}$",
+                    "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+                  },
+                  "uri": {
+                    "type": "string",
+                    "description": "Where the original document is stored (max 256 chars)."
+                  }
+                }
+              },
+              "example": {
+                "subject": "APP-2026-0001",
+                "kind": "algorithm_output",
+                "content": {
+                  "doc": {
+                    "grade": "C",
+                    "limit": 13990000,
+                    "rateBps": 1200,
+                    "sweepRateBps": 6300
+                  }
+                },
+                "uri": "s3://webank-sg/APP-2026-0001/ticket.json"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnchorRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already anchored for this subject",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Chain node error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/audit/anchors/{subject}": {
+      "get": {
+        "tags": [
+          "Audit trail"
+        ],
+        "operationId": "listAnchors",
+        "summary": "List anchors of a subject",
+        "parameters": [
+          {
+            "name": "subject",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "APP-2026-0001"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "subject": {
+                      "type": "string"
+                    },
+                    "records": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AnchorRecord"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Chain node error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/audit/anchors/{subject}/verify": {
+      "get": {
+        "tags": [
+          "Audit trail"
+        ],
+        "operationId": "verifyChain",
+        "summary": "Recompute the subject's hash chain",
+        "parameters": [
+          {
+            "name": "subject",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "APP-2026-0001"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "valid": {
+                      "type": "boolean"
+                    },
+                    "records": {
+                      "type": "integer"
+                    },
+                    "head": {
+                      "type": "string",
+                      "pattern": "^0x[0-9a-fA-F]{64}$",
+                      "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+                    },
+                    "brokenAt": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Chain node error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/audit/verify": {
+      "post": {
+        "tags": [
+          "Audit trail"
+        ],
+        "operationId": "verifyContent",
+        "summary": "Was this exact document anchored? Where and when?",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "content": {
+                    "type": "object",
+                    "properties": {
+                      "doc": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "description": "Any JSON document. Hashed canonically (sorted keys, SHA-256)."
+                      }
+                    }
+                  },
+                  "contentHash": {
+                    "type": "string",
+                    "pattern": "^0x[0-9a-fA-F]{64}$",
+                    "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+                  }
+                }
+              },
+              "example": {
+                "content": {
+                  "doc": {
+                    "grade": "C",
+                    "limit": 13990000,
+                    "rateBps": 1200,
+                    "sweepRateBps": 6300
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "contentHash": {
+                      "type": "string",
+                      "pattern": "^0x[0-9a-fA-F]{64}$",
+                      "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+                    },
+                    "found": {
+                      "type": "boolean"
+                    },
+                    "record": {
+                      "$ref": "#/components/schemas/AnchorRecord"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Chain node error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/explorer/api/overview": {
+      "get": {
+        "security": [],
+        "tags": [
+          "Explorer"
+        ],
+        "operationId": "exOverview",
+        "summary": "Chain summary: height, nodes, latest blocks and withdrawals",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "chain": {
+                      "type": "object"
+                    },
+                    "nodes": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Node"
+                      }
+                    },
+                    "latestBlocks": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Block"
+                      }
+                    },
+                    "latestWithdrawals": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/OnChain"
+                      }
+                    },
+                    "totalWithdrawals": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Chain node error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/explorer/api/blocks": {
+      "get": {
+        "security": [],
+        "tags": [
+          "Explorer"
+        ],
+        "operationId": "exBlocks",
+        "summary": "Latest blocks",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "blocks": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Block"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Chain node error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/explorer/api/blocks/{number}": {
+      "get": {
+        "security": [],
+        "tags": [
+          "Explorer"
+        ],
+        "operationId": "exBlock",
+        "summary": "One block",
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "example": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Block"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such block",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Chain node error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/explorer/api/tx/{hash}": {
+      "get": {
+        "security": [],
+        "tags": [
+          "Explorer"
+        ],
+        "operationId": "exTx",
+        "summary": "One transaction, with the decoded withdrawal and its verification",
+        "parameters": [
+          {
+            "name": "hash",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "0x629a6c2975f30aaed60f1dacd0d0d5611742f8c6c0f8d02f5334803078b18675"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "transaction": {
+                      "$ref": "#/components/schemas/Transaction"
+                    },
+                    "withdrawal": {
+                      "$ref": "#/components/schemas/OnChain"
+                    },
+                    "verification": {
+                      "$ref": "#/components/schemas/Verification"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such transaction",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Chain node error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/explorer/api/withdrawals": {
+      "get": {
+        "security": [],
+        "tags": [
+          "Explorer"
+        ],
+        "operationId": "exWithdrawals",
+        "summary": "Withdrawals as the chain holds them (encrypted), newest first",
+        "parameters": [
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total": {
+                      "type": "integer"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/OnChain"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Chain node error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/explorer/api/withdrawals/{id}": {
+      "get": {
+        "security": [],
+        "tags": [
+          "Explorer"
+        ],
+        "operationId": "exWithdrawal",
+        "summary": "One withdrawal as on chain (envelope included) with its public verification",
+        "description": "This is what the standalone decrypt script downloads: envelope, commitments and root.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Withdrawal id or transaction hash",
+            "example": "WD-0FE326452A1A54BE"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "withdrawal": {
+                      "$ref": "#/components/schemas/OnChain"
+                    },
+                    "chain": {
+                      "$ref": "#/components/schemas/ChainRef"
+                    },
+                    "verification": {
+                      "$ref": "#/components/schemas/Verification"
+                    }
+                  }
+                },
+                "example": {
+                  "chain": {
+                    "backend": "fisco-bcos",
+                    "txHash": "0x629a6c2975f30aaed60f1dacd0d0d5611742f8c6c0f8d02f5334803078b18675",
+                    "blockNumber": 64,
+                    "blockHash": "0xddcc0914e9af6783090030499eff492bb9d81593dc31f25c654116ba299bffd5",
+                    "timestamp": "2026-10-10T20:42:48Z",
+                    "contract": "0xe30422f912b545ee2aa9d35c85d6bc03c49d1070",
+                    "submittedTo": "node0 (127.0.0.1:20200)",
+                    "sealedBy": "node3",
+                    "sealerNodeId": "dd2c2d42c44f9ea890561f26e24336995fbfb8919ae2b541a4d722e80fb9b976687a310fc24a1a49966462beb53f0cde63c4eb907c330f629670d562d5fd06df",
+                    "confirmedNodes": 4,
+                    "totalNodes": 4,
+                    "confirmations": [
+                      {
+                        "node": "node0",
+                        "url": "127.0.0.1:20200",
+                        "nodeId": "b4a8eed798036a756cf809a1a97ec6b22bb66049efd206ecf76ace861ad2813eaa784c6fc3e31c9596edb946ba2281b478f2c2087050c71528295ed8a745edcc",
+                        "confirmed": true
+                      },
+                      {
+                        "node": "node1",
+                        "url": "127.0.0.1:20201",
+                        "nodeId": "67b78d9b15eb2ab363885a7d31f9113b3e6e010dae8bde47e61b9ebd3b5f46c59d31baf21da796d5dd3020a405698158eba984857d7dc575099a897bd17b57f8",
+                        "confirmed": true
+                      },
+                      {
+                        "node": "node2",
+                        "url": "127.0.0.1:20202",
+                        "nodeId": "8f48e787fabcf9274c2b707c3033bd5661d9340a33791622b4008002b1bd8b03edd032c80f8c4ecbd1f61f503bd9966a94da0e7bca43e61af056f6d3db64b90f",
+                        "confirmed": true
+                      },
+                      {
+                        "node": "node3",
+                        "url": "127.0.0.1:20203",
+                        "nodeId": "dd2c2d42c44f9ea890561f26e24336995fbfb8919ae2b541a4d722e80fb9b976687a310fc24a1a49966462beb53f0cde63c4eb907c330f629670d562d5fd06df",
+                        "confirmed": true
+                      }
+                    ],
+                    "explorerUrl": "/explorer/#/tx/0x629a6c2975f30aaed60f1dacd0d0d5611742f8c6c0f8d02f5334803078b18675",
+                    "verifyUrl": "/v1/withdrawals/WD-0FE326452A1A54BE/verify"
+                  },
+                  "verification": {
+                    "withdrawalId": "WD-0FE326452A1A54BE",
+                    "valid": true,
+                    "checks": [
+                      {
+                        "name": "recorded_on_chain",
+                        "ok": true,
+                        "detail": "block 64, written by 0xe1147113322ab9812a5157353c3d53dafc944f41"
+                      },
+                      {
+                        "name": "root_matches_commitments",
+                        "ok": true,
+                        "detail": "Merkle root of 4 commitments = 0x295f51a9604feb79a859d44249233a3c23da7fff5ac8db8bcc76f0f9de5c93f1"
+                      },
+                      {
+                        "name": "transaction_succeeded",
+                        "ok": true,
+                        "detail": "0x629a6c2975f30aaed60f1dacd0d0d5611742f8c6c0f8d02f5334803078b18675 in block 64 (success)"
+                      },
+                      {
+                        "name": "confirmed_on_nodes",
+                        "ok": true,
+                        "detail": "4 of 4 nodes hold the transaction"
+                      }
+                    ],
+                    "chain": {
+                      "backend": "fisco-bcos",
+                      "txHash": "0x629a6c2975f30aaed60f1dacd0d0d5611742f8c6c0f8d02f5334803078b18675",
+                      "blockNumber": 64,
+                      "blockHash": "0xddcc0914e9af6783090030499eff492bb9d81593dc31f25c654116ba299bffd5",
+                      "timestamp": "2026-10-10T20:42:48Z",
+                      "contract": "0xe30422f912b545ee2aa9d35c85d6bc03c49d1070",
+                      "submittedTo": "node0 (127.0.0.1:20200)",
+                      "sealedBy": "node3",
+                      "sealerNodeId": "dd2c2d42c44f9ea890561f26e24336995fbfb8919ae2b541a4d722e80fb9b976687a310fc24a1a49966462beb53f0cde63c4eb907c330f629670d562d5fd06df",
+                      "confirmedNodes": 4,
+                      "totalNodes": 4,
+                      "confirmations": [
+                        {
+                          "node": "node0",
+                          "url": "127.0.0.1:20200",
+                          "nodeId": "b4a8eed798036a756cf809a1a97ec6b22bb66049efd206ecf76ace861ad2813eaa784c6fc3e31c9596edb946ba2281b478f2c2087050c71528295ed8a745edcc",
+                          "confirmed": true
+                        },
+                        {
+                          "node": "node1",
+                          "url": "127.0.0.1:20201",
+                          "nodeId": "67b78d9b15eb2ab363885a7d31f9113b3e6e010dae8bde47e61b9ebd3b5f46c59d31baf21da796d5dd3020a405698158eba984857d7dc575099a897bd17b57f8",
+                          "confirmed": true
+                        },
+                        {
+                          "node": "node2",
+                          "url": "127.0.0.1:20202",
+                          "nodeId": "8f48e787fabcf9274c2b707c3033bd5661d9340a33791622b4008002b1bd8b03edd032c80f8c4ecbd1f61f503bd9966a94da0e7bca43e61af056f6d3db64b90f",
+                          "confirmed": true
+                        },
+                        {
+                          "node": "node3",
+                          "url": "127.0.0.1:20203",
+                          "nodeId": "dd2c2d42c44f9ea890561f26e24336995fbfb8919ae2b541a4d722e80fb9b976687a310fc24a1a49966462beb53f0cde63c4eb907c330f629670d562d5fd06df",
+                          "confirmed": true
+                        }
+                      ],
+                      "explorerUrl": "/explorer/#/tx/0x629a6c2975f30aaed60f1dacd0d0d5611742f8c6c0f8d02f5334803078b18675",
+                      "verifyUrl": "/v1/withdrawals/WD-0FE326452A1A54BE/verify"
+                    },
+                    "root": "0x295f51a9604feb79a859d44249233a3c23da7fff5ac8db8bcc76f0f9de5c93f1"
+                  },
+                  "withdrawal": {
+                    "withdrawalId": "WD-0FE326452A1A54BE",
+                    "root": "0x295f51a9604feb79a859d44249233a3c23da7fff5ac8db8bcc76f0f9de5c93f1",
+                    "commitments": [
+                      "0x5e14b9313c8b5f07fb936972b49964ee68f34558c236b646601fcf15131950fe",
+                      "0x701ac35a68a4c276497636588fb86790977ca5372e2823461943b5e971dabe36",
+                      "0x34f59d21272a050c515cd371cfe28445f5e3f3560294fb9fa1ae6a12c51dfece",
+                      "0x3e59c0ededf356a8f4de913e11fae9797bd3764110f5a40af2e2fde16cc85f53"
+                    ],
+                    "pieces": 4,
+                    "slots": 4,
+                    "envelopeBytes": 3532,
+                    "envelope": {
+                      "v": 1,
+                      "alg": "X25519-HKDF-SHA256/AES-256-GCM",
+                      "eph": "f8000bd2e50d91e92e141fd6b1cdfa3958f462457228579efa1874e710ff8329",
+                      "pieces": [
+                        {
+                          "nonce": "a2cc934fce0c39fb971c6c61",
+                          "ct": "GQdN/weWis8z/w54CP5c20ey6JyV/PRvIhbGB5w2w1gfkJjY3EWN2O3EhT4q3ir5VIulWlY9NB8Sr3014L+XD9K9E6i0wNmWSuT5RwpQZ45t6gAUsxuV0pP0ZTzhAV3ly2oQ0ksEjsY3Zl/TJrd5pYx5g3kS1DrPLEGWNXYT6Ntkb22klKguNXz+Kf15YbAWMFUzVkBGM24bBmp5isYRYzV+MdZ6ROHb2PsuuUtvR6PQosL0lL13HBLwdLFz9YpSuzC5eO1gJbUynFuwVQct1oPO6j/yOaKIoE8pzRbVgcNo1E41CxBWLgh5c1Ni5M3FxLjCe/WCeATOl0IMp6gsSqlM3m3isEEl51kb9ut/mCURa/D62cjvwUF95Cc/GOrU0pCF3dPqFe4qniUhrq6ZYeG9W/58gn6qRbKvB9ONBasYjp5Ng7+DBcMCImL44N8Og4fN45DrwJnHYGYMaA9kG58t07rnTRSlHYKPxtKYL73l7kAKkrkQ4pKPw2cv97GZmbThGhABoLRL2v9xNApYwZYkk9sv/UxxU4rIvKImuBcYrSE7R7zGv6Ku3bKYRd4l3cTvqhi4wsuOEen6CypEbM5vu9Z5D3kYQRpy8t16BtWVmAxTZKoXohTnPiWW4BfV+rY3QG9yYi6feBUURUBhXBWjx3RaEu6Konb0MLVkBZ8YnSLtTgMvySM5kmrjdK5x9emVp5VSfcWoubsqquCAjsFJrTeXIU2qIKOhh8NmXpq+SC1XhBEj"
+                        },
+                        {
+                          "nonce": "0edd7354b0457383a644bfff",
+                          "ct": "Ct9RwO5T3ykkYJUzXvJFQAVHKN1vtqPAFzraUBWFxKj3VcPM/J9e0nVQhKTq/4wyBohKLYE16CBwzhEYyDTpEFrnarFEMURtM7D0yDJk81xrHrSEfRrP7INhf+ht5emREcXUMZCPQzpMmlKecinxRDKQSv4v3U5c6FiAU/74UpGy3fEdEeO7916ukk3Wr1qTS/+zD1hZWvLEbZHth1nrqmwMtZZONnAnCxUnzKlhexpNl9KaFoK7GqrWlVXZahlsKLvjPIynoYvO7kwGB5iQFOHjmemrB631I/CtfkSl47Z5GSPnU1ZFWVHkhvmuLNbg1F186RKvfYyg"
+                        },
+                        {
+                          "nonce": "36870e130ce662fc422b050f",
+                          "ct": "/IT/TRmHj+C+phNZSYWoMLiiQFZSpdqUZSM2eRC2lsrFt+oMXVUYddikKprq5e8Ziv9gNMoqD0vyYrL2SCDWkHK06uNZMvrvq2vE+igsVcQKikMRQ8nncGhh+tdFd3QIx/OYkbqY/A8y5R0Ictki8YTH33IkzqF1+ZUV/QbX8k1psyqx6GbTD/ogQjM0LXSqp28H0PsENmq1rl+PGG4g4LSWUXu4Oh5WjgCF4wXHpxhhiRB/k3OfnBlvnHv8cGcQNKopBywzW0QUnMP0uC+NkvK5T/g7msTuKfb0RzMLkPnH+QZU0OLfkQzoFU/p2YnUe6KJPgQi"
+                        },
+                        {
+                          "nonce": "a4ce81dceacd86f024e6651a",
+                          "ct": "MR2KRXaUsWkXG5xGy8Fcqb+6u1SSv8KN3vU/wDyg4We4CY3cpSFUmkie/6KISyG6NNWFqv2WijgDud6ezgCuTaFFdQtuZd3N1mfWg5peFKb2U1qz3LHQA4dEH8MmdKbTvhVJAEOOBGMoCTLhE9EMI9VvPo8Yp8XLD2WkrWBDxSGbxiM67js+SIGT3pTtCvbRWRz0etnYk16OlOzE0ZJZKRg2ADSZoxeNKT8lO/TAjEdOpKd+tg+te0jbd/RKiX/mXUDGWYqH/Ix/xvVajmlGKZXY9W+bRQfEsQKSm5qt0Nn5fnp1WtfEFQn7PhB4lIPlsSjI87bbmyB9zA=="
+                        }
+                      ],
+                      "slots": [
+                        {
+                          "nonce": "eefb48a70acd768bb2b28f1f",
+                          "ct": "A0pRidzT2SQP7itc/FwysWrUkWvEyeWOihYwSW4aK2TvjoR6jxezPsCWeHqEzO39XXpewTssZSHDsK5f95yaBS5BhNly+let5Ky8NuxiTmnUJExuiHNUPctQbhSs5C9C52djDJjI5vQ5QqsjdiZk3P/jkebdxYFu/YK2RNUqmdVKSU+KkoB6fifqbkBNJvzP1qP982DFxJ7m1ql7f0Mw0a3TD72SI2bUCcznF4hg7QdrzdaUPUXjWsE1aODvoKmzEJdx/A=="
+                        },
+                        {
+                          "nonce": "f0e8ddba8129ccf07b0aeab4",
+                          "ct": "nxoys5ouqWC4iEeGjb4Glxa5r67ZGhzvxqXC7ITtRS8/3yHMsb69ZYIBucSyxNmsbTMKBjM0sGQQ1lMabSUkQ1HuUamtAn8Msz13oGfTOb0mcgX0gRYPAc62VxtbsJG0IoZCKUBq4wMVR841rn7Za4P+I8tYdMviYSoZGWVfyIa7oTF1pZwo/MtDnc0Wca/YdjuWLk+M5YtyK7at6f1cvI5nJK+F11casVpqpK1Rnjoqq1h/QkZMPj3sQIeS7A5AfvygiGHm/duPoijLJh3wm2/UvbLzJJh4pSM4ngeiDUbM6Bb22+izzdO1sN3OSCX4S+ohuze94xjc3T/1/b45u7t05VPtjF5XDj9o6D2Tq7JeEVcWFEsaOPmiafEz1xC80br3mi6zO3OWJV0vAicuml0kQlkWSIQQUPxfdmu3ikKh/5tGtB/JsYoGWoS6kXI0XSOqVb651xoNwKgYxKTa4wSPP5XjlngGF0rJPpva"
+                        },
+                        {
+                          "nonce": "f00ed9fbeb71d60395b05733",
+                          "ct": "tKK0Mf6iPMR6HwL1wgZFnJT6uygUJpStK9CWeFVivk4CljKcgO/2C6EQFqq/RyVqbCBUDrrY+mQlpHiwvOYnYG0kDLLQsxO+45rxt9m5sW3/U1eQjH9Sd/GUV10Sw5Vvff67mRzNWyVLGTmCP/jL/rDItZqX2cYjQtDa39HycVIuhWH5rXPFqHgu4lcwzMDZDm5FHnVSxEUQoaHH7BuUutqyuWzwpyWERep1hXUJTj0QgGSaEw5Md+Dy179jUkxTiLC98Q=="
+                        },
+                        {
+                          "nonce": "bec80571e197092c05daae45",
+                          "ct": "qZXWSAfnGJIArgfO3es3OMn6nhX77szF373aRfjrcMeyD6ml+1I0+458NgOhGE1VpaQUBy4YFEXs3Rk19z1BEKPeCiq2icHKkuhVFN1av8qw6pqsuVx3mzujXCQxr5yutp3MLwFv3WhZL8N30OqnfdkDFzavSZmbpyz2mlOzWjqPPDQTATCX1BYYLWquh8y63pIWP8Ib0tpdhv/BBhgNIACW7DsWcsmYVuBOcZjpt7hEKJo8boJMBQq7IiVfC76O5MKrpA=="
+                        }
+                      ]
+                    },
+                    "timestamp": "2026-10-10T20:42:48Z",
+                    "blockNumber": 64,
+                    "txHash": "0x629a6c2975f30aaed60f1dacd0d0d5611742f8c6c0f8d02f5334803078b18675",
+                    "writer": "0xe1147113322ab9812a5157353c3d53dafc944f41"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Chain node error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/explorer/api/decrypt": {
+      "post": {
+        "security": [],
+        "tags": [
+          "Explorer"
+        ],
+        "operationId": "decrypt",
+        "summary": "Decrypt a withdrawal with your own private key",
+        "description": "Returns the pieces your key can read, each with `commitmentMatches` (SHA-256 of the plaintext equals the on-chain commitment). A bank key reads the summary and its own share; the BuoyUp master key reads everything; any other key gets 403 `no_access`. The server does not store the key. To decrypt without trusting the server, use `/explorer/decrypt_withdrawal.py` or `sgchain decrypt`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "withdrawalId",
+                  "privateKey"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "withdrawalId": {
+                    "type": "string",
+                    "description": "Withdrawal id or transaction hash"
+                  },
+                  "privateKey": {
+                    "type": "string",
+                    "description": "X25519 private key, 64 hex characters"
+                  }
+                }
+              },
+              "example": {
+                "withdrawalId": "WD-0FE326452A1A54BE",
+                "privateKey": "<BIDV private key from GET /v1/overview>"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "withdrawalId": {
+                      "type": "string"
+                    },
+                    "piecesTotal": {
+                      "type": "integer"
+                    },
+                    "root": {
+                      "type": "string",
+                      "pattern": "^0x[0-9a-fA-F]{64}$",
+                      "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+                    },
+                    "rootMatchesCommitments": {
+                      "type": "boolean"
+                    },
+                    "readable": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "integer"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "summary",
+                              "bank_share"
+                            ]
+                          },
+                          "content": {
+                            "type": "object"
+                          },
+                          "commitment": {
+                            "type": "string",
+                            "pattern": "^0x[0-9a-fA-F]{64}$",
+                            "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+                          },
+                          "commitmentMatches": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "piecesTotal": 4,
+                  "readable": [
+                    {
+                      "index": 0,
+                      "kind": "summary",
+                      "content": {
+                        "type": "summary",
+                        "withdrawalId": "WD-0FE326452A1A54BE",
+                        "amount": 500000000,
+                        "currency": "VND",
+                        "region": "VN",
+                        "province": "VN-HN",
+                        "accountRef": "0x96ca66dac8467c77b94694373e40c4135fdda787b5d36b02e340307b8a2acc70",
+                        "payoutRef": "MOCKPAY-0FE326452A1A54BE",
+                        "paidAt": "2026-10-10T20:42:48Z",
+                        "actor": {
+                          "type": "agent",
+                          "agentId": "agent-4",
+                          "version": "4.2.0",
+                          "hash": "0xda1d92a97b414c4b24bc63ef22975cf108ac195b34210dde97db386196dec9e5"
+                        },
+                        "banks": 3,
+                        "requestHash": "0xf8d2f87aa01a2a04336aaef4ac77c3091a87873e8dcbafcc1dd404c74e2c58ac",
+                        "salt": "e588d114b65f3a87859bdd9306a138eb"
+                      },
+                      "commitment": "0x5e14b9313c8b5f07fb936972b49964ee68f34558c236b646601fcf15131950fe",
+                      "commitmentMatches": true
+                    },
+                    {
+                      "index": 2,
+                      "kind": "bank_share",
+                      "content": {
+                        "type": "bank_share",
+                        "withdrawalId": "WD-0FE326452A1A54BE",
+                        "bank": "BIDV",
+                        "bankName": "BIDV",
+                        "percent": 25.5,
+                        "ratioBps": 2550,
+                        "amount": 127500000,
+                        "currency": "VND",
+                        "contractNo": "BU-BIDV-2026-01",
+                        "salt": "d057bea8c0273c9134e18b3417e334ac"
+                      },
+                      "commitment": "0x34f59d21272a050c515cd371cfe28445f5e3f3560294fb9fa1ae6a12c51dfece",
+                      "commitmentMatches": true
+                    }
+                  ],
+                  "root": "0x295f51a9604feb79a859d44249233a3c23da7fff5ac8db8bcc76f0f9de5c93f1",
+                  "rootMatchesCommitments": true,
+                  "withdrawalId": "WD-0FE326452A1A54BE"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "This key cannot read the withdrawal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": {
+                    "kind": "no_access",
+                    "message": "this key cannot read withdrawal WD-0FE326452A1A54BE (it opens none of its 4 slots)"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such withdrawal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/explorer/api/search": {
+      "get": {
+        "security": [],
+        "tags": [
+          "Explorer"
+        ],
+        "operationId": "exSearch",
+        "summary": "Resolve a block number, transaction hash or withdrawal id",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "WD-0FE326452A1A54BE"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "block",
+                        "tx",
+                        "withdrawal"
+                      ]
+                    },
+                    "target": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "type": "withdrawal",
+                  "target": "WD-0FE326452A1A54BE"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Nothing matches",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/overview": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "operationId": "overview",
+        "summary": "What this service does, its security design, every secret, how to decrypt",
+        "description": "For the team. Sections (Markdown inside JSON): what this part of BuoyUp does, how a withdrawal works, security (FISCO BCOS consortium chain, envelope encryption, commitments + Merkle root, salted references, audit hash chain, keys), **Secrets** (master key, every bank key, chain signing keys, reference salt — full values only while `showDemoKeys` is on, which is the default), a step-by-step decryption guide and a worked example from the latest withdrawal. `?format=markdown` returns the same as one Markdown document.",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "json (default) or markdown",
+            "example": "markdown"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "generatedAt": {
+                      "type": "string"
+                    },
+                    "demoKeysShown": {
+                      "type": "boolean"
+                    },
+                    "sections": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "markdown": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "secrets": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "owner": {
+                            "type": "string"
+                          },
+                          "unlocks": {
+                            "type": "string"
+                          },
+                          "heldBy": {
+                            "type": "string"
+                          },
+                          "publicKey": {
+                            "type": "string"
+                          },
+                          "privateKey": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "string"
+                          },
+                          "activeFrom": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "decodeExample": {
+                      "type": "object"
+                    }
+                  }
+                },
+                "example": {
+                  "title": "BuoyUp — chain service overview",
+                  "demoKeysShown": true,
+                  "sections": [
+                    {
+                      "id": "what",
+                      "title": "What this part of BuoyUp does",
+                      "markdown": "…"
+                    },
+                    {
+                      "id": "flow",
+                      "title": "How a withdrawal works",
+                      "markdown": "…"
+                    },
+                    {
+                      "id": "security",
+                      "title": "Security: what protects the data and why",
+                      "markdown": "…"
+                    },
+                    {
+                      "id": "secrets",
+                      "title": "Secrets",
+                      "markdown": "…"
+                    },
+                    {
+                      "id": "decode",
+                      "title": "How to decrypt a withdrawal (step by step)",
+                      "markdown": "…"
+                    },
+                    {
+                      "id": "endpoints",
+                      "title": "Endpoints",
+                      "markdown": "…"
+                    }
+                  ],
+                  "secrets": [
+                    {
+                      "name": "BuoyUp master key",
+                      "owner": "BuoyUp",
+                      "unlocks": "EVERY piece of EVERY withdrawal (the master key gets a slot in all of them)",
+                      "heldBy": "demo: bank-keys.json · production: an HSM/KMS, never on a server disk",
+                      "publicKey": "<64 hex characters>",
+                      "privateKey": "<64 hex characters>",
+                      "activeFrom": "2026-10-10T20:42:44Z",
+                      "status": "current"
+                    },
+                    {
+                      "name": "AGRI encryption key",
+                      "owner": "Agribank",
+                      "unlocks": "the summary and AGRI's own share of withdrawals it funds — nothing about other banks",
+                      "heldBy": "demo: bank-keys.json · production: the bank itself (BuoyUp only knows the public key)",
+                      "publicKey": "<64 hex characters>",
+                      "privateKey": "<64 hex characters>",
+                      "activeFrom": "2026-10-10T20:42:44Z",
+                      "status": "current"
+                    },
+                    "…"
+                  ],
+                  "decodeExample": {
+                    "available": true,
+                    "withdrawalId": "WD-0FE326452A1A54BE",
+                    "bank": "…",
+                    "curl": "…",
+                    "python": "…"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/banks/{code}/public-key": {
+      "put": {
+        "tags": [
+          "Banks & regions"
+        ],
+        "operationId": "putBankKey",
+        "summary": "A bank registers its new public encryption key",
+        "description": "New withdrawals are locked to this key from now on. Earlier withdrawals stay readable only with the key that was current then (keeping old keys is the bank's responsibility; the withdrawal's timestamp tells which key to try).",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "VCB"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "publicKey"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "publicKey": {
+                    "type": "string",
+                    "description": "X25519 public key, 64 hex characters"
+                  }
+                }
+              },
+              "example": {
+                "publicKey": "a97656565786d482c5c589af749e224385f0c4ea1ce55a10f5f2c3c3c8a1f6d1"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bank": {
+                      "type": "string"
+                    },
+                    "encryptionKey": {
+                      "type": "object"
+                    },
+                    "note": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a valid key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown bank",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "security": [],
+        "tags": [
+          "System"
+        ],
+        "operationId": "health",
+        "summary": "Health check (no auth)",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "backend": {
+                      "type": "string"
+                    },
+                    "blockNumber": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "example": {
+                  "ok": true,
+                  "backend": "fisco-bcos",
+                  "blockNumber": 1234
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Ledger unreachable"
+          }
+        }
+      }
+    },
+    "/v1/chain": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "operationId": "chainInfo",
+        "summary": "Backend, contracts, signing accounts and node status",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "chain": {
+                      "type": "object"
+                    },
+                    "nodes": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Node"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Chain node error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "value of apiToken / SG_API_TOKEN"
+      }
+    },
+    "schemas": {
+      "Hash": {
+        "type": "string",
+        "pattern": "^0x[0-9a-fA-F]{64}$",
+        "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "kind",
+              "message"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "example": "invalid_bank_ratio",
+                "description": "Stable error code (see the table at the top)."
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Extra facts, e.g. `bank` or `sumPercent`."
+              }
+            }
+          }
+        }
+      },
+      "AgentActor": {
+        "type": "object",
+        "required": [
+          "type",
+          "agentId",
+          "version"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "agent"
+            ]
+          },
+          "agentId": {
+            "type": "string",
+            "example": "agent-4",
+            "description": "Only `agent-4` may withdraw; other agents get 403 `actor_not_allowed`. 1-32 chars of letters, digits, `. _ : -`."
+          },
+          "name": {
+            "type": "string",
+            "example": "Disbursement & Collection"
+          },
+          "version": {
+            "type": "string",
+            "example": "4.2.0",
+            "description": "Agent version, recorded on chain (1-32 chars)."
+          },
+          "model": {
+            "type": "string",
+            "example": "claude-opus-5-5"
+          },
+          "runId": {
+            "type": "string",
+            "example": "run-20261010-8812"
+          }
+        }
+      },
+      "HumanActor": {
+        "type": "object",
+        "required": [
+          "type",
+          "staffId",
+          "role",
+          "reason"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "human"
+            ]
+          },
+          "staffId": {
+            "type": "string",
+            "example": "CO-17",
+            "description": "Never written in clear: the chain gets a salted `staffRef`."
+          },
+          "role": {
+            "type": "string",
+            "example": "credit_officer",
+            "description": "Recorded on chain in clear (1-32 chars)."
+          },
+          "department": {
+            "type": "string",
+            "example": "SME Lending Ops"
+          },
+          "reason": {
+            "type": "string",
+            "example": "Manual payout: agent run failed after approval",
+            "description": "Why this payout is done by hand. Required."
+          },
+          "approvalRef": {
+            "type": "string",
+            "example": "TICKET-4471"
+          }
+        }
+      },
+      "WithdrawalRequest": {
+        "type": "object",
+        "required": [
+          "userId",
+          "accountNo",
+          "amount",
+          "region",
+          "province",
+          "bankSplit",
+          "actor"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "maxLength": 128,
+            "example": "agent4-req-0001",
+            "description": "Optional idempotency key. Sending the same request again returns the existing record (200, `replayed: true`); reusing it for a different withdrawal returns 409 `duplicate_request`."
+          },
+          "userId": {
+            "type": "string",
+            "example": "U-778899",
+            "description": "Who receives the money."
+          },
+          "accountNo": {
+            "type": "string",
+            "example": "0071000123456",
+            "description": "Account to pay. Hashed with userId into `accountRef`; never stored in clear."
+          },
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "example": 500000000,
+            "description": "In the region's minor unit: đồng for VN, fen for CN."
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "VND",
+              "CNY"
+            ],
+            "description": "Optional. Must match the region if given."
+          },
+          "region": {
+            "type": "string",
+            "enum": [
+              "VN",
+              "CN"
+            ],
+            "example": "VN"
+          },
+          "province": {
+            "type": "string",
+            "example": "VN-HN",
+            "description": "Province code of the region (see `GET /v1/regions`). Recorded on chain."
+          },
+          "bankSplit": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number",
+              "minimum": 0.01,
+              "maximum": 100,
+              "multipleOf": 0.01
+            },
+            "example": {
+              "VCB": 60,
+              "BIDV": 25.5,
+              "TCB": 14.5
+            },
+            "description": "Bank code → percent of the amount that bank funds. Up to 20 banks, all from the region. Each value > 0 with **at most 2 decimals**; values must add up to **exactly 100**. Numbers or numeric strings (`\"25.50\"`) are accepted. Bank limits are not enforced here."
+          },
+          "actor": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AgentActor"
+              },
+              {
+                "$ref": "#/components/schemas/HumanActor"
+              }
+            ],
+            "discriminator": {
+              "propertyName": "type"
+            },
+            "description": "Who asked for the withdrawal."
+          }
+        }
+      },
+      "Leg": {
+        "type": "object",
+        "properties": {
+          "bank": {
+            "type": "string",
+            "example": "VCB"
+          },
+          "bankName": {
+            "type": "string"
+          },
+          "percent": {
+            "type": "number",
+            "example": 60
+          },
+          "ratioBps": {
+            "type": "integer",
+            "example": 6000,
+            "description": "Percent in basis points as stored on chain (100% = 10000)."
+          },
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "This bank's part of the amount. The largest share absorbs the rounding remainder, so legs always add up to the amount."
+          },
+          "contractNo": {
+            "type": "string",
+            "example": "SG-VCB-2026-01"
+          },
+          "reimbursement": {
+            "type": "string",
+            "enum": [
+              "pending"
+            ],
+            "description": "BuoyUp still has to claim this share from the bank (outside this service)."
+          }
+        }
+      },
+      "Confirmation": {
+        "type": "object",
+        "properties": {
+          "node": {
+            "type": "string",
+            "example": "node2"
+          },
+          "url": {
+            "type": "string",
+            "example": "127.0.0.1:20202"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "confirmed": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "ChainRef": {
+        "type": "object",
+        "description": "Where the withdrawal lives on chain.",
+        "properties": {
+          "backend": {
+            "type": "string",
+            "enum": [
+              "fisco-bcos",
+              "mock"
+            ]
+          },
+          "txHash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{64}$",
+            "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+          },
+          "blockNumber": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "blockHash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{64}$",
+            "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "contract": {
+            "type": "string",
+            "description": "WithdrawalLedger address"
+          },
+          "submittedTo": {
+            "type": "string",
+            "example": "node0 (127.0.0.1:20200)",
+            "description": "Node the service sent the transaction to."
+          },
+          "sealedBy": {
+            "type": "string",
+            "example": "node1",
+            "description": "Node that sealed (packed) the block."
+          },
+          "sealerNodeId": {
+            "type": "string"
+          },
+          "confirmedNodes": {
+            "type": "integer",
+            "example": 4
+          },
+          "totalNodes": {
+            "type": "integer",
+            "example": 4
+          },
+          "confirmations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Confirmation"
+            },
+            "description": "Per node: does it hold the transaction receipt?"
+          },
+          "explorerUrl": {
+            "type": "string",
+            "example": "/explorer/#/tx/0x…"
+          },
+          "verifyUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "Withdrawal": {
+        "type": "object",
+        "properties": {
+          "withdrawalId": {
+            "type": "string",
+            "example": "WD-0FE326452A1A54BE"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "paid_out"
+            ]
+          },
+          "replayed": {
+            "type": "boolean",
+            "description": "Present and true when a retry with the same requestId returned the existing record."
+          },
+          "amount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "province": {
+            "type": "string"
+          },
+          "provinceName": {
+            "type": "string"
+          },
+          "accountRef": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{64}$",
+            "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+          },
+          "actor": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "agent",
+                  "human"
+                ]
+              },
+              "agentId": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "role": {
+                "type": "string"
+              },
+              "staffRef": {
+                "type": "string",
+                "pattern": "^0x[0-9a-fA-F]{64}$",
+                "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+              },
+              "hash": {
+                "type": "string",
+                "pattern": "^0x[0-9a-fA-F]{64}$",
+                "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+              }
+            }
+          },
+          "actorRequest": {
+            "type": "object",
+            "description": "The actor object as sent (POST response only; the encrypted summary keeps its hash)."
+          },
+          "payout": {
+            "type": "object",
+            "description": "POST response only.",
+            "properties": {
+              "ref": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string",
+                "example": "mock-treasury"
+              },
+              "paidAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "payoutRef": {
+            "type": "string",
+            "example": "MOCKPAY-ED46743BC5E11650"
+          },
+          "legs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Leg"
+            }
+          },
+          "onChain": {
+            "$ref": "#/components/schemas/OnChain"
+          },
+          "chain": {
+            "$ref": "#/components/schemas/ChainRef"
+          }
+        },
+        "description": "Readable record (decrypted with the BuoyUp master key). The chain itself holds only `onChain`."
+      },
+      "OnChain": {
+        "type": "object",
+        "description": "Exactly what the chain holds: readable by anyone, meaningful only with a key.",
+        "properties": {
+          "withdrawalId": {
+            "type": "string"
+          },
+          "root": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{64}$",
+            "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c",
+            "description": "Merkle root of the commitments (SHA-256 pairs; odd node moves up). Recomputed by the contract."
+          },
+          "commitments": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^0x[0-9a-fA-F]{64}$",
+              "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+            },
+            "description": "SHA-256 of each piece's plaintext: [0] summary, then one per bank."
+          },
+          "pieces": {
+            "type": "integer"
+          },
+          "slots": {
+            "type": "integer",
+            "description": "Key slots, unnamed and shuffled: one per reader (BuoyUp master + each bank)."
+          },
+          "envelopeBytes": {
+            "type": "integer"
+          },
+          "envelope": {
+            "type": "object",
+            "description": "Explorer only. {v, alg: X25519-HKDF-SHA256/AES-256-GCM, eph, pieces:[{nonce,ct}], slots:[{nonce,ct}]}"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "blockNumber": {
+            "type": "integer"
+          },
+          "txHash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{64}$",
+            "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+          },
+          "writer": {
+            "type": "string"
+          }
+        }
+      },
+      "Verification": {
+        "type": "object",
+        "properties": {
+          "withdrawalId": {
+            "type": "string"
+          },
+          "valid": {
+            "type": "boolean"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "enum": [
+                    "recorded_on_chain",
+                    "root_matches_commitments",
+                    "transaction_succeeded",
+                    "master_key_decrypts",
+                    "pieces_match_commitments",
+                    "ratios_total_100",
+                    "amounts_total",
+                    "confirmed_on_nodes"
+                  ]
+                },
+                "ok": {
+                  "type": "boolean"
+                },
+                "detail": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "chain": {
+            "$ref": "#/components/schemas/ChainRef"
+          },
+          "root": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{64}$",
+            "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+          }
+        },
+        "description": "Public checks (anyone can repeat them from the chain): recorded_on_chain, root_matches_commitments, transaction_succeeded. With the master key (GET /v1/withdrawals/{id}/verify only): master_key_decrypts, pieces_match_commitments, ratios_total_100, amounts_total. confirmed_on_nodes is reported but does not change valid."
+      },
+      "Region": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "minorUnit": {
+            "type": "integer"
+          },
+          "note": {
+            "type": "string"
+          },
+          "provinces": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "cities": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "note": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "Policy": {
+        "type": "object",
+        "description": "Written credit policy for Agent 3: judgement, not thresholds.",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "riskAppetite": {
+            "type": "string"
+          },
+          "sectors": {
+            "type": "object",
+            "properties": {
+              "prefer": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Province code (regional preferences only)"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "why": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "cautious": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Province code (regional preferences only)"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "why": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "avoid": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Province code (regional preferences only)"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "why": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          },
+          "regions": {
+            "type": "object",
+            "properties": {
+              "prefer": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Province code (regional preferences only)"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "why": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "cautious": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Province code (regional preferences only)"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "why": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "avoid": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Province code (regional preferences only)"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "why": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          },
+          "customers": {
+            "type": "object",
+            "properties": {
+              "prefer": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Province code (regional preferences only)"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "why": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "cautious": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Province code (regional preferences only)"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "why": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "avoid": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "description": "Province code (regional preferences only)"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "why": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "note": {
+                "type": "string"
+              }
+            }
+          },
+          "useOfFunds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "positiveSignals": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "redFlags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "escalateWhen": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "dealBreakers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reviewerNotes": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{64}$",
+            "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c",
+            "description": "SHA-256 of this policy version. Agent 3 can anchor it to record exactly which policy it read."
+          }
+        }
+      },
+      "Limits": {
+        "type": "object",
+        "description": "Numbers, in the region's minor unit and percent. Information for the agents; not enforced by the withdrawal endpoint.",
+        "properties": {
+          "minWithdrawal": {
+            "type": "number"
+          },
+          "maxWithdrawal": {
+            "type": "number"
+          },
+          "maxSharePercent": {
+            "type": "number"
+          },
+          "dailyCap": {
+            "type": "number"
+          },
+          "reimbursementDays": {
+            "type": "number"
+          },
+          "feePercent": {
+            "type": "number"
+          },
+          "maxLoanAmount": {
+            "type": "number"
+          },
+          "minAnnualRatePercent": {
+            "type": "number"
+          },
+          "maxAnnualRatePercent": {
+            "type": "number"
+          },
+          "maxTenorDays": {
+            "type": "number"
+          },
+          "minStoreAgeMonths": {
+            "type": "number"
+          },
+          "minStoreRating": {
+            "type": "number"
+          }
+        }
+      },
+      "Contract": {
+        "type": "object",
+        "description": "Mock service agreement between the bank and BuoyUp.",
+        "properties": {
+          "contractNo": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "effectiveFrom": {
+            "type": "string"
+          },
+          "expiresOn": {
+            "type": "string"
+          },
+          "reimbursementTerms": {
+            "type": "string"
+          },
+          "feeTerms": {
+            "type": "string"
+          },
+          "evidenceTerms": {
+            "type": "string"
+          },
+          "dataTerms": {
+            "type": "string"
+          },
+          "governingLaw": {
+            "type": "string"
+          },
+          "disputeResolution": {
+            "type": "string"
+          },
+          "termination": {
+            "type": "string"
+          },
+          "parties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "creditLine": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "keyClauses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{64}$",
+            "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+          }
+        }
+      },
+      "Bank": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "localName": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "headquarters": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "mock": {
+            "type": "boolean"
+          },
+          "disclaimer": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/Policy"
+          },
+          "contract": {
+            "$ref": "#/components/schemas/Contract"
+          },
+          "contractStatus": {
+            "type": "string",
+            "enum": [
+              "active",
+              "suspended",
+              "expired",
+              "not_started"
+            ]
+          }
+        }
+      },
+      "BankSummary": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "localName": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "headquarters": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "contractStatus": {
+            "type": "string"
+          },
+          "policyVersion": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "mock": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AnchorRecord": {
+        "type": "object",
+        "properties": {
+          "subject": {
+            "type": "string"
+          },
+          "index": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "contentHash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{64}$",
+            "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+          },
+          "timestamp": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "writer": {
+            "type": "string"
+          },
+          "head": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{64}$",
+            "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+          },
+          "tx": {
+            "type": "object"
+          }
+        }
+      },
+      "Event": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "Block": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer"
+          },
+          "hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{64}$",
+            "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+          },
+          "parentHash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{64}$",
+            "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+          },
+          "timestamp": {
+            "type": "integer"
+          },
+          "sealer": {
+            "type": "string"
+          },
+          "sealerNodeId": {
+            "type": "string"
+          },
+          "txCount": {
+            "type": "integer"
+          },
+          "transactions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^0x[0-9a-fA-F]{64}$",
+              "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+            }
+          }
+        }
+      },
+      "Node": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "blockNumber": {
+            "type": "integer"
+          },
+          "online": {
+            "type": "boolean"
+          },
+          "sealer": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "Transaction": {
+        "type": "object",
+        "properties": {
+          "hash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{64}$",
+            "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "success",
+              "failed"
+            ]
+          },
+          "blockNumber": {
+            "type": "integer"
+          },
+          "blockHash": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{64}$",
+            "example": "0x29d5fce70270f27267a4d09f967ff72c22685cd6fb0e40783e073e5db7ede84c"
+          },
+          "timestamp": {
+            "type": "integer"
+          },
+          "index": {
+            "type": "integer"
+          },
+          "from": {
+            "type": "string"
+          },
+          "fromRole": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "contract": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
+          },
+          "sealer": {
+            "type": "string"
+          },
+          "sealerNodeId": {
+            "type": "string"
+          },
+          "submittedTo": {
+            "type": "string"
+          },
+          "confirmations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Confirmation"
+            }
+          }
+        }
+      },
+      "Trace": {
+        "type": "object",
+        "description": "How long each stage took and when each chain node wrote the block, as heard by this service.",
+        "properties": {
+          "backend": {
+            "type": "string"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "step": {
+                  "type": "string",
+                  "enum": [
+                    "checked",
+                    "paid",
+                    "sealed",
+                    "sent",
+                    "receipt"
+                  ]
+                },
+                "atMs": {
+                  "type": "number",
+                  "description": "Milliseconds since the request arrived"
+                }
+              }
+            }
+          },
+          "submittedTo": {
+            "type": "string",
+            "description": "The node the transaction was sent to"
+          },
+          "leader": {
+            "type": "string",
+            "description": "The node that proposed the block (PBFT leader for that round)"
+          },
+          "blockNumber": {
+            "type": "integer"
+          },
+          "nodes": {
+            "type": "array",
+            "description": "In the order the nodes reported the block; nodes not heard from within 2 s come last with seen=false",
+            "items": {
+              "type": "object",
+              "properties": {
+                "node": {
+                  "type": "string"
+                },
+                "seen": {
+                  "type": "boolean"
+                },
+                "atMs": {
+                  "type": "number"
+                },
+                "order": {
+                  "type": "integer"
+                },
+                "leader": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "quorum": {
+            "type": "integer",
+            "description": "Votes PBFT needs to finalise a block: n - f with n = 3f + 1 (3 of 4)"
+          },
+          "measured": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

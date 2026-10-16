@@ -1,0 +1,261 @@
+<title>Vòng vay BuoyUp</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@500;600;700&family=Be+Vietnam+Pro:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a ledger-like page. The new 10-stage flow is drawn as four lanes (borrower · agents & decision core ·
+   banks · chain) so it reads like a clearing timetable; then the old flow struck through, then a before/after register. */
+:root{
+ --paper:#f4f6f8; --sheet:#ffffff; --ink:#152033; --muted:#55627a; --rule:#d9dfe8; --tint:#eaf0f7;
+ --cobalt:#2b55c9; --cobalt-soft:#e3eafc; --new:#167a4a; --new-soft:#e1f3e9; --chg:#9a5a06; --chg-soft:#fbefd8;
+ --gone:#b3263b; --gone-soft:#fbe5e8;
+ --lane1:#2b55c9; --lane2:#6b4fc7; --lane3:#167a4a; --lane4:#8a6a2c;
+ --display:"Lexend",system-ui,sans-serif; --body:"Be Vietnam Pro",system-ui,-apple-system,"Segoe UI",sans-serif;
+ --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+ --paper:#0d1320; --sheet:#141c2c; --ink:#e6ebf4; --muted:#a2adc2; --rule:#2a3550; --tint:#19233a;
+ --cobalt:#8eabff; --cobalt-soft:#1d2b52; --new:#6fd9a2; --new-soft:#123326; --chg:#f2c06a; --chg-soft:#3a2c11;
+ --gone:#ff97a6; --gone-soft:#3b1a22; --lane1:#8eabff; --lane2:#b9a4ff; --lane3:#6fd9a2; --lane4:#e0c27f; color-scheme:dark}}
+:root[data-theme="dark"]{
+ --paper:#0d1320; --sheet:#141c2c; --ink:#e6ebf4; --muted:#a2adc2; --rule:#2a3550; --tint:#19233a;
+ --cobalt:#8eabff; --cobalt-soft:#1d2b52; --new:#6fd9a2; --new-soft:#123326; --chg:#f2c06a; --chg-soft:#3a2c11;
+ --gone:#ff97a6; --gone-soft:#3b1a22; --lane1:#8eabff; --lane2:#b9a4ff; --lane3:#6fd9a2; --lane4:#e0c27f; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font:15.5px/1.6 var(--body);padding-inline:16px;padding-block:28px 64px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:44px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(1.8rem,4vw,2.6rem);font-weight:700}
+h2{font-size:1.45rem;font-weight:600}
+h3{font-size:1.02rem;font-weight:600}
+p{margin:0}
+.mono{font-family:var(--mono);font-size:.84em}
+.num{font-variant-numeric:tabular-nums}
+.lede{max-width:68ch;color:var(--muted);font-size:1.02rem}
+.eyebrow{font-family:var(--mono);font-size:.74rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+header.top{display:grid;gap:12px}
+.toggle{justify-self:start;border:1px solid var(--rule);background:var(--sheet);color:var(--ink);border-radius:999px;padding:6px 14px;font:inherit;font-size:.86rem;cursor:pointer}
+.toggle:focus-visible,a:focus-visible{outline:2px solid var(--cobalt);outline-offset:2px}
+.decisions{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr));gap:12px}
+.decision{background:var(--sheet);border:1px solid var(--rule);border-radius:12px;padding:14px 16px;display:grid;gap:4px;min-width:0}
+.decision b{font-family:var(--display);font-weight:600}
+.decision span{color:var(--muted);font-size:.9rem}
+section{display:grid;gap:18px;min-width:0}
+.sechead{display:grid;gap:6px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:.84rem;color:var(--muted)}
+.tag{display:inline-flex;align-items:center;border-radius:999px;padding:1px 9px;font-size:.72rem;font-weight:600;white-space:nowrap;font-family:var(--body)}
+.t-new{background:var(--new-soft);color:var(--new)} .t-chg{background:var(--chg-soft);color:var(--chg)} .t-gone{background:var(--gone-soft);color:var(--gone)} .t-same{background:var(--tint);color:var(--muted)}
+/* the lanes */
+.lanes{background:var(--sheet);border:1px solid var(--rule);border-radius:16px;overflow:hidden}
+.lanehead,.stage{display:grid;grid-template-columns:150px repeat(4,minmax(0,1fr))}
+.lanehead{background:var(--tint);border-bottom:1px solid var(--rule)}
+.lanehead div{padding:10px 12px;font-family:var(--mono);font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:7px}
+.lanehead i{width:9px;height:9px;border-radius:2px;display:inline-block}
+.stage{border-bottom:1px solid var(--rule)}
+.stage:last-child{border-bottom:0}
+.stagelabel{padding:14px 12px;display:grid;gap:4px;align-content:start;border-right:1px solid var(--rule)}
+.stagelabel .n{font-family:var(--display);font-size:1.6rem;font-weight:700;color:var(--cobalt);line-height:1}
+.stagelabel b{font-family:var(--display);font-weight:600;font-size:.95rem;line-height:1.25}
+.cell{padding:12px;min-width:0;display:grid;gap:6px;align-content:start;border-right:1px dashed var(--rule)}
+.cell:last-child{border-right:0}
+.cell .lanename{display:none}
+.step{border-left:3px solid var(--l);background:color-mix(in srgb,var(--l) 7%,var(--sheet));border-radius:0 8px 8px 0;padding:7px 10px;font-size:.86rem;line-height:1.45;display:grid;gap:3px}
+.step .tagrow{display:flex;gap:6px;flex-wrap:wrap}
+.l1{--l:var(--lane1)} .l2{--l:var(--lane2)} .l3{--l:var(--lane3)} .l4{--l:var(--lane4)}
+.arrow{font-family:var(--mono);color:var(--muted);font-size:.78rem}
+@media (max-width:860px){
+ .lanehead{display:none}
+ .stage{grid-template-columns:minmax(0,1fr)}
+ .stagelabel{border-right:0;border-bottom:1px solid var(--rule);grid-template-columns:auto minmax(0,1fr);align-items:center;gap:4px 12px}
+ .stagelabel .n{grid-row:span 2}
+ .cell{border-right:0;padding:10px 12px}
+ .cell:empty{display:none}
+ .cell .lanename{display:block;font-family:var(--mono);font-size:.68rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+}
+/* old flow */
+.old{background:var(--sheet);border:1px solid var(--rule);border-radius:16px;padding:16px;display:grid;gap:12px}
+.chain{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chip{border:1px solid var(--rule);border-radius:8px;padding:6px 10px;font-size:.85rem;background:var(--paper)}
+.chip.gone{border-color:color-mix(in srgb,var(--gone) 50%,var(--rule));background:var(--gone-soft);color:var(--gone);text-decoration:line-through;text-decoration-thickness:1.5px}
+.chip.chg{border-color:color-mix(in srgb,var(--chg) 50%,var(--rule));background:var(--chg-soft);color:var(--chg)}
+/* register */
+.tbl{overflow-x:auto;background:var(--sheet);border:1px solid var(--rule);border-radius:16px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:720px}
+th,td{text-align:left;vertical-align:top;padding:11px 14px;border-bottom:1px solid var(--rule)}
+th{font-family:var(--mono);font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);background:var(--tint);font-weight:500}
+tr:last-child td{border-bottom:0}
+td:first-child{font-family:var(--display);font-weight:600;white-space:nowrap}
+td.before{color:var(--muted)}
+td .why{display:block;color:var(--muted);font-size:.82rem;margin-top:4px}
+/* Lan */
+.lan{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:14px}
+.card{background:var(--sheet);border:1px solid var(--rule);border-radius:14px;padding:16px 18px;display:grid;gap:10px;min-width:0}
+.card.after{border-color:color-mix(in srgb,var(--new) 45%,var(--rule))}
+dl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;margin:0;font-size:.9rem}
+dt{color:var(--muted)} dd{margin:0;text-align:right;font-variant-numeric:tabular-nums;font-weight:500}
+.big{font-family:var(--display);font-size:2rem;font-weight:700;line-height:1}
+.big small{font-size:.9rem;font-weight:500;color:var(--muted);margin-left:4px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:14px}
+ul.plain{margin:0;padding-left:18px;display:grid;gap:5px;font-size:.92rem}
+.foot{color:var(--muted);font-size:.84rem;border-top:1px solid var(--rule);padding-top:14px}
+@media (prefers-reduced-motion:no-preference){.stage{animation:in .4s ease both}@keyframes in{from{opacity:.5}to{opacity:1}}}
+</style>
+
+<div class="wrap">
+ <header class="top">
+  <span class="eyebrow">BuoyUp · fintech_new · cập nhật 14/10/2026</span>
+  <h1>Vòng vay BuoyUp</h1>
+  <p class="lede">Luồng mới theo tài liệu <i>BuoyUp loan circle</i>: lõi quyết định tính hạn mức, WeBank dẫn đầu, các ngân hàng hợp tác tự duyệt song song trong 30 giây; người vay chọn khoản vay trong hạn mức, đọc bảng chi phí rồi ký; vốn đi qua tài khoản trung gian và được thu theo kỳ. Bên dưới là luồng mới, luồng cũ và từng thay đổi.</p>
+  <button class="toggle" id="theme" type="button">Đổi nền sáng / tối</button>
+ </header>
+
+ <section aria-labelledby="h-dec">
+  <div class="sechead"><span class="eyebrow">Bốn điểm đội đã chốt</span><h2 id="h-dec">Quyết định nền của luồng mới</h2></div>
+  <div class="decisions">
+   <div class="decision"><b>Không đối tác nào đồng ý</b><span>WeBank không cho vay một mình: thử lại ở 70% rồi 50% hạn mức, vẫn không ai nhận thì từ chối.</span></div>
+   <div class="decision"><b>Trả theo doanh thu</b><span>Tỷ lệ tính theo hồ sơ, không vượt phần doanh thu dành trả nợ (B5). Tối thiểu mỗi kỳ = lãi kỳ + 30% gốc một kỳ trả góp đều.</span></div>
+   <div class="decision"><b>Trả thẳng nhà cung cấp</b><span>Phần vượt 100.000 tệ chuyển thẳng cho nhà cung cấp; phần còn lại vào tài khoản kinh doanh WeBank.</span></div>
+   <div class="decision"><b>Khung kỳ hạn</b><span>Hộ kinh doanh 3, 6, 12 tháng (tối đa 200.000 tệ). Doanh nghiệp 3, 6, 12, 24, 36 tháng.</span></div>
+  </div>
+ </section>
+
+ <section aria-labelledby="h-new">
+  <div class="sechead">
+   <span class="eyebrow">Luồng mới · 10 giai đoạn</span>
+   <h2 id="h-new">Ai làm gì ở từng giai đoạn</h2>
+   <div class="legend"><span><span class="tag t-new">mới</span> chưa có ở bản trước</span><span><span class="tag t-chg">đổi</span> có nhưng làm khác</span><span><span class="tag t-same">giữ</span> như bản trước</span></div>
+  </div>
+  <div class="lanes" role="table" aria-label="Luồng mới theo bốn làn">
+   <div class="lanehead" role="row"><div role="columnheader">Giai đoạn</div><div role="columnheader"><i style="background:var(--lane1)"></i>Người vay</div><div role="columnheader"><i style="background:var(--lane2)"></i>Agent và lõi quyết định</div><div role="columnheader"><i style="background:var(--lane3)"></i>Các ngân hàng</div><div role="columnheader"><i style="background:var(--lane4)"></i>Chuỗi FISCO</div></div>
+   <div id="stages"></div>
+  </div>
+ </section>
+
+ <section aria-labelledby="h-old">
+  <div class="sechead"><span class="eyebrow">Luồng trước loan circle (v4)</span><h2 id="h-old">Bản trước đi thế nào</h2>
+   <p class="lede">Ứng vốn mùa vụ kỳ hạn 4 tháng, trả bằng cách trích một tỷ lệ mỗi lần tiền hàng về. Ô gạch đỏ là bước đã bỏ; ô vàng là bước còn nhưng đã đổi cách làm.</p></div>
+  <div class="old">
+   <div class="chain" id="oldflow"></div>
+  </div>
+ </section>
+
+ <section aria-labelledby="h-reg">
+  <div class="sechead"><span class="eyebrow">Đối chiếu</span><h2 id="h-reg">Trước và sau, theo từng chủ đề</h2></div>
+  <div class="tbl"><table>
+   <thead><tr><th>Chủ đề</th><th>Bản trước (v4)</th><th>Loan circle</th></tr></thead>
+   <tbody id="register"></tbody>
+  </table></div>
+ </section>
+
+ <section aria-labelledby="h-lan">
+  <div class="sechead"><span class="eyebrow">Ví dụ chạy thật</span><h2 id="h-lan">Hồ sơ chị Lan qua hai bản</h2>
+   <p class="lede">Cùng dữ liệu mẫu (hộ kinh doanh thời trang, doanh thu thuế bình quân 166.700 tệ/tháng, 26 tháng, điểm cửa hàng 4,6, kế hoạch nhập 5.000 áo).</p></div>
+  <div class="lan">
+   <div class="card"><span class="eyebrow">Bản trước</span><div class="big num">139.900<small>tệ, một phương án</small></div>
+    <dl><dt>Hạng · lãi</dt><dd>C · 12% (bị hạ 1 hạng vì cờ dòng tiền khai thiếu)</dd><dt>Trần quyết định</dt><dd>trần dòng tiền mùa vụ</dd><dt>Kỳ hạn</dt><dd>4 tháng, ân hạn 23 ngày</dd><dt>Cách trả</dt><dd>trích 63% mỗi lần tiền về</dd><dt>Người duyệt</dt><dd>cổng BuoyUp; ngân hàng nhận phần chia</dd><dt>Tiền đi</dt><dd>trả nhà cung cấp</dd></dl></div>
+   <div class="card after"><span class="eyebrow">Loan circle</span><div class="big num">200.000<small>tệ hạn mức, tự chọn trong đó</small></div>
+    <dl><dt>Hạng · lãi</dt><dd>B · 10%, phí 0, lãi phạt 15%</dd><dt>Trần quyết định</dt><dd>trần hộ kinh doanh 200.000 (khả năng trả 962.374, trần nhóm 250.050)</dd><dt>Kỳ hạn</dt><dd>3, 6 hoặc 12 tháng, ngày trả 1–28</dd><dt>Cách trả</dt><dd>trả góp cố định hoặc theo doanh thu (~14%)</dd><dt>Người duyệt</dt><dd>WeBank 40% · CMB 30% · ICBC 30%, duyệt song song</dd><dt>Tiền đi</dt><dd>100.000 vào tài khoản kinh doanh, phần vượt cho nhà cung cấp</dd></dl></div>
+  </div>
+ </section>
+
+ <section aria-labelledby="h-code">
+  <div class="sechead"><span class="eyebrow">Trong mã nguồn</span><h2 id="h-code">Đã thêm, đã bỏ</h2></div>
+  <div class="cols">
+   <div class="card"><h3><span class="tag t-new">thêm</span> Mới</h3><ul class="plain">
+    <li><span class="mono">banks/syndicate.py</span>: bộ điều phối, quy tắc cứng, ngân hàng tự quyết, 40/30/30 · 30/70, thử lại 70%/50%</li>
+    <li><span class="mono">agents/contract.py</span>: chọn khoản vay, bảng chi phí, đồng hồ đọc 20 giây, ký, giữ chỗ hạn mức ngân hàng</li>
+    <li>API <span class="mono">/select</span>, <span class="mono">/contract</span>, <span class="mono">/sign</span>; khoản vay <span class="mono">/minimum</span>, <span class="mono">/prepay</span>, <span class="mono">/simulate-advance</span>, <span class="mono">/simulate-transfer</span>, <span class="mono">/receiving-account</span>; ngân hàng <span class="mono">/bank/syndicate</span></li>
+    <li>Quy tắc POL-07 (một khoản vay một lúc, hộ kinh doanh ≤ 200.000), bộ quy tắc <span class="mono">rules-v1.2</span></li>
+    <li>Ba trang văn bản đồng ý, giao diện chọn khoản vay và ký hợp đồng</li></ul></div>
+   <div class="card"><h3><span class="tag t-gone">bỏ</span> Đã bỏ</h3><ul class="plain">
+    <li><span class="mono">/accept</span>, <span class="mono">/accept-smaller</span>, trạng thái <span class="mono">approved</span>, <span class="mono">smaller_offer</span></li>
+    <li>Khai tài khoản nhận tiền, dữ liệu dòng tiền ngân hàng khác, cờ RISK_INFLOW_GAP, RISK_PASS_THROUGH</li>
+    <li>Tỷ lệ trích mỗi lần tiền về, ân hạn trước kỳ trích, sàn trả lũy kế</li>
+    <li>Agent 4 chia ngân hàng (B12) và mô hình chọn tỷ lệ chia</li>
+    <li>Ngân hàng ký duyệt sau phê duyệt (<span class="mono">agent4_signoff</span>, <span class="mono">/bank/approvals</span>)</li></ul></div>
+  </div>
+ </section>
+
+ <p class="foot">Kiểm thử: 256 test backend và 4 bộ kiểm giao diện đạt. Chi tiết trong <span class="mono">LOAN_CIRCLE_CHANGES.md</span>. Số liệu cửa hàng, thuế, tín dụng và quyết định của ngân hàng là mô phỏng.</p>
+</div>
+
+<script>
+const S = [
+ {n:1,t:'Nộp hồ sơ',lanes:[
+  [['Chọn hộ kinh doanh hoặc doanh nghiệp','new'],['Dán link cửa hàng, quét CCCD và khuôn mặt','same'],['Ba ô đồng ý riêng, không tích sẵn; ký bằng khuôn mặt hoặc OTP','chg']],
+  [['Agent 1 đọc cửa hàng, tra đăng ký; loại người vay phải khớp đăng ký','chg']],
+  [],
+  [['Bản đồng ý đã ký','same']]]},
+ {n:2,t:'Thẩm định và duyệt hạn mức',lanes:[
+  [['Kế hoạch vay; ảnh doanh thu 1–6 tháng (tùy chọn)','chg'],['Chờ dưới 1 phút','new']],
+  [['Agent 1: doanh thu từ thuế, báo cáo tín dụng, FATE, lịch sử với BuoyUp','chg'],['Lõi quyết định: hạn mức = min(khả năng trả, trần nhóm, trần loại người vay)','chg'],['Agent 2 đề xuất ngay hạn mức đầy đủ','chg'],['Agent 3 rà gói hồ sơ, cổng duyệt hạn mức','chg']],
+  [['Bộ điều phối kiểm quy tắc cứng: danh sách trắng, địa bàn, tập trung 25%/50%, ngân sách tháng','new'],['Các ngân hàng tự tra cứu và tự quyết, trả lời trong 30 giây','new'],['2 đồng ý: 40/30/30 · 1 đồng ý: 30/70 · không ai: 70%, 50%, rồi từ chối','new'],['Hạn mức hiệu lực 7 ngày','new']],
+  [['Biên bản xác minh, phiếu hạn mức, niêm phong Agent 3, quyết định cổng, kết quả vòng duyệt','chg']]]},
+ {n:3,t:'Chọn khoản vay',lanes:[
+  [['Chọn số tiền trong hạn mức, kỳ hạn, cách trả (chọn một lần), ngày trả 1–28','new'],['Xem lịch trả từng lựa chọn','new']],
+  [['Agent 2 báo giá từng lựa chọn, gợi ý vay vừa đủ; không duyệt lại','chg'],['Một người một khoản vay','new']],
+  [],[]]},
+ {n:4,t:'Hợp đồng và ký',lanes:[
+  [['Đọc bảng chi phí tối thiểu 20 giây','new'],['Nhập tài khoản kinh doanh WeBank, tài khoản nhà cung cấp nếu trên 100.000, bảo lãnh nếu là doanh nghiệp; ký','new']],
+  [['Kiểm nhẹ trước khi chuyển tiền: ủy quyền còn hiệu lực, người nhận đúng hợp đồng','chg']],
+  [['Mỗi ngân hàng một hợp đồng; lúc ký mới trừ hạn mức tập trung và ngân sách','new']],
+  [['Mã băm hợp đồng','new']]]},
+ {n:5,t:'Giải ngân',lanes:[
+  [['Nhận tiền vào tài khoản kinh doanh WeBank','chg']],
+  [['Agent 4 chỉ giải ngân khi đủ tiền','chg']],
+  [['Các ngân hàng chuyển phần vốn vào tài khoản trung gian tại WeBank','new'],['Một lệnh: ≤ 100.000 vào tài khoản, phần vượt cho nhà cung cấp','new']],
+  [['Tài khoản trung gian đủ tiền; lệnh giải ngân','chg']]]},
+ {n:6,t:'Trong thời gian vay',lanes:[
+  [['Tiền hàng từ sàn về tài khoản kinh doanh WeBank','chg']],
+  [['Agent 4 giám sát chi tiêu: chứng khoán, bất động sản → đỏ; chuyển cá nhân trên 30% → vàng','new'],['Cảnh báo sớm; báo cáo trạng thái hằng ngày cho ngân hàng','chg']],
+  [['Ngân hàng xem phần của mình mỗi ngày','new']],
+  [['Cờ dùng vốn sai mục đích','new']]]},
+ {n:7,t:'Trả hằng tháng',lanes:[
+  [['Nhắc trước 7 ngày và 1 ngày','chg']],
+  [['Ngày trả: trích tài khoản; lãi phạt → lãi → gốc; lãi theo ngày thực tế','new']],
+  [['Tiền thu chia các ngân hàng theo tỷ lệ góp','chg']],
+  [['Từng khoản thu nợ','same']]]},
+ {n:8,t:'Trả thiếu, quá hạn',lanes:[
+  [['Trả tối thiểu (trả góp, kỳ hạn ≥ 3, tối đa 2 kỳ liền)','new'],['Trả trước bất cứ lúc nào, không phí','new']],
+  [['3 ngày ân hạn rồi lãi phạt 1,5 × lãi (≤ 24%)','new'],['Quá hạn 30 ngày: báo trung tâm tín dụng','new']],
+  [['Nhóm ngân hàng nắm ≥ 2/3 dư nợ quyết định bước xử lý','new']],
+  [['Báo cáo quá hạn','new']]]},
+ {n:9,t:'Tất toán',lanes:[
+  [['Được đổi tài khoản nhận tiền hàng','new']],
+  [['Báo trung tâm tín dụng; Agent 5 được báo','chg']],
+  [['Trả lại hạn mức tập trung cho ngân hàng','chg']],
+  [['Báo cáo tất toán','new']]]},
+ {n:10,t:'Vay lại',lanes:[
+  [['Hồ sơ mới, quét khuôn mặt, đồng ý tra cứu mới','chg']],
+  [['Thẩm định lại từ đầu; tất toán tốt → nhóm 1, từng quá hạn ≥ 30 ngày → nhóm 4','new']],
+  [['Ngân hàng duyệt lại song song','new']],[]]},
+];
+const TAG={new:['t-new','mới'],chg:['t-chg','đổi'],same:['t-same','giữ']};
+const LN=['Người vay','Agent và lõi quyết định','Các ngân hàng','Chuỗi FISCO'];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+document.getElementById('stages').innerHTML=S.map(s=>`<div class="stage" role="row"><div class="stagelabel" role="rowheader"><span class="n num">${s.n}</span><b>${esc(s.t)}</b></div>${s.lanes.map((items,i)=>`<div class="cell" role="cell">${items.length?`<span class="lanename">${LN[i]}</span>`:''}${items.map(([txt,k])=>`<div class="step l${i+1}"><span>${esc(txt)}</span><span class="tagrow"><span class="tag ${TAG[k][0]}">${TAG[k][1]}</span></span></div>`).join('')}</div>`).join('')}</div>`).join('');
+
+const OLD=[
+ ['Chọn tầng 1 / tầng 2',''],['Dán link, quét CCCD',''],['Khai tài khoản nhận tiền','gone'],['Ủy quyền 5 phạm vi (dòng tiền, thuế, tín dụng, FATE, trích nợ)','chg'],['Kế hoạch vay',''],
+ ['Agent 1 đọc dòng tiền các tài khoản ngân hàng','gone'],['Cờ dòng tiền khai thiếu, chuyển tiền qua cá nhân','gone'],['Phiếu: hạn mức mùa vụ, kỳ hạn 4 tháng, tỷ lệ trích, ân hạn','chg'],
+ ['Người bán chọn phương án và bấm vay','chg'],['Agent 3 + cổng duyệt khoản vay','chg'],['Phương án nhỏ hơn → người bán nhận lại','gone'],['Ngân hàng ký duyệt sau (tùy chọn)','gone'],
+ ['Agent 4 chia ngân hàng đủ điều kiện (B12)','gone'],['Giải ngân cho nhà cung cấp hoặc người bán','chg'],['Trích x% mỗi lần tiền hàng về','gone'],['Sàn trả lũy kế, cảnh báo sớm','chg'],['Tất toán khi trích đủ','chg']];
+document.getElementById('oldflow').innerHTML=OLD.map(([t,k],i)=>`<span class="chip ${k}">${esc(t)}</span>${i<OLD.length-1?'<span class="arrow" aria-hidden="true">→</span>':''}`).join('');
+
+const R=[
+ ['Sản phẩm','Ứng vốn mùa vụ, kỳ hạn cố định 4 tháng','Khoản vay 3–36 tháng theo loại người vay, trả hằng tháng','Theo tài liệu loan circle và khung kỳ hạn đội chốt.'],
+ ['Đồng ý dữ liệu','Một màn hình 5 phạm vi, kèm khai tài khoản nhận tiền','Ba ô riêng, không tích sẵn, mỗi ô có văn bản; ký bằng khuôn mặt hoặc OTP; thiếu ô nào là dừng','Theo luật bảo vệ thông tin cá nhân: đồng ý riêng cho dữ liệu nhạy cảm.'],
+ ['Nguồn dữ liệu','Dòng tiền từ sàn về các tài khoản, kể cả ngân hàng khác','Thuế (doanh thu, hóa đơn), báo cáo tín dụng, FATE, lịch sử với BuoyUp, ảnh doanh thu tự nộp','Không lấy dữ liệu ngân hàng khác hay dữ liệu sàn.'],
+ ['Tính hạn mức','Trần dòng tiền mùa vụ, trần nhóm, trần tuyệt đối','min(khả năng trả trong kỳ hạn dài nhất, trần nhóm, trần hộ kinh doanh 200.000); ảnh doanh thu khớp thuế cộng 5% hệ số thận trọng',''],
+ ['Ai duyệt','Cổng BuoyUp duyệt khoản vay; ngân hàng nhận phần được chia','Cổng duyệt hạn mức; các ngân hàng tự duyệt song song trong 30 giây, ai trả lời trước vào trước','WeBank luôn là ngân hàng dẫn đầu.'],
+ ['Chia vốn','Agent 4 chia theo ngân hàng đủ điều kiện, mỗi bên ≥ 30%','2 đối tác: 40/30/30; 1 đối tác: 30/70; không ai: thử 70%, 50%, rồi từ chối','Tỷ lệ do vòng duyệt chốt, không còn mô hình chọn tỷ lệ.'],
+ ['Thứ tự','Chọn số tiền rồi mới kiểm soát','Kiểm soát và ngân hàng duyệt hạn mức trước; người vay chọn trong hạn mức, không duyệt lại','Bỏ bước "nhận phương án nhỏ hơn".'],
+ ['Hợp đồng','Phiếu 8 điều khoản','Bảng chi phí (lãi năm là toàn bộ chi phí, phí 0, lãi phạt, quy tắc trả tối thiểu, ngân hàng, kênh khiếu nại), đọc ≥ 20 giây, mỗi ngân hàng một hợp đồng',''],
+ ['Giải ngân','Lệnh chia theo ngân hàng, trả nhà cung cấp','Tài khoản trung gian tại WeBank, đủ tiền mới giải ngân; ≤ 100.000 vào tài khoản kinh doanh, phần vượt cho nhà cung cấp',''],
+ ['Thu nợ','Trích x% mỗi lần tiền về','Trích vào ngày trả; lãi phạt → lãi → gốc; lãi theo ngày thực tế; hai cách trả: trả góp cố định hoặc theo doanh thu',''],
+ ['Trả thiếu, quá hạn','Cảnh báo đỏ khi thiếu sàn lũy kế','Trả tối thiểu (tối đa 2 kỳ liền), 3 ngày ân hạn, lãi phạt, quá hạn 30 ngày báo trung tâm tín dụng, nhóm ≥ 2/3 dư nợ quyết định',''],
+ ['Giám sát','Tiền về tài khoản đã khai, FATE chấm lại','Chi tiêu tài khoản kinh doanh (chứng khoán, bất động sản, chuyển cá nhân lớn), số dư trước kỳ trả, báo cáo hằng ngày cho ngân hàng',''],
+ ['Vay lại','Không có bước riêng','Thẩm định lại từ đầu; lịch sử với BuoyUp quyết định nhóm 1 hoặc nhóm 4','']];
+document.getElementById('register').innerHTML=R.map(([a,b,c,w])=>`<tr><td>${esc(a)}</td><td class="before">${esc(b)}</td><td>${esc(c)}${w?`<span class="why">${esc(w)}</span>`:''}</td></tr>`).join('');
+
+document.getElementById('theme').onclick=()=>{const r=document.documentElement,dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;r.dataset.theme=dark?'light':'dark';};
+</script>

@@ -1,0 +1,36 @@
+/* Face capture dialog (face-capture.js). Self-contained: also used on workspace.html, without auth-pages.css. */
+.face-dialog{width:min(440px,calc(100vw - 32px));max-height:calc(100dvh - 24px);overflow:auto;text-align:center;border:1px solid var(--bu-border,#eadfe7);border-radius:24px;padding:28px;background:var(--bu-surface,#fff);color:var(--bu-text,#2b1d26)}
+.face-dialog::backdrop{background:#0009;backdrop-filter:blur(8px)}
+.face-dialog [hidden]{display:none!important}
+.face-dialog h2{font-size:22px}
+.face-retry{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:50px;border:1px solid transparent;border-radius:12px;background:var(--bu-gradient,linear-gradient(120deg,#ecc6dd 0%,#efc3d3 55%,#f3c6ae 100%));color:#2b1d26;padding:12px 18px;font:inherit;font-weight:700;font-size:14px;cursor:pointer}
+.face-kicker{font-size:11px;letter-spacing:.1em;font-weight:700;color:var(--bu-primary,#9b4d6b)}
+.face-dialog h2{margin:8px 0 6px}
+.face-sub{font-size:13px!important;line-height:1.7!important;color:var(--bu-muted,#6f5d6a);margin:0 0 18px}
+.face-stage{position:relative;width:min(260px,70vw);aspect-ratio:1;margin:0 auto}
+.face-video{position:absolute;inset:9%;width:82%;height:82%;border-radius:50%;object-fit:cover;transform:scaleX(-1);background:#0c090b;box-shadow:0 0 0 3px color-mix(in srgb,var(--bu-border,#eadfe7) 80%,transparent)}
+.face-stage.has-face .face-video{box-shadow:0 0 0 3px var(--bu-primary,#9b4d6b)}
+.face-stage.is-ok .face-video{box-shadow:0 0 0 3px #efc3d3,0 0 32px #efc3d366}
+.face-stage.is-error .face-video{box-shadow:0 0 0 3px #c45044}
+.face-ring{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.face-seg{fill:none;stroke:color-mix(in srgb,var(--bu-muted,#6f5d6a) 35%,transparent);stroke-width:7;stroke-linecap:round;transition:stroke .2s}
+.face-seg.is-next{stroke:var(--bu-primary,#9b4d6b);animation:face-pulse 1.1s ease-in-out infinite}
+.face-seg.is-done{stroke:#efc3d3;animation:none}
+.face-dialog.is-login .face-seg:not(.is-next){stroke:transparent}
+@keyframes face-pulse{50%{opacity:.35}}
+.face-hint{min-height:3.4em;margin:16px 0 10px;font-size:14px!important;line-height:1.7!important;font-weight:600}
+.face-hint[data-tone=warn]{color:var(--bu-warning,#9a6400)}
+.face-hint[data-tone=error]{color:var(--bu-danger,#b03a2e)}
+.face-hint[data-tone=ok]{color:var(--bu-primary,#9b4d6b)}
+.face-progress{height:6px;border-radius:6px;background:color-mix(in srgb,var(--bu-primary,#9b4d6b) 12%,transparent);overflow:hidden;margin-bottom:18px}
+.face-progress span{display:block;height:100%;width:0;background:var(--bu-gradient-strong,linear-gradient(120deg,#8f5a7e 0%,#b06f81 60%,#ab5948 100%));transition:width .25s}
+.face-actions{display:flex;gap:10px}
+.face-actions>*{flex:1}
+.face-cancel{min-height:50px;border:1px solid var(--bu-border,#eadfe7);border-radius:12px;background:transparent;color:var(--bu-text,#2b1d26);font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.face-privacy{font-size:11px!important;line-height:1.6!important;color:var(--bu-muted,#6f5d6a);margin:14px 0 0}
+.auth-or{display:flex;align-items:center;gap:12px;margin:18px 0 14px;font-size:12px;color:var(--bu-muted,#6f5d6a)}
+.auth-or::before,.auth-or::after{content:"";flex:1;height:1px;background:var(--bu-border,#eadfe7)}
+.auth-face-button{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:50px;border:1px solid var(--bu-primary,#9b4d6b);border-radius:12px;background:color-mix(in srgb,var(--bu-primary,#9b4d6b) 6%,transparent);color:var(--bu-primary,#9b4d6b);font:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.auth-face-button:hover{background:color-mix(in srgb,var(--bu-primary,#9b4d6b) 12%,transparent)}
+.auth-face-note{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.6;color:var(--bu-muted,#6f5d6a);margin:0 0 16px}
+@media(prefers-reduced-motion:reduce){.face-seg.is-next{animation:none}}

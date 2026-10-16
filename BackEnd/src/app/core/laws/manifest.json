@@ -1,0 +1,195 @@
+{
+ "extracted": "2026-10-14",
+ "extractor": "scripts/extract_laws.py",
+ "corpus_hash": "sha256:9cc2c4bf7f753442c44049cb94af764a07da1bcd9d8e12a7ef09f37938aa1e2c",
+ "entries": 794,
+ "sources": [
+  {
+   "file": "China_Anti_Money_Laundering_Law_2024.docx",
+   "law_id": "AML-2024",
+   "name": "Luật Chống rửa tiền 2024",
+   "title": "中华人民共和国反洗钱法",
+   "effective": "2025-01-01",
+   "mode": "articles",
+   "sha256": "0dd8b2cfe6e3a44e2ab3063a53bf2843c7c57c41c91052956eb6f0e8bc62e313",
+   "articles": 65,
+   "expected_articles": 65,
+   "warnings": [
+    "Ngày hiệu lực cần đối chiếu nguồn chính thức (README TQ)."
+   ]
+  },
+  {
+   "file": "China_Large_Suspicious_Transactions.docx",
+   "law_id": "PBOC-LST-2016",
+   "name": "Quy định báo cáo giao dịch lớn và đáng ngờ",
+   "title": "金融机构大额交易和可疑交易报告管理办法",
+   "effective": "2017-07-01",
+   "mode": "articles",
+   "sha256": "83b9980ea580af0e00ed56ff92aded8c0e89d246d13b2f9e99160864d93c8bba",
+   "articles": 30,
+   "expected_articles": 30,
+   "warnings": [
+    "Bản 2016; kiểm các lần sửa đổi sau (README TQ).",
+    "Bỏ dòng tiêu đề trang lặp lại: 中国人民银行发布; 中国人民银行规章",
+    "1 dòng bắt đầu bằng 第X条 nhưng sai số thứ tự: giữ trong điều trước (câu viện dẫn bị ngắt dòng)."
+   ]
+  },
+  {
+   "file": "China_E_Cigarette_Measures_2022.docx",
+   "law_id": "ECIG-2022",
+   "name": "Quy định quản lý thuốc lá điện tử",
+   "title": "电子烟管理办法（2022）",
+   "effective": "2022-05-01",
+   "mode": "articles",
+   "sha256": "004d3a3152e5ac2c948cc2e4b2c42db4f9739a8d4f299716a19fa9f74a9e7659",
+   "articles": 45,
+   "expected_articles": 45,
+   "warnings": []
+  },
+  {
+   "file": "China_Product_Quality_Law_2018.docx",
+   "law_id": "PQL-2018",
+   "name": "Luật Chất lượng sản phẩm",
+   "title": "中华人民共和国产品质量法（2018年修正）",
+   "effective": "2018-12-29",
+   "mode": "articles",
+   "sha256": "16b5d109ed6640dacdc7b3f3c6044630707ea4b10113a8abaea4854eb5f51b53",
+   "articles": 74,
+   "expected_articles": 74,
+   "warnings": []
+  },
+  {
+   "file": "China_Trademark_Law_2026.docx",
+   "law_id": "TM-2026",
+   "name": "Luật Nhãn hiệu 2026",
+   "title": "中华人民共和国商标法（2026年修订）",
+   "effective": "2027-01-01",
+   "mode": "articles",
+   "sha256": "a5cbc156e6ea54652cad5d3c22e0e09b36f9ea1485cf26be7b0fb6fb39f4d96b",
+   "articles": 87,
+   "expected_articles": 87,
+   "warnings": [
+    "Chưa có hiệu lực trước 2027-01-01."
+   ]
+  },
+  {
+   "file": "China_Trademark_Law_2019.docx",
+   "law_id": "TM-2019",
+   "name": "Luật Nhãn hiệu 2019",
+   "title": "中华人民共和国商标法（2019年修正）",
+   "effective": "2019-11-01",
+   "mode": "articles",
+   "sha256": "3235aec9dc3b4324a1fb361b64d9d057f2676722dbb006878733d402a2eaae4d",
+   "origin": "来源：国家知识产权局网站 https://www.cnipa.gov.cn/art/2019/7/30/art_95_28179.html",
+   "articles": 73,
+   "expected_articles": 73,
+   "warnings": []
+  },
+  {
+   "file": "China_Market_Access_Negative_List_2025.docx",
+   "law_id": "NEG-2025",
+   "name": "Danh sách tiêu cực tiếp cận thị trường 2025",
+   "title": "市场准入负面清单（2025年版）",
+   "effective": null,
+   "mode": "fulltext",
+   "sha256": "089021af826725909d8c112c1b2a418923e462bf9ea2a87f55d35024701a81d6",
+   "paragraphs": 2355,
+   "warnings": [
+    "Chuyển từ PDF hai cột, lẫn cột: chỉ dùng để kiểm câu trích trên toàn văn; mục đang dùng cần người đối chiếu bản PDF gốc.",
+    "Văn bản không ghi ngày hiệu lực."
+   ]
+  },
+  {
+   "file": "China_Prohibited_and_Restricted_Goods_List_2026.docx",
+   "law_id": "GOODS-2026",
+   "name": "Danh mục hàng cấm và hạn chế (bản tổng hợp của đội)",
+   "title": "中国禁止及限制经营商品目录汇编",
+   "effective": null,
+   "mode": "table",
+   "sha256": "50f331f0c6b5aec0c5322ca1a027bf42278ee9b740b5e30c2248dceceda05df2",
+   "rows": 25,
+   "warnings": [
+    "Bản tổng hợp của đội, không phải danh mục chính thức."
+   ]
+  },
+  {
+   "file": "China_Personal_Information_Protection_Law_2021.docx",
+   "law_id": "PIPL-2021",
+   "name": "Luật Bảo vệ thông tin cá nhân",
+   "title": "中华人民共和国个人信息保护法",
+   "effective": "2021-11-01",
+   "mode": "articles",
+   "sha256": "f9eb5480b3789dd97db6fb3cba7a85078f7ad735c73b03874b097f2eb266418c",
+   "origin": "来源：国家互联网信息办公室网站（转载中国人大网） https://www.cac.gov.cn/2021-08/20/c_1631050028355286.htm",
+   "articles": 74,
+   "expected_articles": 74,
+   "warnings": []
+  },
+  {
+   "file": "China_E_Commerce_Law_2018.docx",
+   "law_id": "ECOM-2018",
+   "name": "Luật Thương mại điện tử",
+   "title": "中华人民共和国电子商务法",
+   "effective": "2019-01-01",
+   "mode": "articles",
+   "sha256": "bd7ce28ec3196f5f6290e231ad0fa8e162bb9c8420a72afeba528f3a933b03d7",
+   "origin": "来源：国家互联网信息办公室网站（转载新华社） https://www.cac.gov.cn/2018-09/01/c_1123362506.htm（共3页）",
+   "articles": 89,
+   "expected_articles": 89,
+   "warnings": []
+  },
+  {
+   "file": "China_Online_Trading_Supervision_Measures_2021.docx",
+   "law_id": "NETTRADE-2021",
+   "name": "Quy định giám sát giao dịch trực tuyến",
+   "title": "网络交易监督管理办法",
+   "effective": "2021-05-01",
+   "mode": "articles",
+   "sha256": "9fbd457847dd5a6bc5e5c55b13cf0f9f43a8f075f87c465157bf2715dbe49b29",
+   "origin": "来源：中国政府网·国务院公报 https://www.gov.cn/gongbao/content/2021/content_5602020.htm",
+   "articles": 56,
+   "expected_articles": 56,
+   "warnings": []
+  },
+  {
+   "file": "China_Credit_Reporting_Business_Measures_2021.docx",
+   "law_id": "CREDIT-2021",
+   "name": "Quy định hoạt động thông tin tín dụng",
+   "title": "征信业务管理办法",
+   "effective": "2022-01-01",
+   "mode": "articles",
+   "sha256": "e6322ad3ea82153363b0219395e8196205524657a3cd234d0366cade4fb3522a",
+   "origin": "来源：中国政府网·国务院公报 https://www.gov.cn/gongbao/content/2021/content_5654782.htm",
+   "articles": 53,
+   "expected_articles": 53,
+   "warnings": []
+  },
+  {
+   "file": "China_Commercial_Bank_Internet_Loan_Measures_2020.docx",
+   "law_id": "NETLOAN-2020",
+   "name": "Quy định cho vay qua internet",
+   "title": "商业银行互联网贷款管理暂行办法",
+   "effective": "2020-07-12",
+   "mode": "articles",
+   "sha256": "6e79aaffa72c3cfce6e7973fd0dc3bb176c31f3025a70440dea5acd904d98a1a",
+   "origin": "来源：中国政府网·国务院公报 https://www.gov.cn/gongbao/content/2020/content_5541497.htm",
+   "articles": 70,
+   "expected_articles": 70,
+   "warnings": []
+  },
+  {
+   "file": "China_Working_Capital_Loan_Measures_2024.docx",
+   "law_id": "WCLOAN-2024",
+   "name": "Quy định cho vay vốn lưu động",
+   "title": "流动资金贷款管理办法",
+   "effective": "2024-07-01",
+   "mode": "articles",
+   "sha256": "28b340eb3a242a9e0bdfd1a05b8f83dbe48300df92d5fe32dd08388456387316",
+   "origin": "来源：中国政府网·国务院公报 https://www.gov.cn/gongbao/2024/issue_11306/202404/content_6947721.html",
+   "articles": 51,
+   "expected_articles": 51,
+   "appendix": true,
+   "warnings": []
+  }
+ ]
+}

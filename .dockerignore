@@ -1,0 +1,16 @@
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.venv
+**/*.db
+**/*.db-*
+**/.buoyup-autopilot.lock
+BackEnd/API_config/.env
+Frontend/tests
+.git
+data
+.omc
+docs
+deploy
+BackEnd/src/Reid/data
+BackEnd/src/Reid/models

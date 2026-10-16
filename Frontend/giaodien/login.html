@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Đăng nhập — BuoyUp</title><meta name="theme-color" content="#0c090b">
+<link rel="icon" type="image/webp" href="../src/chung/assets/logo.webp">
+<link rel="stylesheet" href="../src/chung/bu/tokens.css"><link rel="stylesheet" href="../src/chung/bu/base.css"><link rel="stylesheet" href="../src/chung/bu/components.css"><link rel="stylesheet" href="../src/chung/bu/auth-pages.css"><link rel="stylesheet" href="../src/xac-thuc-khuon-mat/face-capture.css">
+<script src="../src/chung/bu/api.js" defer></script><script src="../src/chung/bu/session.js" defer></script>
+<script src="../src/chung/vendor/gsap-3.12.7/gsap.min.js" defer></script><script src="../src/chung/vendor/gsap-3.12.7/ScrollTrigger.min.js" defer></script>
+<script src="../src/chung/bu/motion.js" defer></script><script src="../src/xac-thuc-khuon-mat/face-capture.js" defer></script><script src="../src/chung/bu/auth-pages.js" defer></script>
+</head>
+<body class="auth-page" data-auth-page="login">
+<div class="bg auth-bg" aria-hidden="true"><video muted loop playsinline preload="metadata"><source src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260809_012548_ef22562c-c0ae-4816-ad9d-f8922af4e6a7.mp4" type="video/mp4"></video></div>
+<header class="auth-top"><a class="auth-brand" href="index.html"><img src="../src/chung/assets/logo.webp" alt="" width="34" height="34"><span>BuoyUp</span></a><button class="auth-theme" type="button" aria-label="Đổi giao diện sáng tối">Sáng / tối</button></header>
+<main class="auth-layout">
+<section class="auth-story" aria-labelledby="story-title" data-reveal><span class="auth-eyebrow">ĐỒNG HÀNH CÙNG NGƯỜI BÁN</span><h2 id="story-title">Dòng vốn đúng lúc.<br><em>Kinh doanh vững vàng.</em></h2><p>Kết nối câu chuyện kinh doanh của bạn với nguồn vốn từ ngân hàng đối tác. Minh bạch từng bước, chủ động từng quyết định.</p><div class="auth-story-foot"><span class="auth-orbit" aria-hidden="true">↗</span><span>Dữ liệu của bạn.<br>Quyền quyết định của bạn.</span></div></section>
+<section class="auth-card login" aria-labelledby="auth-title" data-reveal>
+<div class="auth-card-kicker">CHÀO MỪNG TRỞ LẠI</div>
+<h1 id="auth-title">Đăng nhập</h1><p class="auth-sub">Tiếp tục hành trình kinh doanh của bạn.</p>
+<p class="auth-error" id="error" role="alert" tabindex="-1" hidden></p>
+<form id="login-form" method="post" onsubmit="return false" novalidate><div class="auth-field"><div class="auth-input-wrap"><input id="email" name="email" type="email" autocomplete="username" placeholder=" " required maxlength="254" aria-describedby="email-error"><label for="email">Email</label></div><p class="auth-field-error" id="email-error" hidden></p></div><div class="auth-field"><div class="auth-input-wrap"><input id="password" name="password" type="password" autocomplete="current-password" maxlength="128" placeholder=" " required aria-describedby="password-error"><label for="password">Mật khẩu</label><button class="auth-password-toggle" type="button" data-password="password" aria-label="Hiện mật khẩu" aria-pressed="false">Hiện</button></div><p class="auth-field-error" id="password-error" hidden></p></div><button class="auth-submit bu-btn bu-btn-primary" type="submit"><span>Đăng nhập</span><span aria-hidden="true">↗</span></button></form><div class="auth-or"><span>hoặc</span></div><button class="auth-face-button" type="button" id="face-login"><span aria-hidden="true">◎</span><span>Đăng nhập bằng khuôn mặt</span></button>
+<p class="auth-switch">Mới đến BuoyUp? <a href="register.html">Tạo tài khoản</a></p><details class="auth-demo"><summary>Tài khoản mẫu <span class="bu-badge bu-badge-simulated">Mô phỏng</span></summary><p>Chọn để điền thông tin, sau đó bấm Đăng nhập. Tài khoản mẫu chỉ dùng trong môi trường demo.</p><div class="auth-demo-grid"><button type="button" data-demo-email="lan@buoyup.vn"><strong>Người bán · Chị Lan</strong><span>lan@buoyup.vn</span></button><button type="button" data-demo-email="officer@buoyup.vn"><strong>Cán bộ tín dụng</strong><span>officer@buoyup.vn</span></button><button type="button" data-demo-email="admin@buoyup.vn"><strong>Quản trị viên</strong><span>admin@buoyup.vn</span></button><button type="button" data-demo-email="webank@buoyup.vn"><strong>Ngân hàng · WeBank</strong><span>webank@buoyup.vn</span></button><button type="button" data-demo-email="cmb@buoyup.vn"><strong>Ngân hàng · CMB</strong><span>cmb@buoyup.vn</span></button><button type="button" data-demo-email="icbc@buoyup.vn"><strong>Ngân hàng · ICBC</strong><span>icbc@buoyup.vn</span></button><button type="button" data-demo-email="vcb@buoyup.vn"><strong>Ngân hàng · Vietcombank</strong><span>vcb@buoyup.vn</span></button></div><p>Mật khẩu mẫu: <code>BuoyUp@2026</code></p></details><a class="auth-back" href="index.html">← Về trang chủ</a>
+<noscript><p>Vui lòng bật JavaScript để đăng nhập an toàn vào BuoyUp.</p></noscript>
+</section></main>
+</body></html>

@@ -1,0 +1,66 @@
+{
+ "extracted": "2026-10-14",
+ "extractor": "scripts/extract_laws_vn.py",
+ "jurisdiction": "VN",
+ "corpus_hash": "sha256:15ef601fcf53af9f5f5149507253f7806fde8ed2d1d575b63726cbcab5075bb3",
+ "entries": 1147,
+ "sources": [
+  {
+   "file": "2022_909 + 910_14-2022-QH15 (Luật Phòng Chống Rửa Tiền)).docx",
+   "law_id": "PCRT-2022",
+   "name": "Luật Phòng, chống rửa tiền 2022 (14/2022/QH15)",
+   "effective": "2023-03-01",
+   "sha256": "73b34d7ec7d206058ede7544eec688e82ad9154c31198726b1ce67981c5d05d3",
+   "entries": 66,
+   "articles": 66,
+   "warnings": []
+  },
+  {
+   "file": "2026_42_143_2025_QH15 (Luật Đầu tư).docx",
+   "law_id": "DT-2025",
+   "name": "Luật Đầu tư 2025 (143/2025/QH15)",
+   "effective": "2026-03-01",
+   "sha256": "518e45a3fd34508cb7a8764450d21e4012507b1868bf353b7a6c14d828d2aa14",
+   "entries": 663,
+   "articles": 52,
+   "warnings": [
+    "Điều 7 và Phụ lục IV có hiệu lực từ 01/07/2026; khoản 3 Điều 50 từ 01/01/2026."
+   ]
+  },
+  {
+   "file": "Nghi_dinh_173_2024_ND_CP.docx",
+   "law_id": "ND173-2024",
+   "name": "Nghị định 173/2024/NĐ-CP (bãi bỏ một phần NĐ 59/2006)",
+   "effective": "2025-02-15",
+   "sha256": "e30438776e80b2994e19f6d5c5c566c1a397aef93031df708bd679084b8db176",
+   "entries": 2,
+   "articles": 2,
+   "warnings": []
+  },
+  {
+   "file": "Nghi_dinh_59_2006_ND_CP_toan_van_phu_luc.docx",
+   "law_id": "ND59-2006",
+   "name": "Nghị định 59/2006/NĐ-CP (hàng hóa, dịch vụ cấm, hạn chế kinh doanh)",
+   "effective": "2006-07-01",
+   "sha256": "d8310562e8fdd28ce95c4decc6035837f90e317bc631b30ccf028876465a561c",
+   "entries": 152,
+   "articles": 11,
+   "warnings": [
+    "Ngày hiệu lực: 15 ngày sau khi đăng Công báo (2006); ghi tạm 2006-07-01.",
+    "Nhiều phần đã bị bãi bỏ bởi NĐ 173/2024 từ 15/02/2025 (đánh dấu từng mục)."
+   ]
+  },
+  {
+   "file": "Nghi_dinh_98_2020_VBHN_03_2025.docx",
+   "law_id": "ND98-2020",
+   "name": "Nghị định 98/2020/NĐ-CP (xử phạt hành chính thương mại, hàng giả, hàng cấm; bản hợp nhất 03/2025)",
+   "effective": "2020-10-15",
+   "sha256": "a404879b071d8b098e3250f2808b28208225842c5bce3a151771ca381d461368",
+   "entries": 264,
+   "articles": 99,
+   "warnings": [
+    "Văn bản hợp nhất: chú thích (điều nào được sửa bởi nghị định nào, và điều khoản thi hành của các nghị định sửa đổi) nằm ở mục #CT-n."
+   ]
+  }
+ ]
+}

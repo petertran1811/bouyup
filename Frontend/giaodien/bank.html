@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Cổng ngân hàng đối tác — BuoyUp</title>
+  <meta name="theme-color" content="#0c090b">
+  <link rel="icon" href="../src/chung/assets/logo.webp">
+  <link rel="stylesheet" href="../src/chung/bu/tokens.css">
+  <link rel="stylesheet" href="../src/chung/bu/base.css">
+  <link rel="stylesheet" href="../src/chung/bu/components.css">
+  <link rel="stylesheet" href="../src/chung/bu/shell.css">
+  <link rel="stylesheet" href="../src/chung/bu/v4.css">
+  <script src="../src/chung/bu/api.js"></script>
+  <script src="../src/chung/bu/session.js"></script>
+  <script>window.bankSession = BU.requireRole(['bank']);</script>
+</head>
+<body>
+  <div id="bank-shell"></div>
+  <noscript><p>Vui lòng bật JavaScript để mở cổng ngân hàng.</p><a href="login.html">Đăng nhập</a></noscript>
+  <script src="../src/chung/vendor/gsap-3.12.7/gsap.min.js"></script>
+  <script src="../src/chung/vendor/gsap-3.12.7/ScrollTrigger.min.js"></script>
+  <script src="../src/chung/bu/motion.js"></script>
+  <script src="../src/chung/bu/shell.js"></script>
+  <script src="../src/ngan-hang/bank.js"></script>
+</body>
+</html>

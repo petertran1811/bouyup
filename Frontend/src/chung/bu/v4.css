@@ -1,0 +1,83 @@
+/* Semantic aliases upgrade the existing console; its layout remains the shell. */
+:root, .workspace-body, .admin-body {
+ --bg:var(--bu-bg); --surface:var(--bu-surface); --surface-2:var(--bu-surface-soft);
+ --pill-dark:var(--bu-surface-soft); --text:var(--bu-text); --muted:var(--bu-muted); --dim:var(--bu-dim);
+ --line:var(--bu-border); --line-strong:var(--bu-border-strong); --accent:var(--bu-primary);
+ --ok:var(--bu-success); --warn:var(--bu-warning); --bad:var(--bu-danger); --info:var(--bu-info);
+ --font-sans:var(--bu-font); --font-display:var(--bu-font-display); --font-mono:var(--bu-mono); --radius:14px;
+}
+.workspace-body, .admin-body { background:var(--bg); color:var(--text); font-family:var(--bu-font); }
+.workspace-background { background:radial-gradient(ellipse at 10% 0%,color-mix(in srgb,var(--bu-primary) 8%,transparent),transparent 50%),var(--bg); }
+.workspace-background::before, .workspace-background::after, .admin-body::after { animation:none; }
+.admin-body::before { opacity:.25; }
+.admin-body::after { background:radial-gradient(ellipse at 15% 10%,color-mix(in srgb,var(--bu-primary) 8%,transparent),transparent 50%); }
+.topbar { background:var(--bu-glass); border-color:var(--line); }
+.workspace-sidebar { background:var(--bu-surface); border-color:var(--line); }
+.workspace-sidebar h2, .sidebar-foot, .account-chip small, .sidebar-width, .topbar-caption { color:var(--muted); }
+.account-chip, .workspace-body .account-avatar { background:var(--surface-2); color:var(--text); border-color:var(--line); }
+.btn { background:var(--surface); color:var(--text); border-color:var(--line-strong); min-height:36px; border-radius:10px; }
+.btn:hover:not(:disabled) { background:var(--surface-2); color:var(--text); }
+.btn-primary, .btn-primary:hover:not(:disabled) { background:var(--bu-gradient,linear-gradient(120deg,#ecc6dd 0%,#efc3d3 55%,#f3c6ae 100%)); color:var(--bu-accent-ink); border-color:transparent; }
+.btn-primary:hover:not(:disabled) { filter:saturate(1.15) brightness(1.02); box-shadow:0 10px 26px -14px #b06f8199; }
+.btn-ok, .badge-ok { background:var(--bu-success-bg); color:var(--ok); border-color:var(--ok); }
+.btn-bad, .btn-reject, .badge-bad { background:var(--bu-danger-bg); color:var(--bad); border-color:var(--bad); }
+.badge-warn, .banner-demo { background:var(--bu-warning-bg); color:var(--warn); border-color:var(--warn); }
+.badge-info { background:var(--bu-info-bg); color:var(--info); border-color:var(--info); }
+.badge-muted { background:var(--surface-2); color:var(--muted); border-color:var(--line); }
+.workspace-body .panel, .admin-main .panel, .admin-main .kpi, .health-card, .schema-block, .admin-body .drawer, .toolcall-body { background:var(--surface); border-color:var(--line); box-shadow:var(--bu-shadow-1); }
+.admin-main .alliance-panel { background:var(--surface)!important; border-color:var(--line)!important; }
+.board-heading p, .board-heading h1 span, .board-heading .eyebrow, .kpi-sub, .message-meta, .empty, .workspace-body .empty { color:var(--muted); }
+.admin-body .drawer { color:var(--text); }
+.tab, .segmented button { color:var(--muted); }
+.tab.is-active { color:var(--bu-primary); border-color:var(--bu-primary); }
+.segmented { border-color:var(--line); }
+.segmented button.is-active { color:var(--text); background:var(--surface-2); }
+input, textarea, select { font-family:var(--bu-font); color:var(--text); background:var(--surface); border:1px solid var(--line-strong); border-radius:10px; padding:10px 12px; min-height:40px; max-width:100%; }
+input[type="checkbox"], input[type="radio"] { min-height:0; accent-color:var(--bu-primary); }
+input[type="range"] { accent-color:var(--bu-primary); padding:0; }
+body :focus-visible, .workspace-body button:focus-visible, .workspace-body a:focus-visible, .admin-body :focus-visible { outline:2px solid var(--bu-focus); outline-offset:3px; }
+.money, .metric-value, .mono-number, .kpi-value { font-variant-numeric:lining-nums tabular-nums; }
+.mono, code, pre, .audit-hash { font-family:var(--bu-mono); }
+.table-wrap { overflow:auto; border:1px solid var(--line); border-radius:14px; background:var(--surface); }
+.table-wrap table { border-collapse:collapse; width:100%; font-size:13px; }
+.table-wrap th, .table-wrap td { padding:12px 14px; border-bottom:1px solid var(--line); text-align:left; }
+.table-wrap th { background:var(--surface-2); position:sticky; top:0; }
+.table-wrap tr:hover { background:var(--surface-2); }
+.table-wrap [data-numeric] { text-align:right; font-variant-numeric:tabular-nums; }
+.v4-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.v4-panel { padding:24px; border:1px solid var(--line); border-radius:14px; background:var(--surface); box-shadow:var(--bu-shadow-1); margin-bottom:16px; min-width:0; }
+.v4-panel h2 { margin-top:0; font-size:18px; }
+.v4-panel h3 { font-size:16px; }
+.v4-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.v4-fields label { display:grid; gap:8px; font-size:13px; }
+.v4-actions { display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin:16px 0; }
+.v4-muted { color:var(--muted); }
+.v4-error { color:var(--bad); background:var(--bu-danger-bg); padding:16px; border-radius:10px; overflow-wrap:anywhere; }
+.v4-success { color:var(--ok); background:var(--bu-success-bg); padding:12px; border-radius:10px; }
+.v4-json { white-space:pre-wrap; overflow-wrap:anywhere; max-height:340px; overflow:auto; font-size:12px; padding:16px; background:var(--surface-2); border-radius:10px; }
+.v4-bank-hero { margin-bottom:24px; }
+.v4-bank-kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin:24px 0; }
+.v4-bank-kpis dl { margin:0; padding:20px; border:1px solid var(--line); border-radius:14px; background:var(--surface); }
+.v4-bank-kpis dt { font-size:12px; color:var(--muted); }
+.v4-bank-kpis dd { margin:8px 0 0; font-size:24px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.v4-bank-chain { overflow-wrap:anywhere; }
+.v4-bank-chain-facts { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)); gap:16px; }
+.v4-bank-chain-facts > div { padding:12px; border:1px solid var(--line); border-radius:10px; background:var(--surface-2); }
+.v4-bank-chain-facts dt { color:var(--muted); font-size:12px; }
+.v4-bank-chain-facts dd { margin:8px 0 0; font-variant-numeric:tabular-nums; white-space:pre-wrap; }
+.v4-bank-chain li { margin-bottom:8px; }
+.bu-toast-host { position:fixed; right:16px; bottom:16px; z-index:100; max-width:min(440px,calc(100vw - 32px)); }
+.bu-toast { display:flex; gap:16px; padding:16px; margin-top:8px; background:var(--surface); color:var(--text); border:1px solid var(--line-strong); border-radius:14px; box-shadow:var(--bu-shadow-2); }
+.bu-toast button { color:inherit; background:transparent; border:0; }
+[hidden] { display:none!important; }
+@media(max-width:720px) { .v4-grid,.v4-fields,.v4-bank-kpis { grid-template-columns:1fr; } .v4-panel { padding:16px; } .v4-bank-kpis dd { font-size:22px; } }
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
+@media(prefers-reduced-transparency:reduce) { .topbar { background:var(--surface); backdrop-filter:none; } }
+/* Browser-default meters/progress bars are green: draw them in the hero palette. */
+meter, progress { appearance:none; -webkit-appearance:none; height:8px; border:0; border-radius:8px; background:var(--bu-surface-soft); overflow:hidden; vertical-align:middle; }
+meter::-webkit-meter-bar { background:var(--bu-surface-soft); border:0; border-radius:8px; height:8px; }
+meter::-webkit-meter-optimum-value, meter::-webkit-meter-suboptimum-value, meter::-webkit-meter-even-less-good-value { background:var(--bu-gradient-strong); border-radius:8px; }
+meter::-moz-meter-bar { background:var(--bu-gradient-strong); border-radius:8px; }
+progress::-webkit-progress-bar { background:var(--bu-surface-soft); border-radius:8px; }
+progress::-webkit-progress-value { background:var(--bu-gradient-strong); border-radius:8px; }
+progress::-moz-progress-bar { background:var(--bu-gradient-strong); border-radius:8px; }

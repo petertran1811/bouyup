@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Gian hàng của tôi — BuoyUp Core</title>
+  <meta name="theme-color" content="#08080a" />
+  <link rel="icon" href="../src/chung/assets/logo.webp" />
+  <link rel="stylesheet" href="../src/chung/bu/tokens.css" /><link rel="stylesheet" href="../src/chung/console.css" />
+  <link rel="stylesheet" href="../src/chung/chat.css" />
+  <link rel="stylesheet" href="../src/nguoi-ban/workspace.css" />
+  <link rel="stylesheet" href="../src/chung/bu/v4.css" />
+  <link rel="stylesheet" href="../src/nguoi-ban/workspace-v4.css" />
+  <link rel="stylesheet" href="../src/xac-thuc-khuon-mat/face-capture.css" />
+<style>body,input,textarea,select,button{font-family:"Be Vietnam Pro",sans-serif}html[data-bu-paused] *,html[data-bu-paused] *::before,html[data-bu-paused] *::after{animation-play-state:paused!important}</style>
+</head>
+<body class="workspace-body">
+  <div class="workspace-background" aria-hidden="true"></div>
+  <header class="topbar">
+    <button class="btn btn-sm" id="sidebar-toggle" aria-label="Mở hoặc thu gọn thanh dự án" aria-controls="sidebar" aria-expanded="true">☰</button>
+    <a class="brand" href="index.html"><span class="brand-mark"><img src="../src/chung/assets/logo.webp" alt="" /></span>BuoyUp <span class="core-label">CORE</span></a>
+    <span class="topbar-spacer"></span><span class="topbar-caption">Trợ lý vốn lưu động</span>
+    <button class="btn btn-sm" data-theme-toggle aria-label="Chuyển giao diện sáng hoặc tối">Sáng / tối</button>
+    <button class="btn btn-sm" id="logout">Đăng xuất</button>
+  </header>
+  <div class="banner banner-demo" id="demo-banner" hidden><strong>MÔ PHỎNG</strong><span>Dữ liệu mẫu và giải ngân mô phỏng; không phải cam kết tín dụng.</span></div>
+  <div id="notice" class="workspace-notice" role="status" hidden></div>
+  <div class="workspace-shell" id="workspace-shell">
+    <button class="sidebar-backdrop" id="sidebar-backdrop" aria-label="Đóng thanh dự án" hidden></button>
+    <aside id="sidebar" class="workspace-sidebar" aria-label="Dự án và hồ sơ">
+      <div class="account-chip"><span class="account-avatar" aria-hidden="true">●</span><div><strong id="account-name"></strong><small id="account-role"></small></div></div>
+      <div class="sidebar-section"><h2>Vay vốn BuoyUp</h2><div id="project-list" aria-live="polite">Đang tải hồ sơ…</div></div>
+      <div id="profile-nav" class="sidebar-section"></div>
+      <div id="application-nav" class="sidebar-section"></div>
+      <label class="sidebar-width">Độ rộng thanh dự án<input id="sidebar-width" type="range" min="240" max="380" step="10" value="280" /></label>
+      <p class="sidebar-foot">Hồ sơ được lưu sau mỗi bước.<br />Bạn có thể quay lại bất cứ lúc nào.</p>
+    </aside>
+    <main id="workspace-main" tabindex="-1"><div class="empty">Đang mở gian hàng…</div></main>
+  </div>
+  <dialog id="seller-wizard" class="seller-wizard" aria-labelledby="wizard-title" aria-describedby="wizard-count">
+    <div class="wizard-header">
+      <button type="button" id="wizard-back" class="wizard-back" data-action="wizard-back">← Quay lại</button>
+      <div class="wizard-center"><span class="wizard-brand"><img src="../src/chung/assets/logo.webp" alt="" />BuoyUp</span><span id="wizard-count" class="wizard-count">Bước 1/8</span></div>
+      <button type="button" class="wizard-close" data-action="wizard-close" aria-label="Đóng và lưu tiến độ">×</button>
+    </div>
+    <progress id="wizard-progress" class="wizard-progress" max="8" value="1" aria-label="Tiến độ hồ sơ"></progress>
+    <div class="wizard-body">
+      <div class="wizard-main">
+        <div id="wizard-demo" hidden><span class="v4-badge warning">Mô phỏng</span></div>
+        <div id="wizard-screen" class="wizard-screen"></div>
+        <p id="wizard-notice" class="wizard-error" role="status" hidden></p>
+      </div>
+      <button type="button" id="chat-jump" class="chat-jump" hidden>Hỏi trợ lý</button>
+      <aside id="wizard-chat" class="wizard-chat" aria-labelledby="chat-title" hidden>
+        <div class="chat-head"><span class="chat-avatar" aria-hidden="true"><img src="../src/chung/assets/logo.webp" alt="" /></span><div><strong id="chat-title">Trợ lý BuoyUp</strong><small>Hỏi bất cứ điều gì về khoản vay, dòng tiền hay hồ sơ của bạn</small></div></div>
+        <div id="chat-scroll" class="chat-scroll">
+          <ol id="chat-log" class="chat-log" aria-label="Lịch sử trò chuyện"></ol>
+          <div id="chat-suggest" class="chat-suggest"></div>
+        </div>
+        <p id="chat-status" class="chat-sr" role="status" aria-live="polite"></p>
+        <div class="chat-footer">
+          <button id="chat-latest" class="chat-latest" type="button" hidden>Xuống tin mới <span aria-hidden="true">↓</span></button>
+          <form id="chat-form" class="chat-form">
+            <label class="chat-sr" for="chat-input">Câu hỏi cho trợ lý</label>
+            <div class="chat-composer">
+              <textarea id="chat-input" rows="1" maxlength="2000" placeholder="Hỏi trợ lý BuoyUp…" autocomplete="off" aria-describedby="chat-help"></textarea>
+              <button id="chat-send" class="btn btn-primary" type="submit" aria-label="Gửi câu hỏi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg></button>
+            </div>
+            <p id="chat-help" class="chat-help">Enter để gửi · Shift+Enter xuống dòng</p>
+          </form>
+        </div>
+      </aside>
+    </div>
+  </dialog>
+  <script src="../src/chung/bu/api.js"></script><script src="../src/chung/bu/session.js"></script>
+  <script src="../src/chung/bu/motion.js"></script><script src="../src/xac-thuc-khuon-mat/face-capture.js"></script><script src="../src/nguoi-ban/workspace-v4.js"></script>
+</body>
+</html>

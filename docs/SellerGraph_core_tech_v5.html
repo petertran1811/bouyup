@@ -1,0 +1,518 @@
+<title>SellerGraph Core v5</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: một đường ống dọc như bản cũ (mỗi hàng một lớp kỹ thuật), khối mới/sửa được đánh dấu; dưới là sáu hồ sơ rà soát và bảng tham số chờ duyệt. */
+:root {
+  --bg: #faf6f8; --surface: #ffffff; --ink: #2b1d26; --muted: #6f5d6a; --line: #eadfe7; --line-strong: #d4c4d0;
+  --accent: #9b4d6b; --accent-soft: #f7ebf1;
+  --data: #8a5a3c;   --data-soft: #f6ede6;
+  --ml: #7a3f78;     --ml-soft: #f3e9f2;
+  --agent: #b0476a;  --agent-soft: #fbecf1;
+  --human: #b3261e;  --human-soft: #fbe8e6;
+  --money: #c0632f;  --money-soft: #fcefe6;
+  --code: #5a4a52;   --code-soft: #f1ecef;
+  --ledger: #8f6a12; --ledger-soft: #f8f0dc;
+  --spine: #2b1d26;  --spine-ink: #fbf3f7;
+  --new: #b0476a; --fix: #c0632f; --ok: #6f5d6a;
+  --missing: #b3261e; --partial: #c0632f; --has: #7a3f78;
+  --grad: linear-gradient(120deg, #ecc6dd 0%, #efc3d3 55%, #f3c6ae 100%);
+  --f-display: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --f-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0c090b; --surface: #161114; --ink: #f5edf2; --muted: #c4b3bf; --line: #35272f; --line-strong: #4d3a45;
+  --accent: #f2bfd1; --accent-soft: #2a1a23;
+  --data: #e6b48f; --data-soft: #2a1d15; --ml: #e2a8de; --ml-soft: #2a1729; --agent: #f2a3be; --agent-soft: #2e1820;
+  --human: #ff9b90; --human-soft: #351614; --money: #f5b088; --money-soft: #31200f; --code: #d4c4ce; --code-soft: #221a1f;
+  --ledger: #e8c77a; --ledger-soft: #2e2510; --spine: #f5edf2; --spine-ink: #161114;
+  --new: #f2a3be; --fix: #f5b088; --ok: #c4b3bf; --missing: #ff9b90; --partial: #f5b088; --has: #e2a8de;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0c090b; --surface: #161114; --ink: #f5edf2; --muted: #c4b3bf; --line: #35272f; --line-strong: #4d3a45;
+  --accent: #f2bfd1; --accent-soft: #2a1a23;
+  --data: #e6b48f; --data-soft: #2a1d15; --ml: #e2a8de; --ml-soft: #2a1729; --agent: #f2a3be; --agent-soft: #2e1820;
+  --human: #ff9b90; --human-soft: #351614; --money: #f5b088; --money-soft: #31200f; --code: #d4c4ce; --code-soft: #221a1f;
+  --ledger: #e8c77a; --ledger-soft: #2e2510; --spine: #f5edf2; --spine-ink: #161114;
+  --new: #f2a3be; --fix: #f5b088; --ok: #c4b3bf; --missing: #ff9b90; --partial: #f5b088; --has: #e2a8de;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.55;
+  padding-block: 28px 72px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 40px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; letter-spacing: -0.015em; }
+h1 { font-weight: 800; font-size: clamp(28px, 4.2vw, 40px); line-height: 1.12; }
+h2 { font-weight: 700; font-size: clamp(21px, 2.6vw, 26px); line-height: 1.2; }
+h3 { font-weight: 700; font-size: 16.5px; }
+p { margin: 0; }
+.eyebrow { font: 600 12px var(--f-mono); letter-spacing: .09em; text-transform: uppercase; color: var(--accent); }
+.lede { color: var(--muted); max-width: 70ch; }
+code, .mono { font-family: var(--f-mono); font-size: .86em; }
+section { display: grid; gap: 16px; min-width: 0; }
+.section-head { display: grid; gap: 6px; }
+
+/* header */
+header { display: grid; gap: 12px; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 18px; font: 500 12.5px var(--f-mono); color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font: 600 11.5px var(--f-mono); letter-spacing: .04em; padding: 3px 9px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.chip.new { color: var(--new); } .chip.fix { color: var(--fix); } .chip.keep { color: var(--ok); }
+.chip.missing { color: var(--missing); } .chip.partial { color: var(--partial); } .chip.has { color: var(--has); }
+
+/* summary table */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+th { font: 600 11.5px var(--f-mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); background: var(--accent-soft); }
+tr:last-child td { border-bottom: 0; }
+td.num { font: 700 15px var(--f-mono); color: var(--accent); width: 44px; }
+td b { font-family: var(--f-display); }
+td a { color: inherit; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+td a:hover { text-decoration-color: var(--accent); }
+
+/* diagram */
+.diagram { display: grid; gap: 0; }
+.row { display: grid; gap: 14px; }
+.row.two { grid-template-columns: 1fr 1fr; }
+.row.three { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 780px) { .row.two, .row.three { grid-template-columns: 1fr; } }
+.block { --c: var(--code); --soft: var(--code-soft); position: relative; background: var(--surface); border: 1px solid var(--line); border-top: 4px solid var(--c); border-radius: 10px; padding: 14px 16px; min-width: 0; display: grid; gap: 6px; align-content: start; }
+.block .tag { font: 600 11px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--c); }
+.block ul { margin: 2px 0 0; padding-left: 18px; display: grid; gap: 3px; font-size: 14px; }
+.block li::marker { color: var(--c); }
+.block .note { font-size: 13px; color: var(--muted); }
+.block.is-new { border-color: color-mix(in srgb, var(--new) 55%, var(--line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--new) 14%, transparent); }
+.block.is-fix { border-color: color-mix(in srgb, var(--fix) 55%, var(--line)); }
+.block .flag { position: absolute; top: 10px; right: 10px; }
+.block .ref { font: 500 11.5px var(--f-mono); color: var(--muted); }
+.data { --c: var(--data); --soft: var(--data-soft); } .ml { --c: var(--ml); --soft: var(--ml-soft); }
+.agent { --c: var(--agent); --soft: var(--agent-soft); } .human { --c: var(--human); --soft: var(--human-soft); }
+.money { --c: var(--money); --soft: var(--money-soft); } .ledger { --c: var(--ledger); --soft: var(--ledger-soft); }
+.inset { background: var(--soft); border-radius: 8px; padding: 9px 11px; font-size: 13.5px; }
+.inset b { color: var(--c); font-family: var(--f-display); }
+.spine { background: var(--spine); color: var(--spine-ink); border-radius: 10px; padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; }
+.spine b { font-family: var(--f-display); }
+.spine span { font: 500 12.5px var(--f-mono); opacity: .82; }
+.link { display: grid; justify-items: center; padding: 6px 0; color: var(--muted); font: 500 12px var(--f-mono); }
+.link::before { content: ""; width: 2px; height: 14px; background: var(--line-strong); }
+.link::after { content: "▼"; font-size: 9px; line-height: 1; color: var(--line-strong); }
+.debate { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: stretch; }
+.debate .arrows { display: grid; align-content: center; justify-items: center; gap: 4px; font: 600 11px var(--f-mono); color: var(--agent); text-align: center; }
+.debate .arrows span { font-size: 18px; line-height: 1; }
+@media (max-width: 780px) { .debate { grid-template-columns: 1fr; } .debate .arrows { padding: 4px 0; } .debate .arrows span { transform: rotate(90deg); } }
+.guards { display: flex; flex-wrap: wrap; gap: 6px; }
+.guards span { font: 600 11.5px var(--f-mono); border: 1px solid var(--line-strong); color: var(--muted); border-radius: 999px; padding: 2px 9px; }
+
+/* arbitration flow (SVG) */
+.figure { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; overflow-x: auto; }
+.figure svg { display: block; min-width: 760px; width: 100%; height: auto; }
+.figure .cap { margin-top: 10px; font-size: 13px; color: var(--muted); max-width: 80ch; }
+svg text { font-family: var(--f-body); fill: var(--ink); }
+svg .t-sm { font-size: 12px; fill: var(--muted); }
+svg .t-mono { font-family: var(--f-mono); font-size: 11px; fill: var(--muted); }
+svg .t-b { font-weight: 700; font-size: 13.5px; }
+svg .box { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1.2; }
+svg .box-agent { fill: var(--agent-soft); stroke: var(--agent); stroke-width: 1.4; }
+svg .box-code { fill: var(--code-soft); stroke: var(--code); stroke-width: 1.2; }
+svg .box-ok { fill: var(--ml-soft); stroke: var(--ml); stroke-width: 1.4; }
+svg .box-down { fill: var(--money-soft); stroke: var(--money); stroke-width: 1.4; }
+svg .box-no { fill: var(--human-soft); stroke: var(--human); stroke-width: 1.4; }
+svg .box-log { fill: var(--ledger-soft); stroke: var(--ledger); stroke-width: 1.2; stroke-dasharray: 4 3; }
+svg .edge { stroke: var(--line-strong); stroke-width: 1.6; fill: none; }
+svg .edge-a { stroke: var(--agent); stroke-width: 1.6; fill: none; }
+svg .head { fill: var(--line-strong); }
+svg .head-a { fill: var(--agent); }
+
+/* issue dossiers */
+.issues { display: grid; gap: 22px; }
+.issue { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; display: grid; gap: 14px; min-width: 0; scroll-margin-top: 16px; }
+.issue-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; }
+.issue-head .n { font: 700 13px var(--f-mono); color: var(--accent); }
+.issue-head h3 { font-size: 19px; flex: 1 1 320px; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 780px) { .cols { grid-template-columns: 1fr; } }
+.pane { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.pane h4 { margin: 0; font: 600 11.5px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.pane.now h4 { color: var(--partial); } .pane.prop h4 { color: var(--accent); }
+.pane ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; }
+.pane li { min-width: 0; overflow-wrap: anywhere; }
+.ev { display: block; font: 500 11.5px var(--f-mono); color: var(--muted); margin-top: 1px; }
+.gap { border-left: 3px solid var(--missing); background: var(--human-soft); padding: 9px 12px; border-radius: 0 8px 8px 0; font-size: 14px; }
+.gap b { color: var(--missing); }
+.rules { display: grid; gap: 8px; }
+.rule { display: grid; grid-template-columns: 112px 1fr; gap: 10px; font-size: 14px; padding: 8px 0; border-top: 1px dashed var(--line); }
+.rule:first-child { border-top: 0; padding-top: 0; }
+.rule dt { font: 600 12px var(--f-mono); color: var(--accent); }
+.rule dd { margin: 0; min-width: 0; }
+@media (max-width: 480px) { .rule { grid-template-columns: 1fr; gap: 2px; } }
+.todo { font-size: 13.5px; color: var(--muted); }
+.todo b { color: var(--ink); }
+
+/* params */
+.params td:nth-child(2) { font-family: var(--f-mono); font-size: 13px; white-space: nowrap; }
+.params td:nth-child(3) { font: 600 13.5px var(--f-mono); color: var(--accent); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.open { display: grid; gap: 10px; }
+.open li { font-size: 14.5px; }
+.open ol { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
+footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; display: grid; gap: 4px; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">SellerGraph · BuoyUp v4 → v5 · đã triển khai</p>
+  <h1>Sáu chỗ hở của lõi kỹ thuật và cách chốt</h1>
+  <p class="lede">Đối chiếu sáu câu hỏi phản biện với code đang chạy (<code>BackEnd/src/app</code>, ngày 16/10/2026), không chỉ với tài liệu. Mỗi mục ghi hiện trạng kèm vị trí trong code, chỗ hở, và quy tắc đề xuất chốt. Sơ đồ khối bên dưới vẽ lại bản cũ “SellerGraph Core Tech” với các khối mới và khối sửa.</p>
+  <div class="meta"><span>Gốc: docs/SellerGraph_core_tech.html (28.09.2026)</span><span>Code: rules-v1.2 · params v4</span><span>Đơn vị tiền: tệ (CNY)</span></div>
+  <div class="legend" aria-label="Chú thích">
+    <span class="chip has">✓ Đã triển khai 16/10/2026</span><span class="chip missing">● Trước đây chưa có</span><span class="chip partial">◐ Trước đây một phần</span><span class="chip new">+ Khối mới</span><span class="chip fix">✎ Khối sửa</span>
+  </div>
+</header>
+
+<section aria-labelledby="sum-title">
+  <div class="section-head"><p class="eyebrow">Tổng hợp</p><h2 id="sum-title">Hiện trạng sáu điểm</h2></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>Điểm phản biện</th><th>Trước khi sửa</th><th>Đã chốt và triển khai</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td><a href="#i1"><b>Phân xử Agent 2 và Agent 3</b></a><br><span class="chip partial">◐ Một phần</span> <span class="chip has">✓ Đã làm</span></td><td>Bất đồng thì hạ về phương án nhỏ hơn (<code>approve_smaller</code>) hoặc chuyển cán bộ. Trần một vòng, viết cứng, chỉ cho RISK-04. Quyết định chuyển cán bộ hoặc từ chối không ghi lên chuỗi.</td><td>Bất đồng: hạ về mức Agent 3 chấp nhận, không có mức nào thì từ chối. Trần 2 vòng, hết trần lấy kết luận thận trọng hơn. Mỗi vòng ghi một bản ghi lên chuỗi.</td></tr>
+      <tr><td class="num">2</td><td><a href="#i2"><b>Tính độc lập của Agent 3</b></a><br><span class="chip partial">◐ Một phần</span> <span class="chip has">✓ Đã làm</span></td><td>Bộ quy tắc tất định rules-v1.2 đã có. Mặc định Agent 3 dùng cùng mô hình với Agent 2. Không có mô hình thách thức. Pha 1 vẫn thấy phương án đề xuất.</td><td>Ba lớp: quy tắc tất định, mô hình thách thức huấn luyện riêng trên đặc trưng không giao với Agent 2, LLM khác họ (bắt buộc khi khởi động).</td></tr>
+      <tr><td class="num">3</td><td><a href="#i3"><b>Tách Agent 4</b></a><br><span class="chip missing">● Chưa có</span> <span class="chip has">✓ Đã làm</span></td><td>Giải ngân và giám sát chung một module, một khóa, một token. Vòng lặp autopilot chạy suốt đời khoản vay vẫn gọi được <code>disburse()</code>.</td><td>4a giải ngân dùng token một lần, thu hồi ngay khi xong. 4b giám sát chỉ đọc và chỉ cảnh báo. Trích nợ chuyển sang lệnh định kỳ của core banking.</td></tr>
+      <tr><td class="num">4</td><td><a href="#i4"><b>Luồng khiếu nại</b></a><br><span class="chip missing">● Chưa có</span> <span class="chip has">✓ Đã làm</span></td><td>Chỉ có dòng chữ “Tổng đài WeBank 95384 · khieunai@buoyup.vn”. Không có bảng, trạng thái hay thời hạn. Màn từ chối không hiện kênh này.</td><td>Bàn tiếp nhận khiếu nại: phiếu có mã, trả lý do, người xem xét khác người đã quyết, cam kết 1 ngày xác nhận và 5 ngày làm việc trả lời.</td></tr>
+      <tr><td class="num">5</td><td><a href="#i5"><b>FATE khởi động lạnh</b></a><br><span class="chip missing">● Chưa có</span> <span class="chip has">✓ Đã làm</span></td><td>FATE chỉ trả một số 1–5, không có độ phủ. Thiếu điểm thì tính bậc 5 (mất tới 15/100 điểm). Người bán cá nhân chưa ĐKKD bị từ chối ngay ở bước 2.</td><td>FATE trả thêm độ phủ. Tín hiệu mỏng thì chấm điểm thay thế bằng dữ liệu đã có, kèm trần thấp hơn.</td></tr>
+      <tr><td class="num">6</td><td><a href="#i6"><b>Xác minh doanh thu khoản đầu</b></a><br><span class="chip partial">◐ Một phần</span> <span class="chip has">✓ Đã làm</span></td><td>Doanh thu chỉ dựa trên thuế. Ảnh chụp tùy chọn, chỉ cộng thêm hệ số. Không có khoản vay mồi. Không nâng hạn mức theo dòng tiền WeBank.</td><td>Khoản đầu là khoản vay mồi bằng 50% mức tính được. Từ khoản thứ hai, nâng theo dòng tiền thật qua tài khoản WeBank.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section aria-labelledby="dia-title">
+  <div class="section-head"><p class="eyebrow">Sơ đồ khối · vẽ lại</p><h2 id="dia-title">Hồ sơ đi qua những khối nào ở v5</h2>
+  <p class="lede">Giữ nguyên nguyên tắc của bản cũ: máy tính số và đặt trần, tác tử phán đoán nhưng không vượt trần, con người ký các khoản lớn, tiền đi thẳng tới nhà cung cấp.</p></div>
+
+  <div class="diagram">
+    <div class="row two">
+      <div class="block data"><span class="tag">Đầu vào</span><h3>Người bán nộp hồ sơ</h3>
+        <ul><li>Link gian hàng, CCCD, ĐKKD (hộ kinh doanh / doanh nghiệp)</li><li>Kế hoạch nhập hàng cho dịp bán (Tầng 2)</li><li>Ba ô ủy quyền, ký Ed25519</li></ul></div>
+      <div class="block agent"><span class="tag">Agent 1</span><h3>Tiếp nhận và xác minh</h3>
+        <ul><li>Đối chiếu chủ thể ↔ CCCD ↔ khuôn mặt (ArcFace 1:1)</li><li>Kéo dữ liệu thuế, tín dụng, FATE; dựng cờ RISK_*</li><li>Hỏi lại người bán tối đa 3 ngày</li></ul></div>
+    </div>
+    <div class="link">hồ sơ + ủy quyền</div>
+    <div class="row two">
+      <div class="block data is-fix"><span class="chip fix flag">✎ sửa</span><span class="tag">Tầng dữ liệu</span><h3>Nguồn doanh thu có thứ bậc</h3>
+        <ul><li>Thuế 12 tháng: bắt buộc, là gốc của mọi con số</li><li>Ảnh chụp doanh thu: tùy chọn, chỉ cộng tối đa +0,05 hệ số</li><li><b>Mới:</b> dòng tiền thật qua TK WeBank, dùng từ khoản thứ hai</li><li><b>Mới:</b> bật cờ RISK_INFLOW_GAP, RISK_PASS_THROUGH đã có ngưỡng</li></ul>
+        <span class="ref">→ mục 6</span></div>
+      <div class="block ml is-fix"><span class="chip fix flag">✎ sửa</span><span class="tag">FATE · học liên kết</span><h3>Điểm liên ngân hàng có độ phủ</h3>
+        <ul><li>Trả <code>value</code> 1–5 kèm <b>độ phủ</b>: số ngân hàng có quan hệ, số tháng quan hệ</li><li>Độ phủ thấp → gắn nhãn “tín hiệu mỏng”, không trừ điểm như thiếu điểm</li></ul>
+        <span class="ref">→ mục 5</span></div>
+    </div>
+    <div class="link">đặc trưng đã xác minh</div>
+    <div class="spine"><b>Bộ điều phối · code cố định</b><span>gọi tính toán và tác tử theo thứ tự · áp luật chuyển người · ghi vết mọi đầu vào/đầu ra · cấp và thu hồi quyền theo bước</span></div>
+    <div class="link">gọi song song</div>
+    <div class="row two">
+      <div class="block ml"><span class="tag">Lõi tính toán · B1–B12</span><h3>Điểm, nhóm, hạn mức, lãi</h3>
+        <ul><li>Điểm 100: trễ hạn, tra cứu, nợ/doanh thu, FATE, đánh giá, tháng có bán…</li><li>Hạn mức = MIN(khả năng trả, trần nhóm, trần loại người vay)</li><li>Lãi theo hạng A 8% · B 10% · C 12% · D 15%</li></ul></div>
+      <div class="block ml is-new"><span class="chip new flag">+ mới</span><span class="tag">Lõi tính toán · nhánh rủi ro mới</span><h3>FATE mỏng và khoản vay mồi</h3>
+        <ul><li>Tín hiệu mỏng: chia 15 điểm FATE cho 4 tín hiệu thay thế; trần 0,5× doanh thu tháng, tối đa 50.000 tệ</li><li>Khoản đầu: hạn mức × 0,5 · khoản 2: × 0,75 · từ khoản 3: × 1,0</li></ul>
+        <span class="ref">→ mục 5, 6</span></div>
+    </div>
+    <div class="link">trần hạn mức + yếu tố giải thích</div>
+    <div class="block agent is-fix"><span class="chip fix flag">✎ sửa</span><span class="tag">Lớp tác tử · phán đoán</span><h3>Đề xuất và phản biện, tối đa hai vòng</h3>
+      <div class="debate">
+        <div class="inset" style="--soft: var(--agent-soft)"><b>Agent 2 · Đề xuất</b><br>Chọn phương án trong trần, viết tờ trình, mỗi ý dẫn tới ô trong bảng tính (<code>sheet.B3</code>, <code>sheet.B8</code>…)</div>
+        <div class="arrows" aria-hidden="true"><span>⇄</span>vòng 1<br>vòng 2</div>
+        <div class="inset" style="--soft: var(--ml-soft); --c: var(--ml)"><b>Agent 3 · Kiểm soát độc lập</b><br>① Quy tắc tất định rules-v1.2 · ② Mô hình thách thức, đặc trưng riêng · ③ LLM khác họ. Pha 1 niêm phong trước khi thấy đề xuất.</div>
+      </div>
+      <div class="guards"><span>Không tự tính số</span><span>Không vượt trần</span><span>Không tự phê duyệt</span><span>Mỗi vòng lên chuỗi</span></div>
+      <span class="ref">→ mục 1, 2</span></div>
+    <div class="link">đề xuất + kết luận + biên bản tranh luận</div>
+    <div class="row two">
+      <div class="block"><span class="tag">Cổng quyết định · code</span><h3>Quy tắc phân xử</h3>
+        <ul><li>Đồng thuận → duyệt, gửi vòng ngân hàng song song</li><li>Bất đồng → hạ về mức Agent 3 chấp nhận; không có mức nào → từ chối</li><li>Hết 2 vòng → lấy kết luận thận trọng hơn</li></ul></div>
+      <div class="block human"><span class="tag">Cổng con người</span><h3>Chuyển cán bộ khi</h3>
+        <ul><li>Số tiền vượt ngưỡng, tín hiệu gian lận, AML</li><li>Mô hình gặp lỗi hoặc thiếu nguồn thuế/tín dụng</li><li>Người bán yêu cầu (Điều 24) hoặc khiếu nại</li></ul></div>
+    </div>
+    <div class="link">ký hợp đồng = kích hoạt 4a</div>
+    <div class="row two">
+      <div class="block money is-new"><span class="chip new flag">+ tách</span><span class="tag">Agent 4a · giải ngân</span><h3>Quyền cao, dùng một lần</h3>
+        <ul><li>Nhận token giải ngân gắn mã hồ sơ, số tiền, người nhận; hạn 15 phút</li><li>Tiền đi thẳng nhà cung cấp, phần còn lại về TK kinh doanh</li><li>Ghi <code>disbursement</code> lên chuỗi → token bị thu hồi, tiến trình kết thúc</li></ul>
+        <span class="ref">→ mục 3</span></div>
+      <div class="block is-new" style="--c: var(--code)"><span class="chip new flag">+ tách</span><span class="tag">Agent 4b · giám sát</span><h3>Chạy suốt khoản vay, chỉ đọc</h3>
+        <ul><li>Đọc dòng tiền, lịch trả, mục đích vốn; chấm cảnh báo xanh / vàng / đỏ</li><li>Chỉ ghi bảng cảnh báo và thông báo; không gọi được module tiền</li><li>Trích nợ: lệnh định kỳ trong core banking, ký lúc giải ngân</li></ul>
+        <span class="ref">→ mục 3</span></div>
+    </div>
+    <div class="link">cảnh báo · tất toán · khiếu nại</div>
+    <div class="row two">
+      <div class="block human is-new"><span class="chip new flag">+ mới</span><span class="tag">Bàn khiếu nại · người + code</span><h3>Tiếp nhận và trả lời có thời hạn</h3>
+        <ul><li>Phiếu có mã từ app, tổng đài 95384, email</li><li>Tự gửi lý do từ chối hoặc hạ hạn mức đã ghi trong hồ sơ</li><li>Xác nhận ≤ 1 ngày làm việc · trả lời ≤ 5 ngày làm việc</li></ul>
+        <span class="ref">→ mục 4</span></div>
+      <div class="block agent is-fix"><span class="chip fix flag">✎ sửa</span><span class="tag">Agent 5 · hậu kiểm + vòng lặp</span><h3>Trả tốt thì hạn mức tăng</h3>
+        <ul><li>Kiểm định ngược hệ số thận trọng, đề xuất thay tham số (admin duyệt)</li><li><b>Mới:</b> đưa dòng tiền WeBank thật vào mức doanh thu xác minh của khoản sau</li><li>Thống kê khiếu nại theo lý do để sửa quy tắc</li></ul></div>
+    </div>
+    <div class="link">mọi bước để lại bằng chứng</div>
+    <div class="block ledger is-fix"><span class="chip fix flag">✎ sửa</span><span class="tag">Nhật ký kiểm toán · FISCO BCOS</span><h3>Ghi thêm những gì đang thiếu</h3>
+      <ul><li>Mỗi vòng tranh luận: <code>debate_round</code> (luận điểm, dẫn chứng, kết quả công cụ, mã mô hình)</li><li>Mọi quyết định của cổng, kể cả chuyển cán bộ và từ chối (hôm nay chỉ ghi khi duyệt)</li><li>Cấp và thu hồi token 4a; mở và đóng phiếu khiếu nại</li></ul></div>
+  </div>
+</section>
+
+<section aria-labelledby="arb-title">
+  <div class="section-head"><p class="eyebrow">Mục 1 · sơ đồ</p><h2 id="arb-title">Phân xử khi Agent 2 và Agent 3 không đồng ý</h2></div>
+  <div class="figure">
+    <svg viewBox="0 0 1040 430" role="img" aria-labelledby="arb-svg-t">
+      <title id="arb-svg-t">Luồng phân xử tối đa hai vòng giữa Agent 2 và Agent 3, kết thúc bằng duyệt, hạ hạn mức hoặc từ chối</title>
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
+        <marker id="aha" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head-a" d="M0,0 L10,5 L0,10 z"/></marker>
+      </defs>
+      <!-- column 1 -->
+      <rect class="box-code" x="16" y="30" width="190" height="70" rx="10"/>
+      <text class="t-b" x="30" y="56">Pha 0 · quy tắc</text>
+      <text class="t-sm" x="30" y="76">rules-v1.2 đặt sàn</text>
+      <text class="t-mono" x="30" y="92">approve‹smaller‹escalate‹reject</text>
+      <rect class="box-ok" x="16" y="140" width="190" height="78" rx="10"/>
+      <text class="t-b" x="30" y="166">Pha 1 · Agent 3</text>
+      <text class="t-sm" x="30" y="186">đánh giá độc lập, niêm phong</text>
+      <text class="t-sm" x="30" y="204">trước khi thấy đề xuất</text>
+      <rect class="box-agent" x="16" y="258" width="190" height="70" rx="10"/>
+      <text class="t-b" x="30" y="284">Agent 2 · đề xuất</text>
+      <text class="t-sm" x="30" y="304">phương án + tờ trình</text>
+      <path class="edge" d="M111 100 V138" marker-end="url(#ah)"/>
+      <!-- compare -->
+      <rect class="box" x="262" y="180" width="170" height="76" rx="38"/>
+      <text class="t-b" x="296" y="212">So hai kết luận</text>
+      <text class="t-sm" x="292" y="232">cùng phương án?</text>
+      <path class="edge" d="M206 179 C 236 179, 236 205, 260 210" marker-end="url(#ah)"/>
+      <path class="edge" d="M206 293 C 236 293, 236 240, 260 232" marker-end="url(#ah)"/>
+      <!-- agree -->
+      <rect class="box-ok" x="500" y="30" width="200" height="62" rx="10"/>
+      <text class="t-b" x="516" y="56">Đồng thuận → duyệt</text>
+      <text class="t-sm" x="516" y="76">gửi vòng ngân hàng</text>
+      <path class="edge" d="M380 182 C 420 120, 450 70, 498 62" marker-end="url(#ah)"/>
+      <text class="t-mono" x="404" y="108">có</text>
+      <!-- debate rounds -->
+      <rect class="box-agent" x="500" y="150" width="200" height="66" rx="10"/>
+      <text class="t-b" x="516" y="176">Vòng 1</text>
+      <text class="t-sm" x="516" y="196">A3 nêu lý do + mức chấp nhận</text>
+      <rect class="box-agent" x="500" y="236" width="200" height="66" rx="10"/>
+      <text class="t-b" x="516" y="262">Vòng 2</text>
+      <text class="t-sm" x="516" y="282">A2 phản hồi bằng dẫn chứng</text>
+      <path class="edge-a" d="M432 218 H498" marker-end="url(#aha)"/>
+      <text class="t-mono" x="446" y="210">không</text>
+      <path class="edge-a" d="M600 216 V234" marker-end="url(#aha)"/>
+      <!-- outcomes -->
+      <rect class="box-ok" x="770" y="120" width="250" height="62" rx="10"/>
+      <text class="t-b" x="786" y="146">Thống nhất trong 2 vòng</text>
+      <text class="t-sm" x="786" y="166">→ duyệt theo phương án đã chốt</text>
+      <rect class="box-down" x="770" y="208" width="250" height="62" rx="10"/>
+      <text class="t-b" x="786" y="234">Hết trần, A3 có mức chấp nhận</text>
+      <text class="t-sm" x="786" y="254">→ hạ về mức đó (approve_smaller)</text>
+      <rect class="box-no" x="770" y="296" width="250" height="62" rx="10"/>
+      <text class="t-b" x="786" y="322">Hết trần, không có mức nào</text>
+      <text class="t-sm" x="786" y="342">→ từ chối, kèm lý do + quyền khiếu nại</text>
+      <path class="edge" d="M700 183 C 735 183, 740 151, 768 151" marker-end="url(#ah)"/>
+      <path class="edge" d="M700 269 C 735 269, 740 239, 768 239" marker-end="url(#ah)"/>
+      <path class="edge" d="M700 285 C 735 300, 740 327, 768 327" marker-end="url(#ah)"/>
+      <!-- log -->
+      <rect class="box-log" x="262" y="372" width="758" height="44" rx="10"/>
+      <text class="t-b" x="280" y="399">Chuỗi kiểm toán</text>
+      <text class="t-mono" x="410" y="399">agent3_phase1_seal · proposal · debate_round×N · agent3_conclusion · gate_decision (mọi kết cục)</text>
+      <path class="edge" d="M111 328 V394 H260" marker-end="url(#ah)"/>
+    </svg>
+    <p class="cap">Thứ tự thận trọng giữ đúng thứ tự đang có trong code (<code>core/legal.py:23</code>): approve ‹ smaller ‹ escalate ‹ reject. Kết luận cuối không bao giờ nhẹ hơn sàn của pha 0. Chuyển cán bộ vẫn xảy ra theo cổng con người, độc lập với tranh luận.</p>
+  </div>
+</section>
+
+<section aria-labelledby="iss-title">
+  <div class="section-head"><p class="eyebrow">Chi tiết</p><h2 id="iss-title">Sáu hồ sơ rà soát</h2>
+  <p class="lede">Đường dẫn tính từ <code>BackEnd/src/app/</code>. Con số trong phần đề xuất là mức khởi điểm để nhóm duyệt; tất cả đi vào bảng tham số, đổi được mà không sửa code.</p></div>
+  <div class="issues">
+
+  <article class="issue" id="i1">
+    <div class="issue-head"><span class="n">01</span><h3>Quy tắc phân xử giữa Agent 2 và Agent 3</h3><span class="chip partial">◐ Có một phần</span></div>
+    <div class="cols">
+      <div class="pane now"><h4>Code hôm nay</h4><ul>
+        <li>Bất đồng ở cổng: phương án nhỏ hơn thì <code>approve_smaller</code>; còn lại lấy mức nặng nhất giữa pha 2 và sàn, nặng nhất là reject thì từ chối, không thì chuyển cán bộ.<span class="ev">agents/agent3_control.py:517-538, 549-550</span></li>
+        <li>Một vòng hỏi lại, viết cứng bằng biến <code>asked</code>, chỉ cho mối lo RISK-04. Câu trả lời của “Agent 2” thật ra là code chạy lại <code>_rationale</code>.<span class="ev">agent3_control.py:392-416</span></li>
+        <li>Agent 2 phía đề xuất luôn là code mẫu; LLM của Agent 2 chỉ chạy trong chat và không gọi lại Agent 3.<span class="ev">agent2_advise.py:223-229, 485-509, 871-881</span></li>
+        <li>Lên chuỗi: proposal, phase1_seal, conclusion. <code>gate_decision</code> chỉ ghi khi duyệt; kết quả công cụ của mô hình không được lưu.<span class="ev">agent3_control.py:275-282, 434-440, 545-556, 594</span></li>
+      </ul></div>
+      <div class="pane prop"><h4>Đề xuất chốt</h4><dl class="rules">
+        <div class="rule"><dt>Mặc định</dt><dd>Không đồng thuận thì hạ về mức Agent 3 chấp nhận. Agent 3 không nêu mức nào thì từ chối, kèm lý do và quyền khiếu nại.</dd></div>
+        <div class="rule"><dt>Trần vòng</dt><dd>2 vòng, tham số <code>arbitration.max_rounds</code>. Mọi mối lo đều được hỏi lại, không riêng RISK-04.</dd></div>
+        <div class="rule"><dt>Hết trần</dt><dd>Lấy kết luận thận trọng hơn theo thứ tự SEVERITY đang có; không bao giờ nhẹ hơn sàn pha 0.</dd></div>
+        <div class="rule"><dt>Ghi log</dt><dd>Mỗi vòng một bản ghi <code>debate_round</code>: luận điểm, dẫn chứng, đầu ra công cụ, mã mô hình, hash đặc trưng. <code>gate_decision</code> ghi với mọi kết cục.</dd></div>
+      </dl></div>
+    </div>
+    <p class="gap"><b>Chỗ hở:</b> chưa có tranh luận thật giữa hai bên phán đoán; biên bản hiện tại không đủ làm hồ sơ kiểm toán cho các ca từ chối và chuyển cán bộ.</p>
+    <p class="todo"><b>Việc trong code:</b> cho LLM của Agent 2 trả lời câu hỏi của Agent 3 qua công cụ có kiểm dẫn chứng; vòng lặp có trần ở <code>agent3_control.review</code>; thêm loại bản ghi <code>debate_round</code> ở <code>blockchain/chain.py</code>; ghi <code>gate_decision</code> ở cả nhánh escalate/reject.</p>
+  </article>
+
+  <article class="issue" id="i2">
+    <div class="issue-head"><span class="n">02</span><h3>Tính độc lập thật của Agent 3</h3><span class="chip partial">◐ Có một phần</span></div>
+    <div class="cols">
+      <div class="pane now"><h4>Code hôm nay</h4><ul>
+        <li>Bộ quy tắc tất định có thật: rules-v1.2, khoảng 29 kiểm tra (LAW, POL, RISK, AML), quy tắc nào trích dẫn sai văn bản thì bị tắt khi nạp.<span class="ev">core/legal.py:22-23, 172-174 · agent3_control.py:66-153</span></li>
+        <li><code>LLM_AGENT3_MODEL_NAME</code> mặc định rỗng nên Agent 3 dùng cùng mô hình, cùng endpoint với Agent 2.<span class="ev">platform/config.py:88-89 · agents/llm_tools.py:71-72</span></li>
+        <li>Không có mô hình thách thức nào được huấn luyện; repo không có mã huấn luyện hay file mô hình tín dụng (chỉ có mô hình khuôn mặt).<span class="ev">grep sklearn/lightgbm/xgboost: không có</span></li>
+        <li>Pha 1 không đọc tờ trình nhưng vẫn thấy phương án đề xuất và toàn bộ bảng tính giống Agent 2.<span class="ev">agent3_control.py:317-325, 451</span></li>
+        <li>AML-STR-01 luôn trả True vì chưa có dữ liệu ngân hàng trước khoản vay.<span class="ev">agent3_control.py:126-128</span></li>
+      </ul></div>
+      <div class="pane prop"><h4>Đề xuất chốt</h4><dl class="rules">
+        <div class="rule"><dt>Lớp ①</dt><dd>Quy tắc tất định rules-v1.2 giữ nguyên làm sàn.</dd></div>
+        <div class="rule"><dt>Lớp ②</dt><dd>Mô hình thách thức (scorecard WoE + LightGBM đơn điệu) huấn luyện riêng, trên đặc trưng không giao với Agent 2: đồ thị chung chủ/SĐT/nhà cung cấp, tỷ lệ hoàn đơn, độ lệch giá, hành vi tra cứu tín dụng, điểm FATE. Agent 2 giữ doanh thu thuế, kế hoạch, bảng B1–B12.</dd></div>
+        <div class="rule"><dt>Lớp ③</dt><dd>LLM khác họ mô hình với Agent 2; server từ chối khởi động nếu hai tên trùng nhau ở môi trường thật.</dd></div>
+        <div class="rule"><dt>Niêm phong</dt><dd>Pha 1 không được thấy phương án đề xuất; chỉ mở sau khi niêm phong.</dd></div>
+        <div class="rule"><dt>Kiểm chứng</dt><dd>Test kiến trúc khẳng định hai danh sách đặc trưng không giao nhau; báo cáo độ tương quan lỗi giữa hai bên trong hậu kiểm.</dd></div>
+      </dl></div>
+    </div>
+    <p class="gap"><b>Chỗ hở:</b> ở cấu hình mặc định, phản biện là cùng một mô hình đọc cùng dữ liệu, nên hai bên sai cùng kiểu.</p>
+    <p class="todo"><b>Việc trong code:</b> thêm <code>core/challenger.py</code> và mã huấn luyện ngoài đường chạy; bỏ <code>option</code> khỏi gói pha 1; kiểm tra tên mô hình khi khởi động trong <code>main.py</code>.</p>
+  </article>
+
+  <article class="issue" id="i3">
+    <div class="issue-head"><span class="n">03</span><h3>Tách Agent 4 thành 4a giải ngân và 4b giám sát</h3><span class="chip missing">● Chưa có</span></div>
+    <div class="cols">
+      <div class="pane now"><h4>Code hôm nay</h4><ul>
+        <li>Một module làm cả hai: <code>disburse()</code> và <code>tick()</code> giám sát cùng file, cùng khóa <code>LOAN_LOCK</code>.<span class="ev">agents/agent4_disburse.py:61, 172-223, 1116-1179</span></li>
+        <li>Vòng autopilot chạy mỗi vòng gọi <code>flush_outbox</code>, hàm này giải ngân các lệnh đang chờ, không qua kiểm tra vai trò như route HTTP (admin).<span class="ev">autopilot/loop.py:98-100 · blockchain/chain.py:210-219 · api/chain_api.py:181-188</span></li>
+        <li>Mọi lệnh gọi chuỗi dùng chung một token, mọi bản ghi ký bằng một khóa HMAC.<span class="ev">blockchain/chain_remote.py:183 · platform/ledger_key.py</span></li>
+        <li>Giám sát vẫn di chuyển tiền: trích nợ và chuyển cho ngân hàng.<span class="ev">agent4_disburse.py:424, 450</span></li>
+        <li>Có chống giải ngân trùng: requestId cố định, khoản vay thứ hai bị chặn 409.<span class="ev">agent4_disburse.py:207, 315-317</span></li>
+      </ul></div>
+      <div class="pane prop"><h4>Đề xuất chốt</h4><dl class="rules">
+        <div class="rule"><dt>4a</dt><dd>Chạy khi hợp đồng được ký. Bộ điều phối cấp token giải ngân gắn <code>app_id</code>, số tiền, người nhận, hạn 15 phút. Ghi <code>disbursement</code> xong thì thu hồi token và kết thúc.</dd></div>
+        <div class="rule"><dt>Thất bại</dt><dd>Giải ngân lỗi quá hạn token thì chuyển cán bộ cấp lại, không để vòng lặp tự thử.</dd></div>
+        <div class="rule"><dt>4b</dt><dd>Chạy theo lịch suốt đời khoản vay, kết nối DB chỉ đọc, chỉ ghi bảng cảnh báo và thông báo. Không import được module tiền (test kiến trúc).</dd></div>
+        <div class="rule"><dt>Trích nợ</dt><dd>Chuyển thành lệnh định kỳ trong core banking, ký một lần lúc giải ngân với trần tỷ lệ trích; 4b chỉ đọc biên nhận.</dd></div>
+        <div class="rule"><dt>Khóa</dt><dd>Mỗi tác tử một danh tính và một khóa ký riêng trên chuỗi.</dd></div>
+      </dl></div>
+    </div>
+    <p class="gap"><b>Chỗ hở:</b> tiến trình chạy nhiều tháng đang giữ quyền giải ngân, cùng token và cùng khóa với lệnh chi tiền.</p>
+    <p class="todo"><b>Việc trong code:</b> tách <code>agent4_disburse.py</code> thành <code>agent4a_payout.py</code> và <code>agent4b_monitor.py</code>; bỏ nhánh <code>disburse</code> khỏi <code>flush_outbox</code> trong vòng lặp; thêm bảng token có hạn và thu hồi.</p>
+  </article>
+
+  <article class="issue" id="i4">
+    <div class="issue-head"><span class="n">04</span><h3>Luồng xử lý khiếu nại</h3><span class="chip missing">● Chưa có</span></div>
+    <div class="cols">
+      <div class="pane now"><h4>Code hôm nay</h4><ul>
+        <li>Kênh khiếu nại chỉ là chuỗi chữ trong tham số, in vào bảng chi phí và trang văn bản.<span class="ev">core/params.py:61 · agents/contract.py:153 · giaodien/van-ban/ngan-hang-hop-tac.html:22</span></li>
+        <li>Không có route, bảng hay trạng thái khiếu nại. Gần nhất là “yêu cầu người xem xét”, chỉ có tác dụng trước quyết định hoặc khi cổng tự từ chối.<span class="ev">api/applications.py:481-486 · agent3_control.py:751-772</span></li>
+        <li>Lý do từ chối có dạng <code>{law, factor, fix}</code>; màn hình hiện factor và fix, không hiện law, không hiện kênh khiếu nại.<span class="ev">agent3_control.py:656-738 · workspace-v4.js:175-176</span></li>
+        <li>Không có thời hạn phản hồi; <code>expected_review_at</code> giao diện đọc nhưng backend không bao giờ đặt.<span class="ev">workspace-v4.js:173</span></li>
+      </ul></div>
+      <div class="pane prop"><h4>Đề xuất chốt</h4><dl class="rules">
+        <div class="rule"><dt>Tiếp nhận</dt><dd>Phiếu có mã từ app, tổng đài 95384, email; phân loại: từ chối, hạ hạn mức, phí và lãi, trích nợ, dữ liệu cá nhân.</dd></div>
+        <div class="rule"><dt>Lý do</dt><dd>Tự gửi lý do đã ghi trong hồ sơ (factor, law, fix và các mã giảm hạn mức) ngay khi mở phiếu, trừ ca AML phải giữ kín theo luật.</dd></div>
+        <div class="rule"><dt>Chuyển người</dt><dd>Mọi phiếu về từ chối hoặc hạ hạn mức đến một cán bộ khác người đã quyết; cán bộ có thể giữ, sửa quyết định, hoặc mở lại hồ sơ.</dd></div>
+        <div class="rule"><dt>Thời hạn</dt><dd>Xác nhận ≤ 1 ngày làm việc; trả lời có lý do ≤ 5 ngày làm việc; cần xác minh thêm thì báo trước, tối đa 15 ngày. Quá hạn tự leo thang lên trưởng nhóm.</dd></div>
+        <div class="rule"><dt>Vòng lặp</dt><dd>Agent 5 thống kê khiếu nại theo lý do và quy tắc để đề xuất sửa quy tắc.</dd></div>
+      </dl></div>
+    </div>
+    <p class="gap"><b>Chỗ hở:</b> bảng công khai chi phí hứa một kênh khiếu nại mà không ai nhận việc và không có cam kết thời gian.</p>
+    <p class="todo"><b>Việc trong code:</b> bảng <code>bu_complaints</code> và route <code>/v4/complaints</code>; hàng đợi cán bộ có đồng hồ thời hạn; hiện kênh khiếu nại trên màn từ chối; đặt <code>expected_review_at</code>.</p>
+  </article>
+
+  <article class="issue" id="i5">
+    <div class="issue-head"><span class="n">05</span><h3>Khởi động lạnh của FATE</h3><span class="chip missing">● Chưa có</span></div>
+    <div class="cols">
+      <div class="pane now"><h4>Code hôm nay</h4><ul>
+        <li>FATE trả một số nguyên 1–5 và <code>run_id</code>; không có độ phủ hay độ tin cậy.<span class="ev">data_sources/sources.py:376-397</span></li>
+        <li>Thiếu điểm thì gán bậc 5 (0/15 điểm) và gắn cờ <code>DATA_PARTNER_MISSING</code>, khiến RISK-02 không cho duyệt tự động.<span class="ev">agent1_verify.py:292-297, 326-328, 370-373 · core/params.py:68</span></li>
+        <li>Chỉ có hai loại người vay: hộ kinh doanh và doanh nghiệp. Người bán cá nhân chưa ĐKKD bị từ chối ở bước 2; dưới 12 tháng doanh thu thuế bị loại.<span class="ev">api/applications.py:46 · agent1_verify.py:150-158, 281-286</span></li>
+        <li>Tham số Tầng 1 và <code>tier2.absolute_cap</code> có trong bảng nhưng không code nào dùng.<span class="ev">core/params.py:22-33</span></li>
+      </ul></div>
+      <div class="pane prop"><h4>Đề xuất chốt</h4><dl class="rules">
+        <div class="rule"><dt>Đo độ phủ</dt><dd>FATE trả thêm <code>coverage</code>: số ngân hàng có quan hệ ≥ 6 tháng. Dưới 2 trong 3 ngân hàng là “tín hiệu mỏng”.</dd></div>
+        <div class="rule"><dt>Điểm thay thế</dt><dd>15 điểm FATE chia đều cho bốn tín hiệu đã có trong hệ thống: tháng nộp thuế đúng hạn, độ ổn định doanh thu, đánh giá cửa hàng, tuổi gian hàng.</dd></div>
+        <div class="rule"><dt>Trần thấp</dt><dd>Hạn mức = MIN(mức tính được, 0,5 × doanh thu tháng bình quân, 50.000 tệ); không duyệt tự động khi đồng thời có cờ RISK khác.</dd></div>
+        <div class="rule"><dt>Phân biệt</dt><dd>Mỏng khác thiếu: FATE lỗi kết nối vẫn đi đường <code>DATA_PARTNER_MISSING</code> như hiện nay.</dd></div>
+      </dl></div>
+    </div>
+    <p class="gap"><b>Chỗ hở:</b> khách mục tiêu ít quan hệ ngân hàng bị chấm như người xấu, còn điểm FATE dựng trên rất ít quan hệ được tin như điểm mạnh.</p>
+    <p class="todo"><b>Việc trong code:</b> mở rộng hợp đồng FATE; thêm khối điểm thay thế ở <code>core/algorithm.py</code> B6; thêm trần <code>thin_fate</code> vào B8.</p>
+  </article>
+
+  <article class="issue" id="i6">
+    <div class="issue-head"><span class="n">06</span><h3>Lấp lỗ hổng xác minh doanh thu</h3><span class="chip partial">◐ Có một phần</span></div>
+    <div class="cols">
+      <div class="pane now"><h4>Code hôm nay</h4><ul>
+        <li>Mọi con số doanh thu lấy từ thuế; thiếu nguồn thuế thì chuyển cán bộ.<span class="ev">data_sources/profiles.py:96-97, 175-176 · agent1_verify.py:279-280, 317-320</span></li>
+        <li>Ảnh chụp doanh thu tùy chọn (tối đa 6 tháng); khớp thuế trong 15% thì cộng 0,05 hệ số thận trọng, lệch quá 30% thì gắn cờ. Ảnh không bao giờ thay được thuế.<span class="ev">sources.py:243-261 · algorithm.py:114-115 · params.py:51</span></li>
+        <li>Không có khoản vay mồi. Người chưa từng vay ở nhóm 3, trần nhóm 0,5 × doanh thu tháng.<span class="ev">algorithm.py:72-81 · params.py:45</span></li>
+        <li>Trả tốt chỉ đưa lên nhóm 1 (trần 3,0×). Dòng tiền về TK WeBank được theo dõi sau giải ngân nhưng không quay lại chấm điểm.<span class="ev">agent1_verify.py:263-271 · agent4_disburse.py:615-638</span></li>
+        <li>Cờ RISK_INFLOW_GAP và RISK_PASS_THROUGH có ngưỡng và số liệu nhưng không bao giờ được bật.<span class="ev">params.py:79-82 · profiles.py:189-195</span></li>
+      </ul></div>
+      <div class="pane prop"><h4>Đề xuất chốt</h4><dl class="rules">
+        <div class="rule"><dt>Khoản đầu</dt><dd>Doanh thu xác minh bằng thuế 12 tháng. Hạn mức = 50% mức tính được (khoản vay mồi). Đây là quyết định có chủ đích, ghi rõ trong bảng chi phí.</dd></div>
+        <div class="rule"><dt>Khoản 2</dt><dd>Cần khoản trước trả đúng hạn và ≥ 3 tháng dòng tiền về TK WeBank. Hạn mức = 75%; doanh thu xác minh = MIN(thuế, dòng tiền WeBank × hệ số quy đổi).</dd></div>
+        <div class="rule"><dt>Từ khoản 3</dt><dd>100% mức tính được; lãi giảm một bậc khi dòng tiền WeBank ổn định 6 tháng.</dd></div>
+        <div class="rule"><dt>Cờ</dt><dd>Bật RISK_INFLOW_GAP và RISK_PASS_THROUGH bằng ngưỡng đã có; từ khoản 2 chúng đọc dòng tiền WeBank thật.</dd></div>
+      </dl></div>
+    </div>
+    <p class="gap"><b>Chỗ hở:</b> khoản đầu tiên tin hoàn toàn vào số thuế tự khai, và hệ thống chưa dùng dòng tiền thật để nâng hay hạ hạn mức.</p>
+    <p class="todo"><b>Việc trong code:</b> hệ số <code>seed.ratio</code> theo số khoản đã trả ở B8; đưa <code>inflow_total</code> của Agent 4b vào doanh thu xác minh; bật hai cờ ở <code>agent1_verify.py</code>.</p>
+  </article>
+
+  </div>
+</section>
+
+<section aria-labelledby="par-title">
+  <div class="section-head"><p class="eyebrow">Đã đưa vào bảng tham số</p><h2 id="par-title">Tham số mới</h2>
+  <p class="lede">Toàn bộ đi vào bảng tham số có phiên bản như các tham số hiện tại, đổi qua quy trình admin duyệt của Agent 5.</p></div>
+  <div class="table-wrap"><table class="params">
+    <thead><tr><th>Mục</th><th>Tham số</th><th>Đề xuất</th><th>Ý nghĩa</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>arbitration.max_rounds</td><td>2</td><td>Trần số vòng tranh luận Agent 2 ↔ Agent 3</td></tr>
+      <tr><td>1</td><td>arbitration.on_disagree</td><td>smaller → reject</td><td>Hạ về mức Agent 3 chấp nhận; không có mức nào thì từ chối</td></tr>
+      <tr><td>2</td><td>agent3.require_distinct_model</td><td>true</td><td>Khởi động thất bại nếu LLM của Agent 3 trùng Agent 2 (môi trường thật)</td></tr>
+      <tr><td>3</td><td>payout.token_ttl_min</td><td>15</td><td>Hạn của token giải ngân dùng một lần (phút)</td></tr>
+      <tr><td>4</td><td>complaint.ack_days</td><td>1</td><td>Xác nhận tiếp nhận (ngày làm việc)</td></tr>
+      <tr><td>4</td><td>complaint.answer_days</td><td>5</td><td>Trả lời có lý do (ngày làm việc)</td></tr>
+      <tr><td>4</td><td>complaint.max_days</td><td>15</td><td>Trần khi cần xác minh thêm (ngày)</td></tr>
+      <tr><td>5</td><td>fate.thin_min_banks</td><td>2</td><td>Dưới mức này trong 3 ngân hàng là tín hiệu mỏng</td></tr>
+      <tr><td>5</td><td>fate.thin_cap_mult</td><td>0,5</td><td>Trần theo doanh thu tháng bình quân khi tín hiệu mỏng</td></tr>
+      <tr><td>5</td><td>fate.thin_cap_abs</td><td>50.000 tệ</td><td>Trần tuyệt đối khi tín hiệu mỏng</td></tr>
+      <tr><td>6</td><td>seed.ratio</td><td>0,50 · 0,75 · 1,0</td><td>Tỷ lệ hạn mức cho khoản 1, khoản 2, từ khoản 3</td></tr>
+      <tr><td>6</td><td>seed.min_webank_months</td><td>3</td><td>Số tháng dòng tiền về TK WeBank để nâng lên khoản 2</td></tr>
+      <tr><td>6</td><td>seed.min_inflow_share</td><td>0,80</td><td>Tiền về TK WeBank bình quân tối thiểu so với doanh thu thuế</td></tr>
+      <tr><td>2</td><td>challenger.smaller_at · escalate_at</td><td>0,30 · 0,60</td><td>Xác suất vỡ nợ của mô hình thách thức để hạ mức / chuyển cán bộ</td></tr>
+      <tr><td>4</td><td>complaint.review_days</td><td>2</td><td>Ngày làm việc tới hạn cán bộ xem hồ sơ đã chuyển (hiện cho người bán)</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section aria-labelledby="impl-title">
+  <div class="section-head"><p class="eyebrow">Triển khai</p><h2 id="impl-title">Đã làm gì trong code</h2>
+  <p class="lede">Test backend: 320 đạt, 1 bỏ qua; 1 test cũ phụ thuộc ngày chạy (có từ trước, không liên quan). Thêm 38 test mới cho sáu điểm. Kiểm API và hai bộ kiểm giao diện của frontend đều đạt; luồng khiếu nại đã chạy thử trên trình duyệt (người bán gửi, cán bộ nhận và trả lời).</p></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>Mã nguồn</th><th>Test</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td><code>agents/agent3_control.py</code> phase2 nhiều vòng, <code>debate_round</code>, <code>gate_decision</code> mọi kết cục; <code>agent2_advise.answer_challenge</code></td><td><code>tests/test_arbitration.py</code></td></tr>
+      <tr><td class="num">2</td><td><code>core/challenger.py</code>, <code>core/models/challenger_v1.json</code>, <code>scripts/train_challenger.py</code>; kiểm độc lập mô hình khi khởi động</td><td><code>tests/test_arbitration.py</code></td></tr>
+      <tr><td class="num">3</td><td><code>agents/agent4a_payout.py</code>, <code>agents/agent4b_monitor.py</code>, <code>platform/capabilities.py</code>, bảng <code>bu_payout_grants</code></td><td><code>tests/test_agent4_split.py</code></td></tr>
+      <tr><td class="num">4</td><td><code>agents/complaints.py</code>, <code>api/complaints.py</code>, bảng <code>bu_complaints</code>, giao diện người bán và cán bộ</td><td><code>tests/test_complaints.py</code></td></tr>
+      <tr><td class="num">5–6</td><td><code>core/algorithm.py</code> (B6 điểm thay thế, B8 <code>thin_fate_cap</code>, <code>seed_cap</code>), <code>agents/agent1_verify.py</code>, kịch bản demo <code>thin</code></td><td><code>tests/test_fate_thin_seed.py</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section aria-labelledby="open-title" class="open">
+  <div class="section-head"><p class="eyebrow">Câu hỏi mở · cách đã xử lý</p><h2 id="open-title">Bốn điểm nhóm cần xác nhận</h2></div>
+  <ol>
+    <li><b>Người bán cá nhân chưa ĐKKD:</b> chưa mở. Code vẫn từ chối ở bước 2; nhánh FATE mỏng và khoản vay mồi đã sẵn để mở khi nhóm quyết.</li>
+    <li><b>Dữ liệu huấn luyện mô hình thách thức:</b> dùng dữ liệu tổng hợp, file mô hình ghi <code>simulated: true</code> (AUC kiểm tra 0,70). Phải huấn luyện lại trên nhãn trả nợ thật.</li>
+    <li><b>Trích nợ trong demo:</b> chạy dưới vai trò <code>standing_order</code> (mô phỏng lệnh định kỳ của core banking), tách khỏi 4b; 4b gọi hàm tiền sẽ bị từ chối.</li>
+    <li><b>Ca AML:</b> phiếu khiếu nại nhận lời văn trung tính, không nêu lý do chi tiết.</li>
+  </ol>
+  <p class="lede">Ảnh hưởng tới demo: chị Lan vay lần đầu nay được 100.000 tệ (khoản vay mồi 50% của 200.000), không còn 200.000.</p>
+</section>
+
+<footer>
+  <span>Nguồn: rà soát code BuoyUp v4 tại BackEnd/src/app ngày 16/10/2026, đối chiếu “SellerGraph Core Tech” bản 28.09.2026.</span>
+  <span>Đã triển khai ngày 16/10/2026; số liệu tham số chỉnh được qua quy trình duyệt của Agent 5.</span>
+</footer>
+
+</div>

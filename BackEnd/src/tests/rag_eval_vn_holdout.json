@@ -1,0 +1,22 @@
+[
+ {"q": "cập nhật thông tin khách hàng định kỳ", "gold": ["PCRT-2022#11"]},
+ {"q": "ngân hàng đại lý và phòng chống rửa tiền", "gold": ["PCRT-2022#18"]},
+ {"q": "chuyển tiền điện tử phải kèm thông tin người gửi", "gold": ["PCRT-2022#34"]},
+ {"q": "bảo mật thông tin báo cáo phòng chống rửa tiền", "gold": ["PCRT-2022#40", "PCRT-2022#63"]},
+ {"q": "phong tỏa tài khoản liên quan rửa tiền", "gold": ["PCRT-2022#45"]},
+ {"q": "hành vi bị nghiêm cấm trong phòng chống rửa tiền", "gold": ["PCRT-2022#8"]},
+ {"q": "dấu hiệu đáng ngờ khi kinh doanh bất động sản", "gold": ["PCRT-2022#33"]},
+ {"q": "customer identification information for individuals", "gold": ["PCRT-2022#10", "PCRT-2022#9"]},
+ {"q": "giao dịch có giá trị lớn", "gold": ["PCRT-2022#25"]},
+ {"q": "chuyển tài sản của nhà đầu tư nước ngoài ra nước ngoài", "gold": ["DT-2025#11"]},
+ {"q": "giải quyết tranh chấp đầu tư kinh doanh", "gold": ["DT-2025#13"]},
+ {"q": "góp vốn mua cổ phần của nhà đầu tư nước ngoài", "gold": ["DT-2025#21"]},
+ {"q": "kinh doanh dịch vụ xoa bóp", "gold": ["DT-2025#PL4-8", "DT-2025#7"]},
+ {"q": "sản xuất hàng giả mạo nhãn hàng hóa", "gold": ["ND98-2020#12"]},
+ {"q": "bán thuốc lá không có giấy phép", "gold": ["ND98-2020#23"]},
+ {"q": "đầu cơ hàng hóa", "gold": ["ND98-2020#31"]},
+ {"q": "găm hàng", "gold": ["ND98-2020#32"]},
+ {"q": "vi phạm trong giao dịch trên không gian mạng với người tiêu dùng", "gold": ["ND98-2020#53a"]},
+ {"q": "thẩm quyền xử phạt của quản lý thị trường", "gold": ["ND98-2020#82"]},
+ {"q": "hang gia mao nhan hieu bi phat bao nhieu", "gold": ["ND98-2020#11", "ND98-2020#12"]}
+]
