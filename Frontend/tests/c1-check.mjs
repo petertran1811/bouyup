@@ -107,7 +107,7 @@ await check('Bearer header, public isolation, contract errors, 401 redirects, ne
   e.ctx.fetch = async () => { throw new TypeError('offline'); };
   await assert.rejects(e.ctx.BU.api.auth.login({}), err => err.code === 'NETWORK' && err.status === 0);
 });
-function authEnv(register = false) {
+function authEnv(register = false, before = null) {
   const e = env(register ? 'register.html' : 'login.html');
   e.doc.body.dataset.authPage = register ? 'register' : 'login';
   const form = new Element(), submit = new Element(), label = new Element('Đăng nhập');
@@ -123,6 +123,7 @@ function authEnv(register = false) {
   e.elements.get('error').hidden = true;
   load(e, 'bu/api.js'); load(e, 'bu/session.js');
   e.ctx.BU.motion = { init() {}, theme: () => 'light', setTheme() {} };
+  if (before) before(e);
   load(e, 'bu/auth-pages.js');
   return { ...e, form, submit, label, fields };
 }
@@ -153,6 +154,37 @@ await check('register payload, success, password confirmation, terms and field e
   await e.form.trigger('submit'); assert.equal(payload.accept_terms, true); assert.equal(payload.phone, undefined); assert.equal(payload.confirm_password, undefined);
   assert.equal(e.navigations.at(-1), 'workspace.html'); assert.equal(e.submit.disabled, false);
 });
+await check('sign-up without a face: the SMS OTP box verifies the phone and register sends otp_verified', async () => {
+  const otpCalls = [];
+  const e = authEnv(true, env => {
+    env.ctx.BU.face = { enroll: async () => { throw Object.assign(new Error('Dùng mã OTP thay thế'), { code: 'USE_OTP' }); } };
+    env.ctx.BU.otp = { normalize: v => String(v).replace(/\D/g, '') === '0912345678' || String(v) === '+84912345678' ? '+84912345678' : null,
+      verify: async o => { otpCalls.push(o); if (otpCalls.length === 1) throw Object.assign(new Error('Đã hủy'), { code: 'CANCELLED' });
+        return { method: 'otp', phone: '+84912345678', phone_masked: '•••• 678', verified_at: '2026-10-18T00:00:00Z' }; } };
+  });
+  e.fields.email.value = 'otp@example.com'; e.fields.display_name.value = 'Chị Mai'; e.fields.password.value = 'BuoyUp@2026';
+  e.fields.confirm_password.value = 'BuoyUp@2026'; e.fields.accept_terms.checked = true; e.fields.phone.value = '0912 345 678';
+  let payload = null;
+  e.ctx.fetch = async (_, init) => { payload = JSON.parse(init.body); return response(201, sessionFor('seller')); };
+  await e.form.trigger('submit');
+  assert.equal(payload, null, 'a cancelled OTP does not register'); assert.equal(e.elements.get('error').hidden, false);
+  assert.match(e.elements.get('error').textContent, /mã OTP/);
+  await e.form.trigger('submit');
+  assert.equal(otpCalls.length, 2); assert.equal(otpCalls[1].editable, true); assert.equal(otpCalls[1].phone, '0912 345 678');
+  assert.equal(payload.otp_verified, true); assert.equal(payload.phone, '+84912345678'); assert.equal(payload.face_enroll_id, undefined);
+  assert.equal(e.navigations.at(-1), 'workspace.html');
+});
+await check('face login that cannot be checked goes back to the password form (no OTP-only login)', async () => {
+  const button = new Element();
+  const e = authEnv(false, env => {
+    env.elements.set('face-login', button);
+    env.ctx.BU.face = { login: async () => { throw Object.assign(new Error('Đăng nhập bằng mật khẩu'), { code: 'USE_PASSWORD' }); } };
+  });
+  e.fields.email.value = 'lan@buoyup.vn';
+  await button.trigger('click');
+  assert.equal(e.elements.get('error').hidden, false); assert.match(e.elements.get('error').textContent, /email và mật khẩu/);
+  assert.equal(e.fields.password.focused, true); assert.equal(e.navigations.length, 0);
+});
 await check('credentials, rate-limit and network errors stay inline without navigation', async () => {
   const e = authEnv(); e.fields.email.value = 'test@example.com'; e.fields.password.value = 'wrong';
   for (const [status, code] of [[401,'INVALID_CREDENTIALS'],[429,'RATE_LIMITED']]) {
@@ -172,7 +204,7 @@ await check('reduced motion: Vietnamese numbers, no frames, static reveals and p
   e.media.matches = false; e.doc.hidden = true; e.ctx.BU.motion.init(e.doc);
   assert.equal(e.frames.size, 0); assert.equal(video.paused, true);
 });
-await check('homepage uses API stats/banks, simulation labels, unavailable retry', async () => {
+await check('homepage uses API stats/banks, no simulation labels, unavailable retry', async () => {
   const e = env('index.html');
   for (const key of ['.marketing-theme','.burger','mobile-menu','[data-menu-overlay]','.bg-video','public-banks','public-stats','overview-status','overview-retry','simulation-badge','bank-simulation-badge']) e.elements.set(key, new Element());
   e.elements.get('mobile-menu').querySelector = () => new Element();
@@ -183,11 +215,11 @@ await check('homepage uses API stats/banks, simulation labels, unavailable retry
   assert.equal(e.elements.get('public-banks').children.length, overview.banks.length);
   assert.equal(e.elements.get('public-banks').children[0].textContent, overview.banks[0].name);
   assert.equal(e.elements.get('public-stats').children[0].children[0].textContent, new Intl.NumberFormat('vi-VN').format(overview.stats.sellers));
-  assert.equal(e.elements.get('simulation-badge').hidden, false); assert.equal(e.elements.get('bank-simulation-badge').hidden, false);
+  assert.equal(e.elements.get('overview-status').textContent, 'Đã cập nhật từ hệ thống.'); assert(!/mô phỏng|demo/i.test(e.elements.get('overview-status').textContent));
   e.ctx.fetch = async () => response(404, { error: {code:'NOT_FOUND',message:'Unavailable'} });
   await e.elements.get('overview-retry').trigger('click');
   assert.equal(e.elements.get('overview-retry').hidden, false); assert.equal(e.elements.get('public-stats').children.length, 1);
-  assert.match(e.elements.get('public-stats').children[0].textContent, /kết nối/); assert.equal(e.elements.get('simulation-badge').hidden, true);
+  assert.match(e.elements.get('public-stats').children[0].textContent, /kết nối/); assert(!/mô phỏng/i.test(e.elements.get('overview-status').textContent));
 });
 await check('shell mounts role navigation, escapes identity, mobile menu and logout', async () => {
   const e = env('bank.html'); load(e, 'bu/api.js'); load(e, 'bu/session.js');
@@ -225,7 +257,7 @@ await check('bank portal validates identity, uses authorized figures, and shows 
   load(e, 'bu/bank.js'); await settle();
   assert.match(main.markup, /Mỗi ngân hàng chỉ thấy phần của mình/);
   assert.match(main.markup, /55\.960 tệ/); assert.match(main.markup, /4\.944\.040 tệ/);
-  assert.match(main.markup, /Mô phỏng/); assert(!main.markup.includes('Phê duyệt ngân hàng'));
+  assert(!/mô phỏng/i.test(main.markup)); assert(!main.markup.includes('Phê duyệt ngân hàng'));
   assert(!main.markup.includes('<script>unsafe</script>')); assert.match(main.markup, /&lt;script&gt;unsafe/);
   assert.match(main.markup, /Duyệt song song/); assert.match(main.markup, /Đồng ý/); assert.match(main.markup, /1,5 giây/);
   assert.match(main.markup, /Ngân hàng dẫn đầu/); assert.match(main.markup, /Doanh nghiệp/); assert.match(main.markup, /40%/);
@@ -287,11 +319,11 @@ for (const remote of [true,false]) {
  return response(404,{});
  };
  load(e,'bu/bank.js');await settle();
- assert(main.markup.includes('Chuỗi thật'));assert(main.markup.includes('Mô phỏng'));
+ assert(main.markup.includes('Chuỗi thật'));assert(main.markup.includes('Chuỗi cục bộ'));assert(!/mô phỏng/i.test(main.markup));
  assert(main.markup.includes('rel="noopener noreferrer"'));assert(!main.markup.includes('javascript:'));
  assert.equal(main.markup.includes('Điều khoản trên chuỗi'),remote);
  assert.equal(main.markup.includes('name="max_rate"'),!remote);
- if(remote){assert(main.markup.includes('Tiền trả nợ mô phỏng'));assert(main.markup.includes('&lt;img onerror=bad&gt;'));assert(main.markup.includes('0,1'));}
+ if(remote){assert(main.markup.includes('&lt;img onerror=bad&gt;'));assert(main.markup.includes('0,1'));}
  const button=new Element(),form=new Element();form.id='bank-policy';form.querySelector=()=>button;
  const vals={min_grade:'C',tiers:['1'],excluded_groups:[],min_amount:'500',max_amount:'500000',min_share:'.3',max_rate:'.15',exclude_industries:['điện tử'],borrower_types:['individual_business'],max_tenor_m:'12',max_late_days:'30'};
  e.ctx.FormData=class{get(k){return vals[k]}getAll(k){return vals[k]}};

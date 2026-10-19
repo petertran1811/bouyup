@@ -42,4 +42,10 @@ def overview(session: Session = Depends(get_session)) -> dict:
 def demo_stores() -> dict:
     if settings.app_env not in ("dev", "demo", "test"):
         raise api_error(404, "NOT_FOUND", "Không có danh sách cửa hàng mẫu ở môi trường này.")
-    return {"stores": sources.demo_stores(), "simulated": True}
+    return {"stores": sources.demo_stores(), "simulated": True, "seed_note": sources.SEED_NOTE}
+
+
+@router.get("/features")
+def features() -> dict:
+    """Switches the seller app reads at start-up (e.g. CCCD OCR at the identity step, CCCD_OCR_REQUIRED)."""
+    return {"cccd_ocr": bool(settings.cccd_ocr_required)}

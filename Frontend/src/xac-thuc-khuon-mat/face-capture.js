@@ -3,7 +3,10 @@
  * decides what is captured. BU.face.enroll() resolves with an enroll_id for /auth/register,
  * BU.face.login(email?) with a session like /auth/login, BU.face.verify() (signed in: 1:1 re-check against
  * the registered face) with a verify_id. They reject with code CANCELLED; enroll() and verify() also with
- * FACE_UNAVAILABLE / FACE_NOT_ENROLLED when the server cannot check a face. */
+ * FACE_UNAVAILABLE / FACE_NOT_ENROLLED when the server cannot check a face.
+ * The box always offers a way out instead of the face: "Dùng mã OTP thay thế" (enroll, verify; rejects with
+ * code USE_OTP, the caller then opens BU.otp.verify from otp-sms.js) or "Đăng nhập bằng mật khẩu" (login;
+ * code USE_PASSWORD). After a camera error, no face model, a failed or timed-out scan it is suggested. */
 (function (global) {
   'use strict';
   var BU = global.BU = global.BU || {};
@@ -44,11 +47,12 @@
       '<div class="face-progress" aria-hidden="true"><span></span></div>' +
       '<div class="face-actions"><button type="button" class="face-cancel">Hủy</button>' +
       '<button type="button" class="face-retry auth-submit" hidden><span>Thử lại</span><span aria-hidden="true">↻</span></button></div>' +
+      '<p class="face-alt-note" hidden></p><button type="button" class="face-alt" hidden></button>' +
       '<p class="face-privacy">Khung hình được gửi tới máy chủ BuoyUp để nhận diện. BuoyUp lưu đặc trưng ArcFace và ảnh khuôn mặt đã căn chỉnh của bạn để đăng nhập; video không được ghi lại.</p>';
     document.body.appendChild(dialog);
     var q = function (sel) { return dialog.querySelector(sel); };
     return { dialog: dialog, title: q('#face-title'), sub: q('.face-sub'), video: q('.face-video'), stage: q('.face-stage'),
-      hint: q('.face-hint'), bar: q('.face-progress span'), cancel: q('.face-cancel'), retry: q('.face-retry'),
+      hint: q('.face-hint'), bar: q('.face-progress span'), cancel: q('.face-cancel'), retry: q('.face-retry'), alt: q('.face-alt'), altNote: q('.face-alt-note'),
       segs: Array.prototype.slice.call(dialog.querySelectorAll('.face-seg')), canvas: document.createElement('canvas') };
   }
 
@@ -92,9 +96,16 @@
     return error;
   }
 
+  // The way out of the face box: an SMS OTP (sign-up, re-checks) or the password form (login).
+  var ALT = {
+    otp: { code: 'USE_OTP', label: 'Dùng mã OTP thay thế', note: 'Không quét được khuôn mặt? Bạn có thể xác thực bằng mã OTP gửi qua SMS.' },
+    password: { code: 'USE_PASSWORD', label: 'Đăng nhập bằng mật khẩu', note: 'Không nhận diện được? Bạn có thể đăng nhập bằng email và mật khẩu.' }
+  };
+  function altFor(mode) { return mode === 'login' ? ALT.password : BU.otp ? ALT.otp : null; }
+
   function run(mode, email) {
     ui = ui || build();
-    var conf = MODES[mode], login = !!conf.challenge;
+    var conf = MODES[mode], login = !!conf.challenge, alt = altFor(mode);
     // One state per run; an older run that is still awaiting never touches the dialog again.
     var state = { stopped: false, stream: null, busy: false };
     ui.current = state;
@@ -102,6 +113,11 @@
     ui.title.textContent = conf.title;
     ui.sub.textContent = conf.sub;
     ui.dialog.classList.toggle('is-login', login);
+    ui.alt.hidden = !alt;
+    ui.alt.textContent = alt ? alt.label : '';
+    ui.alt.classList.remove('is-suggested');
+    ui.altNote.hidden = true;
+    ui.altNote.textContent = alt ? alt.note : '';
 
     return new Promise(function (resolve, reject) {
       function stop() {
@@ -121,19 +137,27 @@
         finish(cancelled);
       }
       function retry() { attempt(); }
+      function other() {
+        var instead = new Error(alt.label); instead.code = alt.code;
+        finish(instead);
+      }
       function cleanup() {
         ui.cancel.removeEventListener('click', cancel);
         ui.dialog.removeEventListener('cancel', cancel);
         ui.retry.removeEventListener('click', retry);
+        ui.alt.removeEventListener('click', other);
       }
       ui.cancel.addEventListener('click', cancel);
       ui.dialog.addEventListener('cancel', cancel);
       ui.retry.addEventListener('click', retry);
+      if (alt) ui.alt.addEventListener('click', other);
 
       async function attempt() {
         if (state.busy || !live()) return;
         state.busy = true;
         ui.retry.hidden = true;
+        ui.alt.classList.remove('is-suggested');
+        ui.altNote.hidden = true;
         ui.stage.classList.remove('is-ok', 'is-error');
         paint(null, null); ui.bar.style.width = '0%';
         say('Đang mở camera…');
@@ -183,7 +207,13 @@
           ui.stage.classList.add('is-error');
           say(error.message || 'Không thể xác thực khuôn mặt. Vui lòng thử lại.', 'error');
           ui.retry.hidden = false;
-          ui.retry.focus();
+          if (alt) {
+            // No camera, camera refused, no face model, not recognised, liveness failed, timed out: suggest the other way.
+            ui.alt.classList.add('is-suggested');
+            ui.altNote.hidden = false;
+          }
+          // Without a camera (or with no model on the server) another scan cannot work: focus the other way.
+          if (alt && (error.code === 'CAMERA' || error.code === 'FACE_UNAVAILABLE')) ui.alt.focus(); else ui.retry.focus();
         } finally { state.busy = false; }
       }
       if (!ui.dialog.open) ui.dialog.showModal();

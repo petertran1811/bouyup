@@ -19,6 +19,7 @@ CATS = {
     "03_llm_rag_legal": "LLM agents, RAG & legal citations (prompt injection)",
     "04_ledger_disburse": "Ledger & disbursement (FISCO, HMAC, double-pay)",
     "05_api_authz_multibank": "API authz & multi-bank (RBAC, validation, syndicate)",
+    "06_dossiers_bypass": "50 hồ sơ vay: trung thực → khai gian (luồng thật, CCCD + cam đoan)",
 }
 DIFF_ORDER = {"easy": 0, "medium": 1, "hard": 2, "unmarked": 3}
 

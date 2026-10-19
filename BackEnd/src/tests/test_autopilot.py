@@ -58,7 +58,7 @@ def test_paying_off_marks_agent5_due(bu_client, as_seller):
     _, loan_id = disburse_lan()
     autopilot._agent5_due.update(at=None, reason=None)
     lc.ok(bu_client.post(f"/v4/loans/{loan_id}/simulate-inflow", headers=as_seller, json={"amount": 60_000}))
-    r = bu_client.post(f"/v4/loans/{loan_id}/prepay", headers=as_seller, json={})
+    r = bu_client.post(f"/v4/loans/{loan_id}/prepay", headers=as_seller, json={"confirm": True})
     assert r.json()["status"] == "closed"
     assert autopilot._agent5_due["reason"] == "khoản vay tất toán"
     autopilot._agent5_due.update(at=None, reason=None)

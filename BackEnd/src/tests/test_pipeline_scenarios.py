@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.data_sources import sources
 from tests.lc import answer_all, start
 
 
@@ -81,7 +82,8 @@ def test_control_outcomes(bu_client, as_seller, as_officer, scenario, status, ki
 def test_electronics_single_partner(bu_client, as_seller):
     app = _run(bu_client, as_seller, "electronics")
     assert app["status"] == "offered"
-    assert [(s["bank"], s["pct"]) for s in app["syndicate"]["split"]] == [("WEBANK", 0.3), ("ICBC", 0.7)]
+    split = [s["bank"] for s in app["syndicate"]["split"]]
+    assert split[0] == "WEBANK" and "ICBC" in split and not {"CMB", "CCB"} & set(split)
 
 
 def test_nobank_rejected_by_orchestrator(bu_client, as_seller):
@@ -98,7 +100,21 @@ def test_young_out_of_scope(bu_client, as_seller):
 
 
 def test_other_rejected_id_mismatch(bu_client, as_seller):
-    app = start(bu_client, as_seller, "other")
+    """18/10/2026 (HANDOVER 16.7): "other" stops at the store connection (tests/test_shop_connect.py). Without that
+    requirement (this suite) the link is self-declared and the CCCD decides: the sample card is not Trần Vũ's."""
+    from app.platform.db.session import session_scope
+    from app.platform.tables import BuApplication, save_json
+
+    app = bu_client.post("/v4/applications", headers=as_seller, json={"store_urls": [sources.demo_url("other")]}).json()
+    with session_scope() as s:
+        row = s.get(BuApplication, app["id"])
+        doc = dict(row.doc)
+        doc["cccd_scans"] = {"front": {"fields": {"name": {"value": "示例用户"}, "id_number": {"value": "440106199001011235"},
+                                                  "id_number_validation": {"format_valid": True, "checksum_valid": True,
+                                                                           "birth_date": "1990-01-01"}}},
+                             "back": {"fields": {"validity_period": {"value": "2020.01.01-2040.01.01"}}}}
+        save_json(row, "doc", doc)
+    app = bu_client.post(f"/v4/applications/{app['id']}/identity", headers=as_seller, json={"cccd": True, "face": True}).json()
     assert app["status"] == "rejected" and app["verification"]["state"] == "REJECTED"
     assert "LAW_ID_MISMATCH" in {f["code"] for f in app["verification"]["flags"]}
-    assert "chính chị" in app["verification"]["reason"]["fix"]
+    assert "chính bạn" in app["verification"]["reason"]["fix"]

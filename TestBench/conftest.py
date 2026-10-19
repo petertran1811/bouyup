@@ -56,6 +56,11 @@ os.environ.update(
         "FACE_DATA_DIR": os.path.join(_TEST_DIR, "faces"),
         # Law retrieval lexical-only, as in BackEnd tests: no ~1 GB embedding-model download.
         "BUOYUP_RAG_DENSE": "0",
+        # Older cases post /identity and /plan without a CCCD scan or the declaration;
+        # 06_dossiers_bypass switches the real product checks on itself.
+        "CCCD_OCR_REQUIRED": "false",
+        "PLAN_DECLARATION_REQUIRED": "false",
+        "UPLOAD_DIR": os.path.join(_TEST_DIR, "uploads"),
     }
 )
 

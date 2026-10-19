@@ -37,6 +37,8 @@ from app.api.views import iso, now_iso, store, today
 from app.platform.guards import forbidden_phrases
 from app.platform.db.tables import utcnow
 from app.platform.llm.messages import LLMMessage
+from app.platform import i18n
+from app.platform.i18n import pick
 
 WHAT_IF_KEYS = ("own_capital", "inventory", "qty", "supplier")
 ORDINALS = ("Thứ nhất", "Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm")
@@ -46,31 +48,31 @@ MAX_INVALID_PROPOSALS = 3
 FACTORS: dict[str, dict[str, str]] = {
     "PRICE_FROM_INVOICE": {
         "title": "Giá nhập theo hóa đơn",
-        "say": "giá nhập được tính theo hóa đơn mua vào ba tháng gần nhất là {price} tệ, thay vì giá chị khai "
+        "say": "giá nhập được tính theo hóa đơn mua vào ba tháng gần nhất là {price} tệ, thay vì giá bạn khai "
                "{declared} tệ, nên nhu cầu vay giảm {v}.",
-        "up": "Nếu giá nhập thực tế đã đổi, chị gửi hóa đơn mới; hồ sơ sẽ quay lại bước xác minh trước khi "
+        "up": "Nếu giá nhập thực tế đã đổi, bạn gửi hóa đơn mới; hồ sơ sẽ quay lại bước xác minh trước khi "
               "tính lại."},
     "SUPPLIER_FACTOR": {
         "title": "Nhà cung cấp chưa có hóa đơn",
-        "say": "phần hàng của nhà cung cấp chưa có hóa đơn mua vào với chị được tính giảm, nên nhu cầu vay giảm {v}.",
-        "up": "Chọn nhà cung cấp đã có hóa đơn mua vào với chị giúp phần này được tính đủ."},
+        "say": "phần hàng của nhà cung cấp chưa có hóa đơn mua vào với bạn được tính giảm, nên nhu cầu vay giảm {v}.",
+        "up": "Chọn nhà cung cấp đã có hóa đơn mua vào với bạn giúp phần này được tính đủ."},
     "INVENTORY_AND_OWN_CAPITAL": {
         "title": "Tồn kho và vốn tự có",
-        "say": "phần tồn kho chị đang có và vốn chị tự bỏ vào được trừ khỏi nhu cầu vay, giảm {v}.",
+        "say": "phần tồn kho bạn đang có và vốn bạn tự bỏ vào được trừ khỏi nhu cầu vay, giảm {v}.",
         "up": "Đây là cách tính nhu cầu vốn, không phải điểm trừ. Bỏ thêm vốn chỉ làm nhu cầu vay giảm."},
     "OTHER_LOANS": {
         "title": "Khoản vay khác",
-        "say": "khoản chị đã vay nơi khác cho chiến dịch này được trừ khỏi nhu cầu vay, giảm {v}.",
+        "say": "khoản bạn đã vay nơi khác cho chiến dịch này được trừ khỏi nhu cầu vay, giảm {v}.",
         "up": "Khoản vay khác đã tính vào vốn chiến dịch nên không cần vay lại phần đó."},
     "SEED_LOAN": {
         "title": "Khoản vay mồi",
-        "say": "đây là khoản vay {stage} của chị với BuoyUp nên hạn mức bằng {pct}% mức tính được {computed} tệ, "
+        "say": "đây là khoản vay {stage} của bạn với BuoyUp nên hạn mức bằng {pct}% mức tính được {computed} tệ, "
                "giảm {v}.",
         "up": "Trả đúng hạn và để tiền bán hàng về tài khoản kinh doanh WeBank đều đặn; từ khoản sau hạn mức được nâng "
               "dần tới mức đầy đủ."},
     "THIN_FATE_CAP": {
         "title": "Dữ liệu liên ngân hàng còn ít",
-        "say": "dữ liệu tín dụng của chị ở các ngân hàng đối tác còn ít nên hạn mức có trần thấp hơn, giảm {v}.",
+        "say": "dữ liệu tín dụng của bạn ở các ngân hàng đối tác còn ít nên hạn mức có trần thấp hơn, giảm {v}.",
         "up": "Lịch sử trả nợ tốt với BuoyUp và các ngân hàng đối tác giúp bỏ trần này ở lần xét sau."},
     "AFFORDABILITY": {
         "title": "Khả năng trả từ doanh thu",
@@ -78,32 +80,137 @@ FACTORS: dict[str, dict[str, str]] = {
         "up": "Gửi thêm ảnh doanh thu khớp hóa đơn thuế giúp dự báo được tính cao hơn ở lần xét sau."},
     "GROUP_CAP": {
         "title": "Trần theo nhóm khách hàng",
-        "say": "hạn mức không vượt mức dành cho nhóm khách hàng của chị, nên giảm thêm {v}.",
-        "up": "Trả tốt khoản vay qua BuoyUp giúp chị lên nhóm có trần cao hơn ở lần vay sau."},
+        "say": "hạn mức không vượt mức dành cho nhóm khách hàng của bạn, nên giảm thêm {v}.",
+        "up": "Trả tốt khoản vay qua BuoyUp giúp bạn lên nhóm có trần cao hơn ở lần vay sau."},
     "TYPE_CAP": {
         "title": "Trần của hộ kinh doanh",
         "say": "hộ kinh doanh vay hoàn toàn trực tuyến được tối đa 200.000 tệ, nên giảm thêm {v}.",
         "up": "Doanh nghiệp vay vốn lưu động có trần cao hơn, kèm bảo lãnh của người đại diện."},
 }
 
-_INJECTION = re.compile(r"bỏ qua|ignore|propose|option_id|custom_|hướng dẫn trước|system prompt", re.I)
+# The same factors for a seller who uses the app in English or Chinese (i18n.lang()).
+FACTORS_I18N: dict[str, dict[str, dict[str, str]]] = {
+    "en": {
+        "PRICE_FROM_INVOICE": {"title": "Purchase price from invoices",
+            "say": "the purchase price is taken from your purchase invoices of the last three months, {price} CNY, "
+                   "instead of the {declared} CNY you declared, so the amount you need is {v} lower.",
+            "up": "If your real purchase price has changed, send a new invoice; the case goes back to verification "
+                  "before it is recalculated."},
+        "SUPPLIER_FACTOR": {"title": "Supplier without invoices",
+            "say": "goods from a supplier with no purchase invoices with you are counted at a reduced value, so the "
+                   "amount you need is {v} lower.",
+            "up": "Choosing a supplier that already has purchase invoices with you lets this part count in full."},
+        "INVENTORY_AND_OWN_CAPITAL": {"title": "Inventory and own capital",
+            "say": "the stock you already hold and the capital you put in yourself are deducted from what you need "
+                   "to borrow, {v} less.",
+            "up": "This is how the capital need is worked out, not a penalty. Putting in more of your own money only "
+                  "lowers what you need to borrow."},
+        "OTHER_LOANS": {"title": "Other loans",
+            "say": "what you already borrowed elsewhere for this campaign is deducted from what you need to borrow, "
+                   "{v} less.",
+            "up": "Other loans already count toward the campaign's capital, so you do not need to borrow that part "
+                  "again."},
+        "SEED_LOAN": {"title": "Starter loan",
+            "say": "this is your {stage} loan with BuoyUp, so the limit is {pct}% of the computed {computed} CNY, "
+                   "{v} less.",
+            "up": "Repay on time and keep your sales income flowing into your WeBank business account; from the next "
+                  "loan the limit rises step by step to the full amount."},
+        "THIN_FATE_CAP": {"title": "Little interbank data",
+            "say": "the partner banks hold little credit data about you, so the limit has a lower cap, {v} less.",
+            "up": "A good repayment record with BuoyUp and the partner banks removes this cap at the next review."},
+        "AFFORDABILITY": {"title": "Repayment capacity from revenue",
+            "say": "the repayments must be covered by a cautious revenue forecast over the longest tenor, so the "
+                   "limit is a further {v} lower.",
+            "up": "Sending revenue screenshots that match your tax invoices lets the forecast count higher at the "
+                  "next review."},
+        "GROUP_CAP": {"title": "Customer group cap",
+            "say": "the limit cannot exceed the cap for your customer group, so it is a further {v} lower.",
+            "up": "Repaying a BuoyUp loan well moves you to a group with a higher cap for your next loan."},
+        "TYPE_CAP": {"title": "Household business cap",
+            "say": "a household business borrowing fully online can get at most 200,000 CNY, so it is a further {v} "
+                   "lower.",
+            "up": "A company borrowing working capital has a higher cap, with a guarantee from its legal "
+                  "representative."},
+    },
+    "zh": {
+        "PRICE_FROM_INVOICE": {"title": "按发票计算进货价",
+            "say": "进货价按您近三个月的进项发票计算为 {price} 元，而不是您申报的 {declared} 元，因此借款需求减少 {v}。",
+            "up": "如果实际进货价已变化，请发送新的发票；申请会先回到核验步骤再重新计算。"},
+        "SUPPLIER_FACTOR": {"title": "供应商暂无发票",
+            "say": "与您没有进项发票往来的供应商的货品按折减计算，因此借款需求减少 {v}。",
+            "up": "选择已与您有进项发票往来的供应商，这部分就能全额计算。"},
+        "INVENTORY_AND_OWN_CAPITAL": {"title": "库存与自有资金",
+            "say": "您现有的库存和自己投入的资金从借款需求中扣除，减少 {v}。",
+            "up": "这是资金需求的计算方式，不是扣分。多投入自有资金只会降低借款需求。"},
+        "OTHER_LOANS": {"title": "其他贷款",
+            "say": "您为本次活动在别处已借的款项从借款需求中扣除，减少 {v}。",
+            "up": "其他贷款已计入活动资金，这部分无需再借。"},
+        "SEED_LOAN": {"title": "首贷额度",
+            "say": "这是您在 BuoyUp 的{stage}贷款，因此额度为计算金额 {computed} 元的 {pct}%，减少 {v}。",
+            "up": "按时还款，并让销售回款稳定进入您的微众银行经营账户；从下一笔贷款起额度会逐步提高到全额。"},
+        "THIN_FATE_CAP": {"title": "银行间数据较少",
+            "say": "合作银行掌握的您的信用数据较少，因此额度上限较低，减少 {v}。",
+            "up": "在 BuoyUp 和合作银行保持良好的还款记录，下次评估时即可取消此上限。"},
+        "AFFORDABILITY": {"title": "收入还款能力",
+            "say": "还款额需由最长期限内审慎预测的收入覆盖，因此额度再减少 {v}。",
+            "up": "补充与税务发票一致的收入截图，下次评估时预测可计算得更高。"},
+        "GROUP_CAP": {"title": "客户分组上限",
+            "say": "额度不能超过您所在客户分组的上限，因此再减少 {v}。",
+            "up": "在 BuoyUp 按时还清贷款，下次借款可进入上限更高的分组。"},
+        "TYPE_CAP": {"title": "个体工商户上限",
+            "say": "个体工商户全线上借款最高 200,000 元，因此再减少 {v}。",
+            "up": "企业申请流动资金贷款上限更高，需法定代表人提供担保。"},
+    },
+}
+ORDINALS_I18N = {"en": ("First", "Second", "Third", "Fourth", "Fifth"), "zh": ("第一", "第二", "第三", "第四", "第五")}
+COUNT_I18N = {"en": ("no", "one", "two", "three", "four", "five"), "zh": ("零", "一", "两", "三", "四", "五")}
+
+
+def factor_text(code: str, part: str) -> str:
+    """A factor's title / say / up in the seller's language."""
+    return (FACTORS_I18N.get(i18n.lang()) or FACTORS)[code][part]
+
+
+_INJECTION = re.compile(r"bỏ qua|ignore|disregard|propose|option_id|custom_|hướng dẫn trước|system prompt"
+                        r"|忽略|无视|系统提示", re.I)
 # Asking for an internal cut-off. "Lãi bao nhiêu phần trăm?" is a question about her own rate (on the
 # card), not a threshold, so a bare "bao nhiêu phần trăm" no longer counts.
 _THRESHOLD_Q = re.compile(r"ngưỡng|threshold|cutoff|bao nhiêu\s*(?:phần trăm|%)?\s*thì\s*(?:được|đạt|qua|duyệt)"
-                          r"|tối thiểu (?:là )?bao nhiêu", re.I)
-_RATE_Q = re.compile(r"lãi\D{0,20}bao nhiêu|bao nhiêu\D{0,12}lãi|tổng (?:phải )?trả\D{0,12}bao nhiêu", re.I)
-_HUMAN = re.compile(r"cán bộ|người thật|nhân viên|người xem|con người|gặp người", re.I)
+                          r"|tối thiểu (?:là )?bao nhiêu|minimum (?:score|requirement)|阈值|门槛|最低要求", re.I)
+_RATE_Q = re.compile(r"lãi\D{0,20}bao nhiêu|bao nhiêu\D{0,12}lãi|tổng (?:phải )?trả\D{0,12}bao nhiêu"
+                     r"|how much interest|interest rate|total (?:to )?(?:repay|pay)|利息|利率|总共(?:要)?还", re.I)
+_HUMAN = re.compile(r"cán bộ|người thật|nhân viên|người xem|con người|gặp người"
+                    r"|\bofficer|\bhuman\b|real person|\bstaff\b|人工|真人|客服|信贷员|工作人员", re.I)
 # "Khi nào duyệt?" is not a request for more; only words asking for a bigger sum, or a figure above
 # the full amount next to a lending verb (_asks_higher), are.
 _HIGHER = re.compile(r"tăng hạn mức|nhiều hơn|cao hơn|lớn hơn|vay thêm"
-                     r"|duyệt (?:cho )?(?:em|tôi|mình|chị)?\s*(?:mức|số|khoản)?\s*(?:cao|nhiều|lớn)", re.I)
-_LEND_VERB = re.compile(r"duyệt|vay|cấp|xin|giải ngân", re.I)
+                     r"|duyệt (?:cho )?(?:em|tôi|mình|chị|bạn)?\s*(?:mức|số|khoản)?\s*(?:cao|nhiều|lớn)"
+                     r"|higher limit|bigger limit|borrow more|more money|increase (?:my |the )?limit"
+                     r"|提高额度|多借|借更多|更高的额度", re.I)
+_LEND_VERB = re.compile(r"duyệt|vay|cấp|xin|giải ngân|borrow|lend|approve|loan|disburse|借|贷|批|放款", re.I)
 # "ảnh hưởng" (affect) is not a photo.
-_DOCS = re.compile(r"hóa đơn mới|gửi file|tài liệu|chứng từ|ảnh chụp|hình chụp|(?<!\w)ảnh(?!\s*hưởng)(?!\w)", re.I)
-_WHAT_IF = re.compile(r"nếu|thử|thêm", re.I)
-_LESS = re.compile(r"ít hơn|nhỏ hơn|bớt", re.I)
-_METHODS_Q = re.compile(r"hình thức|cách trả|trả góp|theo doanh thu|khác (?:gì|nhau)", re.I)
-_WHY = re.compile(r"vì sao|tại sao|sao thấp|giải thích", re.I)
+_DOCS = re.compile(r"hóa đơn mới|gửi file|tài liệu|chứng từ|ảnh chụp|hình chụp|(?<!\w)ảnh(?!\s*hưởng)(?!\w)"
+                   r"|new invoice|upload|send (?:you )?(?:a |the |my )?(?:file|document|photo|picture)|screenshot"
+                   r"|新发票|上传|发送文件|截图|照片|单据", re.I)
+_WHAT_IF = re.compile(r"nếu|thử|thêm|what if|\bif\b|\badd|如果|假如|增加", re.I)
+_CAPITAL = re.compile(r"vốn|capital|own funds|自有资金|资金|本金", re.I)
+_ADD = re.compile(r"thêm|\badd|\bmore\b|\bextra\b|增加|多投|再投", re.I)
+_LESS = re.compile(r"ít hơn|nhỏ hơn|bớt|\bless\b|\blower amount|\bsmaller|少借|更少|少一点|低一点", re.I)
+_METHODS_Q = re.compile(r"hình thức|cách trả|trả góp|theo doanh thu|khác (?:gì|nhau)"
+                        r"|repayment method|how (?:do i|to|can i) repay|instal?l?ments?|revenue-based|还款方式|分期|怎么还", re.I)
+_WHY = re.compile(r"vì sao|tại sao|sao thấp|giải thích|\bwhy\b|explain|how come|为什么|为何|解释|怎么这么低", re.I)
+# A "vì sao" question that names an officer ("Vì sao hồ sơ bị chuyển cho cán bộ?") asks for the reason,
+# not for a person; only these words make it a request to meet someone (SELLER_SERVICES_PLAN §4).
+_MEET = re.compile(r"gặp|nói chuyện|trao đổi trực tiếp|gọi (?:cho )?(?:tôi|em|mình)|liên hệ (?:với )?(?:tôi|em|mình)"
+                   r"|xin (?:chuyển|được)|cho (?:tôi|em|mình) (?:gặp|nói)|muốn (?:được )?(?:cán bộ|người|nhân viên)"
+                   r"|chuyển (?:tôi|em|mình|hồ sơ|giúp)\s+(?:\w+\s+){0,2}(?:cho|sang|tới) (?:cán bộ|người|nhân viên)"
+                   r"|talk (?:to|with)|speak (?:to|with)|\bmeet|call me|contact me|transfer me|connect me"
+                   r"|(?:want|need) (?:a |an |to see a |to see an )?(?:human|officer|person|staff)"
+                   r"|转人工|找人工|联系我|我要人工|我想.{0,6}(?:人工|信贷员|真人)|和.{0,6}(?:人工|信贷员)(?:谈|说|聊)", re.I)
+# Words that make a "vì sao" question about the decision rather than about the offer's figures.
+_DECISION_Q = re.compile(r"cán bộ|chuyển|từ chối|chưa (?:được )?duyệt|không (?:được )?duyệt|bị loại|kết quả"
+                         r"|thấp hơn đề xuất|ngân hàng|officer|reject|declin|not approved|denied|result|\bbank"
+                         r"|lower than|人工|拒绝|没(?:有)?批|未批准|结果|银行", re.I)
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 
 
@@ -111,8 +218,15 @@ _NUMBER = re.compile(r"\d+(?:[.,]\d+)*")
 
 def _facts(app_row: BuApplication, doc: dict[str, Any], plan: dict[str, Any] | None) -> dict[str, Any]:
     data = doc["internal"]["data"]
-    supplier = sources.supplier_info(data, plan["supplier"]) if plan else {"lead_days": 0, "linked": False,
-                                                                           "invoice_history": True}
+    if plan and not plan.get("supplier"):
+        # No supplier declared (review 17/10/2026): the item's own purchase invoices decide whether this is
+        # an existing supply chain (factor 1.0) or a new item without invoices (new-supplier factor).
+        has_invoices = data["tax"].get("invoice_unit_price_3m") is not None
+        supplier = {"id": "", "linked": False, "invoice_history": has_invoices,
+                    "lead_days": sources.DEFAULT_SUPPLIER_DAYS}
+    else:
+        supplier = sources.supplier_info(data, plan["supplier"]) if plan else {"lead_days": 0, "linked": False,
+                                                                               "invoice_history": True}
     return {"credit": data["credit"], "revenue": data["revenue"], "tax": data["tax"],
             "fate": doc["internal"].get("fate_value", data["fate"]["value"]), "rating": data["store"]["rating"],
             "platform": data["store"]["platform"], "industry": data["store"]["industry"], "supplier": supplier,
@@ -148,7 +262,7 @@ def payee_for(params: dict[str, Any], doc: dict[str, Any], amount: int) -> dict[
     ``repay.supplier_direct_threshold`` (100.000, team decision) goes straight to the supplier."""
     threshold = int(params["repay"]["supplier_direct_threshold"])
     plan = _plan_inputs(doc) or {}
-    if amount <= threshold or not plan.get("supplier"):
+    if not params["repay"].get("pay_supplier_direct", True) or amount <= threshold or not plan.get("supplier"):
         return {"kind": "business_account", "to_account": amount, "to_supplier": 0, "supplier": None}
     return {"kind": "split", "to_account": threshold, "to_supplier": amount - threshold, "supplier": plan["supplier"]}
 
@@ -157,7 +271,7 @@ def payee_text(payee: dict[str, Any]) -> str:
     if payee.get("kind") == "split":
         return (f"{algorithm.fmt_num(payee['to_account'])} vào tài khoản kinh doanh WeBank · "
                 f"{algorithm.fmt_num(payee['to_supplier'])} trả thẳng nhà cung cấp {payee['supplier']}")
-    return "Tài khoản kinh doanh WeBank của chị"
+    return "Tài khoản kinh doanh WeBank của bạn"
 
 
 def plan_schedule(params: dict[str, Any], doc: dict[str, Any], *, amount: int, tenor_m: int, method: str,
@@ -266,19 +380,19 @@ def _no_offer(session: Session, app_row: BuApplication, doc: dict[str, Any], she
     if sheet.get("rate_floor_violation"):
         reason = {"law": "Bảng lãi theo hạng và sàn chi phí vốn (khối B7)",
                   "factor": "Lãi suất theo hạng của hồ sơ không đủ bù chi phí vốn của ngân hàng cấp vốn ở mức này.",
-                  "fix": "Chị có thể nộp lại khi hạng tín dụng cải thiện, hoặc liên hệ cán bộ tín dụng."}
+                  "fix": "Bạn có thể nộp lại khi hạng tín dụng cải thiện, hoặc liên hệ cán bộ tín dụng."}
     elif sheet.get("group") == 4:
         reason = {"law": "Chính sách sản phẩm: nhóm khách hàng 4 không được cấp hạn mức",
                   "factor": "Báo cáo tín dụng hoặc lịch sử với BuoyUp có khoản trễ hạn từ 30 ngày, vỡ nợ hoặc nợ xấu.",
                   "fix": "Trả dứt điểm các khoản quá hạn; hồ sơ được xét lại khi lịch sử tín dụng cải thiện."}
     elif sheet["grade"] == "E":
         reason = {"law": "Bảng lãi theo hạng: hạng E từ chối thay vì tăng lãi (quy tắc RISK-03)",
-                  "factor": "Lịch sử tín dụng của chị chưa đáp ứng điều kiện cho vay ở thời điểm này.",
+                  "factor": "Lịch sử tín dụng của bạn chưa đáp ứng điều kiện cho vay ở thời điểm này.",
                   "fix": "Trả đúng hạn các khoản đang có và nộp lại sau."}
     else:
         reason = {"law": "Hạn mức theo khả năng trả và trần nhóm khách hàng (khối B8)",
                   "factor": "Hạn mức tính được thấp hơn mức vay tối thiểu của sản phẩm.",
-                  "fix": "Chị có thể nộp lại khi doanh thu tăng hoặc lịch sử tín dụng tốt hơn."}
+                  "fix": "Bạn có thể nộp lại khi doanh thu tăng hoặc lịch sử tín dụng tốt hơn."}
     doc["decision"] = {"kind": "reject", "option_id": None, "amount": None, "by": "gate", "reason": reason,
                        "at": now_iso()}
     events.log(session, app_row.id, "code", "no_offer", "Giải thuật không ra phương án nào")
@@ -288,6 +402,8 @@ def _no_offer(session: Session, app_row: BuApplication, doc: dict[str, Any], she
 # --- explanation and filters ---------------------------------------------------------
 
 def _money(n: float) -> str:
+    if i18n.lang() != "vi":  # English and Chinese write 100,000
+        return f"{round(n):,}"
     return algorithm.fmt_num(round(n))
 
 
@@ -295,30 +411,93 @@ def factor_sentence(code: str, impact: int, offer: dict[str, Any]) -> str:
     b3 = offer["blocks"].get("B3", {})
     b8 = offer["blocks"].get("B8", {})
     seed = b8.get("seed") or {}
-    return FACTORS[code]["say"].format(v=_money(-impact), price=algorithm.fmt_num(b3.get("unit_price_used", 0)),
-                                       declared=algorithm.fmt_num(b3.get("price_declared", 0)),
-                                       pct=algorithm.fmt_num(round(float(seed.get("ratio", 1)) * 100)),
+    return factor_text(code, "say").format(v=_money(-impact), price=_num(b3.get("unit_price_used", 0)),
+                                       declared=_num(b3.get("price_declared", 0)),
+                                       pct=_money(round(float(seed.get("ratio", 1)) * 100)),
                                        computed=_money(b8.get("computed") or 0),
-                                       stage="đầu tiên" if not seed.get("good_loans") else "tiếp theo")
+                                       stage=pick("đầu tiên", "first", "首笔") if not seed.get("good_loans")
+                                       else pick("tiếp theo", "next", "后续"))
 
 
 def template_explanation(offer: dict[str, Any]) -> str:
     limit = offer.get("limit", offer["options"][0]["amount"])
-    head = (f"Hạn mức của chị là {_money(limit)} tệ, lãi {_pct(offer['options'][0]['rate'])} một năm, kỳ hạn tối đa "
-            f"{offer.get('tenor_max', offer['options'][0]['tenor_m'])} tháng, không thu phí nào ngoài lãi.")
+    rate, tenor = _pct(offer['options'][0]['rate']), offer.get('tenor_max', offer['options'][0]['tenor_m'])
+    head = pick(f"Hạn mức của bạn là {_money(limit)} tệ, lãi {rate} một năm, kỳ hạn tối đa {tenor} tháng, không thu "
+                "phí nào ngoài lãi.",
+                f"Your limit is {_money(limit)} CNY at {rate} a year, for up to {tenor} months, with no fees other "
+                "than interest.",
+                f"您的额度为 {_money(limit)} 元，年利率 {rate}，最长期限 {tenor} 个月，除利息外不收取任何费用。")
     suggested = offer.get("suggested")
     if suggested and suggested < limit:
-        head += (f" Kế hoạch nhập hàng của chị cần khoảng {_money(suggested)} tệ nên em gợi ý vay vừa đủ số đó; "
-                 "vay ít hơn thì trả lãi ít hơn.")
+        head += pick(f" Kế hoạch nhập hàng của bạn cần khoảng {_money(suggested)} tệ nên em gợi ý vay vừa đủ số đó; "
+                     "vay ít hơn thì trả lãi ít hơn.",
+                     f" Your stock plan needs about {_money(suggested)} CNY, so I suggest borrowing just that; "
+                     "borrowing less means paying less interest.",
+                     f"您的进货计划约需 {_money(suggested)} 元，建议按需借这个金额；借得少，利息也少。")
+    head += _bank_adjust_text(offer)
     codes = [r for r in offer["reason_codes"] if r["code"] in FACTORS]
     if not codes or offer["requested"] is None or limit >= offer["requested"]:
         return head
-    parts = [f"{ORDINALS[i]}, {factor_sentence(r['code'], r['impact'], offer)}" for i, r in enumerate(codes)]
-    count = COUNT_WORDS[len(codes)] if len(codes) < len(COUNT_WORDS) else str(len(codes))
-    return head + f" Mức này thấp hơn {_money(offer['requested'])} chị xin vì {count} lý do. " + " ".join(parts)
+    lang = i18n.lang()
+    ordinals = ORDINALS_I18N.get(lang, ORDINALS)
+    words = COUNT_I18N.get(lang, COUNT_WORDS)
+    sep = "：" if lang == "zh" else ", "
+    parts = [f"{ordinals[i]}{sep}{factor_sentence(r['code'], r['impact'], offer)}" for i, r in enumerate(codes)]
+    count = words[len(codes)] if len(codes) < len(words) else str(len(codes))
+    asked = _money(offer['requested'])
+    return head + pick(f" Mức này thấp hơn {asked} bạn xin vì {count} lý do. ",
+                       f" It is lower than the {asked} you asked for, for {count} reason{'s' if len(codes) != 1 else ''}. ",
+                       f"该额度低于您申请的 {asked} 元，原因有{count}点。") + " ".join(parts)
+
+
+def refresh_explanation(offer: dict[str, Any], before: tuple[Any, Any, Any]) -> bool:
+    """After the bank round (or a smaller option the gate chose): when the limit, the longest tenor or
+    the lending banks changed since Agent 2 wrote ``offer["explanation"]``, rewrite it from the template
+    with the new figures (no model call inside the transaction). Returns whether it was rewritten."""
+    old_limit, old_tenor, old_banks = before
+    if (offer.get("limit"), offer.get("tenor_max"), offer.get("banks")) == (old_limit, old_tenor, old_banks):
+        return False
+    adjust = {}
+    if old_limit is not None and offer.get("limit") is not None and int(offer["limit"]) < int(old_limit):
+        adjust["limit_from"] = int(old_limit)
+    if old_tenor is not None and offer.get("tenor_max") is not None and int(offer["tenor_max"]) < int(old_tenor):
+        adjust["tenor_from"] = int(old_tenor)
+    if adjust:
+        offer["bank_adjust"] = adjust
+    with i18n.forced("vi"):  # stored; other languages are rendered on read (seller_offer)
+        offer["explanation"], offer["explanation_source"] = template_explanation(offer), "template"
+    return True
+
+
+def _bank_adjust_text(offer: dict[str, Any]) -> str:
+    adj = offer.get("bank_adjust") or {}
+    out = []
+    if adj.get("limit_from"):
+        lim, frm = _money(offer['limit']), _money(adj['limit_from'])
+        out.append(pick(f"Các ngân hàng đối tác duyệt hạn mức {lim} tệ, thấp hơn mức {frm} tệ BuoyUp tính được.",
+                        f"The partner banks approved a limit of {lim} CNY, lower than the {frm} CNY BuoyUp computed.",
+                        f"合作银行批准的额度为 {lim} 元，低于 BuoyUp 计算的 {frm} 元。"))
+    if adj.get("tenor_from"):
+        t, frm = offer['tenor_max'], adj['tenor_from']
+        out.append(pick(f"Kỳ hạn tối đa là {t} tháng thay vì {frm} tháng vì đó là kỳ hạn dài nhất mà mọi ngân hàng "
+                        "cùng cho vay chấp nhận.",
+                        f"The longest tenor is {t} months instead of {frm} months, because that is the longest every "
+                        "lending bank accepts.",
+                        f"最长期限为 {t} 个月而不是 {frm} 个月，因为这是所有共同放款银行都接受的最长期限。"))
+    joiner = "" if i18n.lang() == "zh" else " "
+    return (joiner + joiner.join(out)) if out else ""
+
+
+def _num(x: float) -> str:
+    """A figure as it is (decimals kept) in the seller's language."""
+    if i18n.lang() != "vi":
+        return f"{x:,.2f}".rstrip("0").rstrip(".") if isinstance(x, float) and x != int(x) else f"{int(round(x)):,}"
+    return algorithm.fmt_num(x)
 
 
 def _pct(x: float) -> str:
+    if i18n.lang() != "vi":
+        return f"{round(x * 100, 2):g}%"
     return algorithm.fmt_num(round(x * 100, 2)) + "%"
 
 
@@ -339,6 +518,8 @@ def thresholds(params: dict[str, Any], offer: dict[str, Any] | None = None) -> s
 def _norm(token: str) -> float:
     if re.fullmatch(r"\d{1,3}(\.\d{3})+", token):
         return float(token.replace(".", ""))
+    if re.fullmatch(r"[1-9]\d{0,2}(,\d{3})+(\.\d+)?", token):  # English/Chinese "100,000" or "1,234.5"
+        return round(float(token.replace(",", "")), 4)
     return round(float(token.replace(",", ".", 1).replace(",", "")), 4)
 
 
@@ -379,9 +560,10 @@ def blocked(text: str, allowed: set[float]) -> list[str]:
 
 
 # A figure right after a lending word must come from the offer sheet or Agent 2's sheet tools
-# (what_if, loans, bank split), never from the seller's cash-flow or tax data: "chị vay được
+# (what_if, loans, bank split), never from the seller's cash-flow or tax data: "bạn vay được
 # 166.700" passes the plain filter because 166.700 is her monthly average.
-_LENDING = re.compile(r"(?:vay|hạn mức|giải ngân|duyệt|được cấp|cho mượn)\D{0,40}?(\d+(?:[.,]\d+)*)", re.I)
+_LENDING = re.compile(r"(?:vay|hạn mức|giải ngân|duyệt|được cấp|cho mượn|borrow|\blimit|\bloan|disburs|approved|\blend"
+                      r"|借|额度|贷款|放款|批准)\D{0,40}?(\d+(?:[.,]\d+)*)", re.I)
 
 
 def lending_misquotes(text: str, sheet_allowed: set[float]) -> list[str]:
@@ -389,11 +571,13 @@ def lending_misquotes(text: str, sheet_allowed: set[float]) -> list[str]:
 
 
 # A sum said to be approved, granted or paid out must be one of the computed amounts (options, the
-# card, what_if, her loans, the bank split). "Chị được duyệt 400.000" passed the plain filter
+# card, what_if, her loans, the bank split). "Bạn được duyệt 400.000" passed the plain filter
 # because 400.000 is the sum she asked for, which is in the sheet as ``requested``.
 _PROMISE_AMOUNT = re.compile(r"(?:được duyệt|duyệt cho|sẽ duyệt|được vay|vay được|được cấp|cấp cho|giải ngân|"
-                             r"nhận được)\D{0,25}?(\d+(?:[.,]\d+)*)(?!\s*(?:tháng|ngày|năm|%|phần trăm|lần))", re.I)
-_THRESHOLD_SAID = re.compile(r"ngưỡng\D{0,30}\d", re.I)
+                             r"nhận được|approved for|will approve|can borrow|will (?:get|receive)|disburse|"
+                             r"获批|可以借|能借|放款|到账)\D{0,25}?(\d+(?:[.,]\d+)*)"
+                             r"(?![.,]?\d)(?!\s*(?:tháng|ngày|năm|%|phần trăm|lần|months?|days?|years?|times|个月|天|年|次))", re.I)
+_THRESHOLD_SAID = re.compile(r"(?:ngưỡng|threshold|cut-?off|阈值|门槛)\D{0,30}\d", re.I)
 
 
 def _amounts(node: Any, out: set[float]) -> None:
@@ -466,7 +650,7 @@ def _llm_rephrase(template: str, allowed: set[float]) -> str | None:
     if prov is None:
         return None
     system = ("Bạn là trợ lý tư vấn vay của BuoyUp. Viết lại đoạn giải thích sau bằng tiếng Việt tự nhiên, "
-              "lịch sự, xưng 'em' gọi 'chị'. Giữ nguyên mọi con số, không thêm số mới, không hứa duyệt, "
+              "lịch sự, xưng 'em' gọi người bán là 'bạn'. Giữ nguyên mọi con số, không thêm số mới, không hứa duyệt, "
               "không nêu ngưỡng nội bộ. Chỉ trả về đoạn văn.")
     for _ in range(3):
         try:
@@ -479,9 +663,21 @@ def _llm_rephrase(template: str, allowed: set[float]) -> str | None:
 
 
 def explain(offer: dict[str, Any], plan: dict[str, Any] | None, params: dict[str, Any]) -> tuple[str, str]:
-    template = template_explanation(offer)
+    with i18n.forced("vi"):  # stored in Vietnamese; seller_offer renders the other languages
+        template = template_explanation(offer)
     rephrased = _llm_rephrase(template, allowed_numbers(offer, plan, params))
     return (rephrased, "llm") if rephrased else (template, "template")
+
+
+def seller_offer(offer: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The offer as the seller reads it: in English or Chinese the explanation is the template in that language
+    (the stored one, possibly reworded by the model, is Vietnamese)."""
+    if not offer or i18n.lang() == "vi" or not offer.get("options"):
+        return offer
+    try:
+        return {**offer, "explanation": template_explanation(offer)}
+    except (KeyError, TypeError, IndexError):
+        return offer
 
 
 # --- propose / options ------------------------------------------------------------------
@@ -535,14 +731,15 @@ class ChallengeAnswer(BaseModel):
 
 
 def answer_challenge(doc: dict[str, Any], option: dict[str, Any], rule: str, question: str,
-                     need: list[str]) -> dict[str, Any]:
+                     need: list[str], use_model: bool = True) -> dict[str, Any]:
     """Agent 2 answers Agent 3. With a model it may point to any existing sheet reference; without one
     (or when the model fails) the rationale builder's own references are the answer (source ``code``).
-    Only references that exist on the sheet are kept; Agent 3 then checks them against ``need``."""
+    Only references that exist on the sheet are kept; Agent 3 then checks them against ``need``.
+    ``use_model`` False (demo sample guard): the code answer, so the verdict does not depend on the model."""
     own = [r["evidence_ref"] for r in _rationale(doc, option) if r.get("evidence_ref")]
     code = {"claim": next((r["claim"] for r in _rationale(doc, option) if r.get("evidence_ref") in need), ""),
             "evidence_refs": [x for x in own if ref_exists(doc, x)], "source": "code"}
-    prov = llm_tools.provider()
+    prov = llm_tools.provider() if use_model else None
     if prov is None:
         return code
     system = ("Bạn là Agent 2 (đề xuất) của BuoyUp. Agent 3 (kiểm soát) hỏi về một băn khoăn. Trả lời ngắn và chỉ "
@@ -591,10 +788,19 @@ DATA_TYPES = {"invoice": "hóa đơn mua vào mới", "account": "tài khoản n
               "store": "cửa hàng khác", "inventory": "số liệu tồn kho", "other": "chứng từ khác"}
 
 
+DATA_TYPES_I18N = {
+    "en": {"invoice": "new purchase invoices", "account": "another sales-income account", "store": "another store",
+           "inventory": "inventory figures", "other": "other documents"},
+    "zh": {"invoice": "新的进项发票", "account": "其他回款账户", "store": "其他店铺", "inventory": "库存数据",
+           "other": "其他单据"},
+}
+
+
 def data_type_of(text: str) -> str:
     low = (text or "").lower()
-    for key, words in (("invoice", ("hóa đơn",)), ("account", ("tài khoản",)), ("store", ("cửa hàng", "link")),
-                       ("inventory", ("tồn kho", "kho"))):
+    for key, words in (("invoice", ("hóa đơn", "invoice", "发票")), ("account", ("tài khoản", "account", "账户")),
+                       ("store", ("cửa hàng", "link", "store", "shop", "店铺")),
+                       ("inventory", ("tồn kho", "kho", "inventory", "stock", "库存"))):
         if any(w in low for w in words):
             return key
     return "other"
@@ -611,6 +817,12 @@ def handoff_to_agent1(session: Session, app_row: BuApplication, doc: dict[str, A
         open_req = {"id": "DR-" + secrets.token_hex(3), "data_type": data_type, "label": DATA_TYPES[data_type],
                     "note": note[:300], "status": "open", "from": "agent2", "at": now_iso()}
         requests.append(open_req)
+        from app.agents import notify  # SELLER_SERVICES_PLAN §3.1.b: the seller sees the request
+
+        notify.push_app_notice(doc, "data_request",
+                               f"BuoyUp cần {notify.SELLER_ADDRESS} bổ sung {open_req['label']} ({open_req['id']}). "
+                               "Mở hồ sơ để gửi; hạn mức chỉ thay đổi sau khi chứng từ được kiểm.", "info",
+                               {"view": "apply", "request_id": open_req["id"]})
     events.log(session, app_row.id, "agent2", "handoff_to_agent1",
                f"Yêu cầu bổ sung {open_req['label']} gửi bước xác minh ({open_req['id']})",
                {"request": open_req["id"], "data_type": data_type})
@@ -666,29 +878,80 @@ def what_if(session: Session, app_row: BuApplication, doc: dict[str, Any], param
 
 def _what_if_text(plan: dict[str, Any], ch: dict[str, Any], out: dict[str, Any]) -> str:
     if out.get("flags"):
-        return ("Nhà cung cấp này cùng nhóm liên kết với cửa hàng nên sẽ bị loại khi xác minh. "
-                "Đây là ước tính, cần nộp chứng từ.")
+        return pick("Nhà cung cấp này cùng nhóm liên kết với cửa hàng nên sẽ bị loại khi xác minh. "
+                    "Đây là ước tính, cần nộp chứng từ.",
+                    "This supplier is linked to your store, so it will be excluded at verification. "
+                    "This is an estimate; documents are needed.",
+                    "该供应商与您的店铺存在关联，核验时会被排除。这只是估算，需要提交单据。")
     changes = []
     if "own_capital" in ch and ch["own_capital"] != plan["own_capital"]:
-        delta = ch["own_capital"] - plan["own_capital"]
-        changes.append(("bỏ thêm " if delta > 0 else "giảm ") + _money(abs(delta)) + " vốn")
+        delta, amt = ch["own_capital"] - plan["own_capital"], _money(abs(ch["own_capital"] - plan["own_capital"]))
+        changes.append(pick(("bỏ thêm " if delta > 0 else "giảm ") + amt + " vốn",
+                            ("put in " if delta > 0 else "take out ") + amt + " of your own capital",
+                            ("多投入 " if delta > 0 else "减少 ") + amt + " 元自有资金"))
     if "inventory" in ch and ch["inventory"] != plan["inventory"]:
-        changes.append("tồn kho " + _money(ch["inventory"]))
+        changes.append(pick("tồn kho ", "hold inventory of ", "库存为 ") + _money(ch["inventory"]))
     if "qty" in ch and ch["qty"] != plan["qty"]:
-        changes.append("nhập " + _money(ch["qty"]) + " sản phẩm")
+        changes.append(pick("nhập " + _money(ch["qty"]) + " sản phẩm", "stock " + _money(ch["qty"]) + " items",
+                            "进货 " + _money(ch["qty"]) + " 件"))
     if "supplier" in ch and ch["supplier"] != plan["supplier"]:
-        changes.append("đổi nhà cung cấp sang " + ch["supplier"])
-    head = f"Nếu chị {', '.join(changes) or 'giữ nguyên kế hoạch'}, nhu cầu vay là {_money(out['need'] or 0)}"
+        changes.append(pick("đổi nhà cung cấp sang ", "switch supplier to ", "将供应商换成 ") + ch["supplier"])
+    need, lim, amt = _money(out['need'] or 0), _money(out['limit']), _money(out['amount'])
+    what = pick(", ".join(changes) or "giữ nguyên kế hoạch", ", ".join(changes) or "keep the plan as it is",
+                "，".join(changes) or "保持计划不变")
+    head = pick(f"Nếu bạn {what}, nhu cầu vay là {need}", f"If you {what}, you would need to borrow {need}",
+                f"如果您{what}，借款需求为 {need}")
     if (out["need"] or 0) > out["limit"]:
-        tail = f" nhưng hạn mức vẫn là {_money(out['limit'])}; em gợi ý vay {_money(out['limit'])}."
+        tail = pick(f" nhưng hạn mức vẫn là {lim}; em gợi ý vay {lim}.",
+                    f", but your limit stays {lim}; I suggest borrowing {lim}.",
+                    f"，但额度仍为 {lim}；建议借 {lim}。")
     else:
-        tail = f" nên em gợi ý vay vừa đủ {_money(out['amount'])} trong hạn mức {_money(out['limit'])}."
+        tail = pick(f" nên em gợi ý vay vừa đủ {amt} trong hạn mức {lim}.",
+                    f", so I suggest borrowing just {amt} within your {lim} limit.",
+                    f"，建议在 {lim} 的额度内按需借 {amt}。")
     if ch.get("own_capital", 0) > plan["own_capital"]:
-        tail += " Thêm vốn tự có làm số cần vay giảm, không làm hạn mức tăng."
-    return head + tail + " Đây là ước tính, cần nộp chứng từ."
+        tail += pick(" Thêm vốn tự có làm số cần vay giảm, không làm hạn mức tăng.",
+                     " More own capital lowers what you need to borrow; it does not raise the limit.",
+                     "增加自有资金会降低借款需求，但不会提高额度。")
+    return head + tail + pick(" Đây là ước tính, cần nộp chứng từ.", " This is an estimate; documents are needed.",
+                              "这只是估算，需要提交单据。")
 
 
 # --- chat -----------------------------------------------------------------------------------
+
+def wants_human(text: str) -> bool:
+    """A request for a person. "Vì sao/tại sao …" naming an officer is a question, unless it also asks to
+    meet one."""
+    if not _HUMAN.search(text):
+        return False
+    return not _WHY.search(text) or bool(_MEET.search(text))
+
+
+def append_system_message(doc: dict[str, Any], text: str, *, session: Session | None = None,
+                          app_id: str | None = None) -> BuMessage | None:
+    """A ``from: "system"`` line in the case's chat thread (SELLER_SERVICES_PLAN §4), so a later question
+    ("vì sao …") is answered from what the seller was actually told. The seller's chat screen hides
+    system lines; the model and staff read them. Without a session nothing is written."""
+    text = (text or "").strip()
+    if not text or session is None or not app_id:
+        return None
+    return _post(session, app_id, "system", text)
+
+
+def _asks_why_decision(app_row: BuApplication, doc: dict[str, Any], text: str) -> bool:
+    exp = (doc.get("decision") or {}).get("explanation")
+    if not exp or not _WHY.search(text) or _MEET.search(text):
+        return False
+    return app_row.status not in ("offered", "selected") or bool(_DECISION_Q.search(text))
+
+
+def _why_decision(session: Session, app_row: BuApplication, doc: dict[str, Any], params: dict[str, Any]) -> BuMessage:
+    from app.agents.agent3_control import explanation_text
+
+    exp = doc["decision"]["explanation"]
+    events.log(session, app_row.id, "agent2", "explain_decision", "Trả lời người bán vì sao có quyết định này")
+    return _say(session, app_row, doc, params, explanation_text(exp), extra=exp)
+
 
 def message_public(m: BuMessage) -> dict[str, Any]:
     return {"id": m.id, "from": m.sender, "text": m.text, "card": m.card, "blocked_numbers": m.blocked_numbers,
@@ -737,78 +1000,142 @@ def _reply(session: Session, app_row: BuApplication, doc: dict[str, Any], params
     offer = doc.get("offer")
     if not offer:
         if (doc.get("verification") or {}).get("state") in (None, "IN_PROGRESS"):
-            return _say(session, app_row, doc, params, "Hồ sơ của chị đang ở bước xác minh. Khi biên bản xác minh "
-                                                       "hoàn tất, em sẽ gửi đề xuất.")
+            return _say(session, app_row, doc, params, pick(
+                "Hồ sơ của bạn đang ở bước xác minh. Khi biên bản xác minh hoàn tất, em sẽ gửi đề xuất.",
+                "Your application is still being verified. When the verification record is complete, I will send "
+                "you an offer.",
+                "您的申请正在核验中。核验记录完成后，我会把方案发给您。"))
         # Verified but no offer (out of scope, rejected, with an officer): she can still ask about her file.
-        if _HUMAN.search(text):  # never refused (§5), whatever else the message says
+        if wants_human(text):  # never refused (§5), whatever else the message says
             return _human(session, app_row, doc, params, text)
         if _INJECTION.search(text) or _THRESHOLD_Q.search(text):
-            return _say(session, app_row, doc, params, "Em chỉ trả lời được về hồ sơ và số liệu đã xác minh của chị.")
+            return _say(session, app_row, doc, params, pick(
+                "Em chỉ trả lời được về hồ sơ và số liệu đã xác minh của bạn.",
+                "I can only answer about your application and your verified figures.",
+                "我只能回答与您的申请和已核验数据有关的问题。"))
+        if _asks_why_decision(app_row, doc, text):
+            return _why_decision(session, app_row, doc, params)
         llm_reply = _llm_reply(session, app_row, doc, params, text)
         if llm_reply is not None:
             return llm_reply
-        return _say(session, app_row, doc, params, "Biên bản xác minh đã hoàn tất. Chị có thể bấm “Tôi muốn gặp "
-                                                   "cán bộ” để được giải thích chi tiết.")
+        return _say(session, app_row, doc, params, pick(
+            "Biên bản xác minh đã hoàn tất. Bạn có thể bấm “Tôi muốn gặp cán bộ” để được giải thích chi tiết.",
+            "The verification record is complete. You can press “I want to talk to an officer” for a detailed "
+            "explanation.",
+            "核验记录已完成。您可以点击“我想联系信贷员”获取详细说明。"))
     final = app_row.status not in ("offered",)
     # Hard guards run before any model. The human request comes first: it is never refused (§5),
     # even when the same message also trips the injection or threshold guard.
-    if _HUMAN.search(text):
+    if wants_human(text):
         return _human(session, app_row, doc, params, text)
     if _INJECTION.search(text):
         return _injection(session, app_row, doc, params, text)
     if _THRESHOLD_Q.search(text):
         events.log(session, app_row.id, "agent2", "threshold_question", "Người bán hỏi ngưỡng nội bộ; không nêu")
-        return _say(session, app_row, doc, params,
-                    "Hạn mức tính từ doanh thu khai thuế, lịch sử tín dụng và kế hoạch nhập hàng của chị; ảnh doanh "
-                    "thu chị tự nộp khớp với thuế thì có thể được cao hơn. Em không nêu được ngưỡng cụ thể.")
+        return _say(session, app_row, doc, params, pick(
+            "Hạn mức tính từ doanh thu khai thuế, lịch sử tín dụng và kế hoạch nhập hàng của bạn; ảnh doanh thu bạn tự "
+            "nộp khớp với thuế thì có thể được cao hơn. Em không nêu được ngưỡng cụ thể.",
+            "Your limit is worked out from your tax-declared revenue, your credit history and your stock plan; revenue "
+            "screenshots that match your tax data can raise it. I cannot share specific internal thresholds.",
+            "额度根据您的报税收入、信用记录和进货计划计算；您提交的收入截图与税务数据一致时额度可能更高。我无法透露具体的内部门槛。"))
+    if _asks_why_decision(app_row, doc, text):
+        return _why_decision(session, app_row, doc, params)
     llm_reply = _llm_reply(session, app_row, doc, params, text)
     if llm_reply is not None:
         return llm_reply
     if _asks_higher(text, offer):
         events.log(session, app_row.id, "agent2", "no_tool", "Yêu cầu mức cao hơn: Agent 2 không có công cụ nhận "
                                                             "số tiền")
-        return _say(session, app_row, doc, params,
-                    "Em không có công cụ nào duyệt mức ngoài các phương án đã tính. Chị có thể nộp kênh thủ công, "
-                    "hoặc bấm “Tôi muốn gặp cán bộ” để em chuyển yêu cầu ngay. Trong hạn mức đã duyệt, chị tự chọn số "
-                    "tiền, kỳ hạn và cách trả mà không cần duyệt lại.")
+        return _say(session, app_row, doc, params, pick(
+            "Em không có công cụ nào duyệt mức ngoài các phương án đã tính. Bạn có thể nộp kênh thủ công, hoặc bấm “Tôi "
+            "muốn gặp cán bộ” để em chuyển yêu cầu ngay. Trong hạn mức đã duyệt, bạn tự chọn số tiền, kỳ hạn và cách "
+            "trả mà không cần duyệt lại.",
+            "I have no tool that approves an amount outside the computed options. You can apply through the manual "
+            "channel, or press “I want to talk to an officer” and I will pass your request on right away. Within the "
+            "approved limit you choose the amount, tenor and repayment yourself, with no new approval.",
+            "我没有任何工具可以批准已计算方案以外的金额。您可以走人工渠道申请，或点击“我想联系信贷员”，我会立即转交。在已批准的额度内，"
+            "您可自行选择金额、期限和还款方式，无需重新审批。"))
     if _DOCS.search(text):
         req = handoff_to_agent1(session, app_row, doc, data_type_of(text), text)
-        return _say(session, app_row, doc, params,
-                    f"Em không đọc tài liệu gửi qua tin nhắn. Em đã ghi yêu cầu bổ sung {req['label']} (mã "
-                    f"{req['id']}) để bước xác minh kiểm tra; dữ liệu mới chỉ ảnh hưởng tới số tiền sau khi được "
-                    "xác minh. Phương án hiện tại vẫn giữ nguyên.", extra=[req["id"]])
+        label = (DATA_TYPES_I18N.get(i18n.lang()) or {}).get(req["data_type"], req["label"])
+        return _say(session, app_row, doc, params, pick(
+            f"Em không đọc tài liệu gửi qua tin nhắn. Em đã ghi yêu cầu bổ sung {label} (mã {req['id']}) để bước xác "
+            "minh kiểm tra; dữ liệu mới chỉ ảnh hưởng tới số tiền sau khi được xác minh. Phương án hiện tại vẫn giữ "
+            "nguyên.",
+            f"I don't read documents sent in chat. I have logged a request to add {label} (code {req['id']}) for the "
+            "verification step to check; new data only changes the amount after it is verified. Your current offer "
+            "stays as it is.",
+            f"我不读取聊天中发送的文件。我已登记补充{label}的请求（编号 {req['id']}），交由核验步骤检查；新数据只有核验后才会影响金额。"
+            "当前方案保持不变。"), extra=[req["id"]])
     if _RATE_Q.search(text):
         c = offer["card"]
-        return _say(session, app_row, doc, params,
-                    f"Lãi năm {_pct(c['rate'])}, cũng là toàn bộ chi phí vay vì không có phí nào khác. Vay "
-                    f"{_money(c['amount'])} tệ trong {c['tenor_m']} tháng, trả góp đều thì tổng lãi khoảng "
-                    f"{_money(c['total_interest'])} tệ, tổng phải trả {_money(c['total_due'])} tệ. Lãi tính theo số "
-                    "ngày thực tế, trả trước bất cứ lúc nào không mất phí.")
+        rate, amt, n = _pct(c['rate']), _money(c['amount']), c['tenor_m']
+        ti, td = _money(c['total_interest']), _money(c['total_due'])
+        return _say(session, app_row, doc, params, pick(
+            f"Lãi năm {rate}, cũng là toàn bộ chi phí vay vì không có phí nào khác. Vay {amt} tệ trong {n} tháng, trả "
+            f"góp đều thì tổng lãi khoảng {ti} tệ, tổng phải trả {td} tệ. Lãi tính theo số ngày thực tế, trả trước bất "
+            "cứ lúc nào không mất phí.",
+            f"The annual rate is {rate}, and that is the whole cost of the loan: there are no other fees. Borrowing "
+            f"{amt} CNY over {n} months in equal instalments, total interest is about {ti} CNY and you repay {td} CNY in "
+            "total. Interest is charged on the actual days, and you can repay early at any time for free.",
+            f"年利率 {rate}，这就是全部借款成本，没有其他费用。借 {amt} 元、期限 {n} 个月、等额分期，总利息约 {ti} 元，"
+            f"总还款 {td} 元。利息按实际天数计算，随时提前还款不收费。"))
     factor = _factor_in(text, offer)
     if factor and not _WHAT_IF.search(text):
         r = next(x for x in offer["reason_codes"] if x["code"] == factor)
         events.log(session, app_row.id, "agent2", "explain_factor", f"Giải thích yếu tố {factor}")
         sentence = factor_sentence(factor, r["impact"], offer)
-        return _say(session, app_row, doc, params, sentence[0].upper() + sentence[1:] + " " + FACTORS[factor]["up"])
-    if _WHAT_IF.search(text) and "vốn" in text.lower() and not final:
+        return _say(session, app_row, doc, params, sentence[0].upper() + sentence[1:]
+                    + ("" if i18n.lang() == "zh" else " ") + factor_text(factor, "up"))
+    if _WHAT_IF.search(text) and _CAPITAL.search(text) and not final:
         return _chat_what_if(session, app_row, doc, params, text)
     if _LESS.search(text):
-        return _say(session, app_row, doc, params,
-                    "Chị kéo thanh trượt để chọn mức thấp hơn hạn mức đã duyệt, không cần duyệt lại. Lãi theo ngày, "
-                    "tổng phải trả và lịch trả do code tính lại theo số tiền, kỳ hạn và cách trả chị chọn.")
+        return _say(session, app_row, doc, params, pick(
+            "Bạn kéo thanh trượt để chọn mức thấp hơn hạn mức đã duyệt, không cần duyệt lại. Lãi theo ngày, tổng phải "
+            "trả và lịch trả do code tính lại theo số tiền bạn chọn.",
+            "Drag the slider to pick an amount below the approved limit; no new approval is needed. Daily interest, the "
+            "total to repay and the schedule are recalculated for the amount you choose.",
+            "拖动滑块即可选择低于已批准额度的金额，无需重新审批。日利息、总还款额和还款计划会按您选择的金额重新计算。"))
+    if _METHODS_Q.search(text) and "revenue" not in params["product"].get("methods", ["installment", "revenue"]):
+        # Review 17/10/2026: instalments only, tenor set by BuoyUp.
+        tenor = offer.get("tenor_max")
+        return _say(session, app_row, doc, params, pick(
+            "Khoản vay trả góp hằng tháng: gốc chia đều mỗi tháng, cộng lãi tính theo số ngày thực tế trên dư nợ còn "
+            "lại, nên số tiền mỗi kỳ giảm dần" + (f"; kỳ hạn {tenor} tháng do BuoyUp xác định" if tenor else "")
+            + ". Tiền trả được trích từ tài khoản kinh doanh WeBank vào ngày trả bạn chọn. Không có phí, trả trước hạn "
+              "được miễn phí.",
+            "The loan is repaid in monthly instalments: equal principal each month plus interest on the actual days "
+            "of the remaining balance, so each payment gets smaller" + (f"; the tenor is {tenor} months, set by BuoyUp"
+                                                                       if tenor else "")
+            + ". Payments are debited from your WeBank business account on the due day you choose. There are no fees "
+              "and early repayment is free.",
+            "贷款按月分期偿还：每月偿还等额本金，加上按剩余本金实际天数计算的利息，因此每期金额逐月递减"
+            + (f"；期限 {tenor} 个月，由 BuoyUp 确定" if tenor else "")
+            + "。还款在您选择的还款日从微众银行经营账户扣款。没有任何费用，提前还款免费。"))
     if _METHODS_Q.search(text):
         rr = offer.get("blocks", {}).get("B9", {}).get("revenue_rate_max_tenor")
-        return _say(session, app_row, doc, params,
-                    "Có hai cách trả, chọn một lần khi ký: (1) Trả góp cố định: gốc chia đều mỗi tháng, cộng lãi tính "
-                    "theo số ngày thực tế trên dư nợ còn lại; số tiền mỗi tháng giảm dần. (2) Trả theo doanh thu: mỗi "
-                    "tháng trả một tỷ lệ doanh thu về tài khoản kinh doanh WeBank"
-                    + (f" (khoảng {_pct(rr)} ở kỳ hạn dài nhất)" if rr else "")
-                    + ", tháng bán ít trả ít nhưng không dưới mức tối thiểu là lãi tháng cộng 30% gốc của một kỳ trả "
-                      "góp đều. Cả hai đều không có phí và trả trước được miễn phí.")
+        return _say(session, app_row, doc, params, pick(
+            "Có hai cách trả, chọn một lần khi ký: (1) Trả góp cố định: gốc chia đều mỗi tháng, cộng lãi tính theo số "
+            "ngày thực tế trên dư nợ còn lại; số tiền mỗi tháng giảm dần. (2) Trả theo doanh thu: mỗi tháng trả một tỷ "
+            "lệ doanh thu về tài khoản kinh doanh WeBank" + (f" (khoảng {_pct(rr)} ở kỳ hạn dài nhất)" if rr else "")
+            + ", tháng bán ít trả ít nhưng không dưới mức tối thiểu là lãi tháng cộng 30% gốc của một kỳ trả góp đều. "
+              "Cả hai đều không có phí và trả trước được miễn phí.",
+            "There are two ways to repay, chosen once when you sign: (1) Fixed instalments: equal principal each month "
+            "plus interest on the actual days of the remaining balance, so payments get smaller. (2) Revenue-based: "
+            "each month you pay a share of the revenue arriving in your WeBank business account"
+            + (f" (about {_pct(rr)} at the longest tenor)" if rr else "")
+            + "; a slow month means a smaller payment, but never below the minimum of the month's interest plus 30% "
+              "of one equal instalment's principal. Neither has fees, and early repayment is free.",
+            "还款方式有两种，签约时选定一次：(1) 固定分期：每月偿还等额本金，加上按剩余本金实际天数计算的利息，每月金额逐步递减。"
+            "(2) 按收入还款：每月按进入微众银行经营账户的收入的一定比例还款" + (f"（最长期限下约 {_pct(rr)}）" if rr else "")
+            + "，销售少的月份少还，但不低于最低还款额，即当月利息加一期等额分期本金的 30%。两种方式都不收费，提前还款免费。"))
     if _WHY.search(text):
         return _say(session, app_row, doc, params, template_explanation(offer))
-    return _say(session, app_row, doc, params, "Em có thể giải thích từng yếu tố, thử phương án khi chị đổi vốn hoặc "
-                                               "số lượng nhập, hoặc chuyển chị gặp cán bộ.")
+    return _say(session, app_row, doc, params, pick(
+        "Em có thể giải thích từng yếu tố, thử phương án khi bạn đổi vốn hoặc số lượng nhập, hoặc chuyển bạn gặp cán bộ.",
+        "I can explain each factor, try out options if you change your capital or the quantity you stock, or put you "
+        "in touch with an officer.",
+        "我可以解释每一项因素，在您调整资金或进货数量时试算方案，或为您转接信贷员。"))
 
 
 def _asks_higher(text: str, offer: dict[str, Any]) -> bool:
@@ -826,8 +1153,11 @@ def _human(session: Session, app_row: BuApplication, doc: dict[str, Any], params
         events.log(session, app_row.id, "agent2", "injection_with_human",
                    "Tin nhắn vừa có lệnh ẩn vừa xin gặp cán bộ; vẫn chuyển cán bộ", {"hidden_from_seller": True})
     control.request_human(session, app_row, doc, "Người bán yêu cầu gặp cán bộ qua chat")
-    return _say(session, app_row, doc, params, "Em đã chuyển yêu cầu của chị tới cán bộ tín dụng. Hồ sơ có "
-                                               "yêu cầu người xem sẽ không duyệt tự động.")
+    return _say(session, app_row, doc, params, pick(
+        "Em đã chuyển yêu cầu của bạn tới cán bộ tín dụng. Hồ sơ có yêu cầu người xem sẽ không duyệt tự động.",
+        "I have passed your request to a credit officer. An application with a request for human review is not "
+        "approved automatically.",
+        "我已将您的请求转给信贷员。申请了人工审核的申请不会被自动批准。"))
 
 
 def _factor_in(text: str, offer: dict[str, Any]) -> str | None:
@@ -847,11 +1177,16 @@ def _injection(session: Session, app_row: BuApplication, doc: dict[str, Any], pa
     candidate = (m.group(1) or m.group(2) or m.group(0)) if m else "custom"
     offer = doc["offer"]
     if find_option(doc, candidate) is None and reject_option(session, app_row, doc, candidate):
-        return _say(session, app_row, doc, params, "Em đã chuyển hồ sơ cho cán bộ tín dụng xem.")
+        return _say(session, app_row, doc, params, pick("Em đã chuyển hồ sơ cho cán bộ tín dụng xem.",
+                                                        "I have passed your application to a credit officer.",
+                                                        "我已将您的申请转给信贷员审核。"))
     amounts = ", ".join(_money(o["amount"]) for o in offer["options"] if not o["id"].startswith("seller_"))
-    return _say(session, app_row, doc, params,
-                f"Em chỉ chọn được một trong các phương án giải thuật đã tính: {amounts} tệ. Nếu chị muốn xin mức "
-                "khác, em có thể chuyển hồ sơ cho cán bộ.")
+    return _say(session, app_row, doc, params, pick(
+        f"Em chỉ chọn được một trong các phương án giải thuật đã tính: {amounts} tệ. Nếu bạn muốn xin mức khác, em có "
+        "thể chuyển hồ sơ cho cán bộ.",
+        f"I can only pick one of the options the algorithm computed: {amounts} CNY. If you want to ask for a different "
+        "amount, I can pass your application to an officer.",
+        f"我只能从算法已计算的方案中选择：{amounts} 元。如果您想申请其他金额，我可以把申请转给信贷员。"))
 
 
 def _chat_what_if(session: Session, app_row: BuApplication, doc: dict[str, Any], params: dict[str, Any],
@@ -859,10 +1194,13 @@ def _chat_what_if(session: Session, app_row: BuApplication, doc: dict[str, Any],
     plan = _plan_inputs(doc)
     nums = [_norm(t) for t in _NUMBER.findall(text)]
     if plan is None or not nums:
-        return _say(session, app_row, doc, params, "Chị nhập số vốn muốn thử ở ô “Nếu tôi làm X”, em sẽ chạy lại "
-                                                   "giải thuật trên bản sao hồ sơ.")
+        return _say(session, app_row, doc, params, pick(
+            "Bạn nhập số vốn muốn thử ở ô “Nếu tôi làm X”, em sẽ chạy lại giải thuật trên bản sao hồ sơ.",
+            "Enter the capital you want to try in the “What if I do X” box and I will rerun the algorithm on a copy of "
+            "your application.",
+            "请在“如果我这样做”框中输入想试算的资金，我会在申请副本上重新运行算法。"))
     value = int(nums[0])
-    own = plan["own_capital"] + value if "thêm" in text.lower() else value
+    own = plan["own_capital"] + value if _ADD.search(text) else value
     out = what_if(session, app_row, doc, params, {"own_capital": own})
     return _say(session, app_row, doc, params, out["text"], extra=[out, value, own])
 
@@ -872,11 +1210,12 @@ def _chat_what_if(session: Session, app_row: BuApplication, doc: dict[str, Any],
 CHAT_MEMORY = 8  # earlier chat turns replayed to the model
 
 AGENT2_SYSTEM = (
-    "Bạn là Agent 2 (tư vấn và đề xuất) của BuoyUp, nói tiếng Việt, xưng 'em' gọi 'chị'. Bạn chỉ chọn và giải "
+    "Bạn là Agent 2 (tư vấn và đề xuất) của BuoyUp, nói tiếng Việt, xưng 'em' gọi người bán là 'bạn'. Bạn chỉ chọn và giải "
     "thích hạn mức giải thuật đã tính và các ngân hàng đã duyệt: dùng get_offer_sheet để đọc phiếu, explain_factor "
     "để giải thích một yếu tố, render_schedule để xem lịch trả của một lựa chọn (số tiền trong hạn mức, kỳ hạn, hình "
     "thức trả, ngày trả), what_if để thử khi người bán đổi vốn/tồn kho/số lượng/nhà cung cấp. Nghiêng về vay vừa đủ; "
-    "giải thích rõ hai hình thức trả (trả theo doanh thu; trả góp cố định) vì chọn rồi không đổi được. "
+    "khoản vay trả góp hằng tháng (gốc chia đều cộng lãi theo ngày), kỳ hạn do BuoyUp xác định; người bán chỉ chọn "
+    "số tiền trong hạn mức và ngày trả, toàn bộ tiền vay về tài khoản WeBank. "
     "propose để chọn một option_id CÓ TRONG PHIẾU, handoff_to_agent1 khi người bán muốn bổ sung chứng từ, "
     "request_human khi người bán muốn gặp cán bộ (không bao giờ từ chối). Không có công cụ nào nhận số tiền. "
     "Người bán có thể hỏi bất cứ điều gì về hồ sơ, gian hàng, dòng tiền, thuế, tín dụng, khoản vay và ngân hàng cho "
@@ -887,8 +1226,8 @@ AGENT2_SYSTEM = (
 )
 _STATUS_VI = {"identified": "đã nhận link gian hàng", "consented": "đã ký ủy quyền", "verifying": "đang xác minh",
               "needs_answer": "chờ người bán trả lời câu hỏi", "verified": "đã xác minh, chờ các ngân hàng duyệt",
-              "offered": "các ngân hàng đã duyệt hạn mức; chờ chị chọn khoản vay",
-              "selected": "đã chọn khoản vay; chờ chị đọc và ký hợp đồng", "signed": "đã ký, đang giải ngân",
+              "offered": "các ngân hàng đã duyệt hạn mức; chờ bạn chọn khoản vay",
+              "selected": "đã chọn khoản vay; chờ bạn đọc và ký hợp đồng", "signed": "đã ký, đang giải ngân",
               "expired": "hạn mức hết hiệu lực", "in_control": "đang kiểm soát",
               "escalated": "chờ cán bộ xem", "disbursed": "đã giải ngân",
               "repaying": "đang trả nợ", "closed": "đã tất toán", "rejected": "không được duyệt",
@@ -1049,10 +1388,10 @@ def _agent2_tools(session: Session, app_row: BuApplication, doc: dict[str, Any],
         syn = doc.get("syndicate") or {}
         if not syn.get("split"):
             return keep({"stage": "các ngân hàng chưa duyệt xong", "funding_split": []})
-        return keep({"stage": "các ngân hàng đã duyệt hạn mức; tỷ lệ áp cho số tiền chị chọn",
+        return keep({"stage": "các ngân hàng đã duyệt hạn mức; tỷ lệ áp cho số tiền bạn chọn",
                      "funding_split": [{"bank": names.get(r["bank"], r["bank"]), "share": r["pct"]} for r in syn["split"]],
                      "limit_valid_until": syn.get("expires_at"),
-                     "note": "Mỗi ngân hàng ký một hợp đồng riêng với chị, cùng lãi suất và lịch trả."})
+                     "note": "Mỗi ngân hàng ký một hợp đồng riêng với bạn, cùng lãi suất và lịch trả."})
 
     read = [
         Tool("get_my_application", "Hồ sơ của người bán: trạng thái, gian hàng, tài khoản đã khai, kế hoạch, các bước "
@@ -1120,13 +1459,23 @@ def _llm_reply(session: Session, app_row: BuApplication, doc: dict[str, Any], pa
         events.log(session, app_row.id, "agent2", "llm_failed", "Không dựng được bối cảnh; dùng bộ định tuyến",
                    {"error": type(exc).__name__, "hidden_from_seller": True})
         return None
+    exp = (doc.get("decision") or {}).get("explanation")
+    if exp:  # what Agent 3 told her about the decision (SELLER_SERVICES_PLAN §4); its figures may be quoted
+        snapshot["decision_explanation"] = {k: exp.get(k) for k in ("headline", "because", "improve")}
+        seen.append(exp)
     if card:
+        methods = params["product"].get("methods", ["installment", "revenue"])
         snapshot["how_repayment_works"] = (
-            "Hai hình thức, chọn một lần cho cả khoản vay và không đổi được: (1) trả theo doanh thu: mỗi tháng trả số "
-            "lớn hơn giữa mức tối thiểu và một tỷ lệ doanh thu tháng trước vào tài khoản WeBank, không vượt số còn nợ; "
-            "(2) trả góp cố định: gốc chia đều cộng lãi. Kỳ hạn chọn trong " + str(offer.get("tenors")) + " tháng, chọn "
-            "ngày trả hằng tháng. Lãi tính theo ngày thực tế; trả trước một phần hoặc toàn bộ bất cứ lúc nào, không phí. "
-            "Hệ thống WeBank trích tài khoản vào ngày trả.")
+            ("Trả góp hằng tháng: gốc chia đều cộng lãi theo ngày thực tế. Kỳ hạn " + str(offer.get("tenor_max"))
+             + " tháng do BuoyUp xác định; người bán chọn số tiền trong hạn mức và ngày trả hằng tháng; toàn bộ tiền "
+               "vay về tài khoản WeBank. ")
+            if "revenue" not in methods or not params["product"].get("borrower_picks_tenor", True) else
+            ("Hai hình thức, chọn một lần cho cả khoản vay và không đổi được: (1) trả theo doanh thu: mỗi tháng trả số "
+             "lớn hơn giữa mức tối thiểu và một tỷ lệ doanh thu tháng trước vào tài khoản WeBank, không vượt số còn nợ; "
+             "(2) trả góp cố định: gốc chia đều cộng lãi. Kỳ hạn chọn trong " + str(offer.get("tenors")) + " tháng, chọn "
+             "ngày trả hằng tháng. ")
+            + "Lãi tính theo ngày thực tế; trả trước một phần hoặc toàn bộ bất cứ lúc nào, không phí. "
+              "Hệ thống WeBank trích tài khoản vào ngày trả.")
     # System context is its own turn; seller text is fenced and marked as data, not instructions.
     history = [LLMMessage(role="user", text=(
         f"[Bối cảnh hệ thống] Cuộc trò chuyện gắn với hồ sơ {app_row.code} của người bán đang đăng nhập; mọi công "
@@ -1137,11 +1486,11 @@ def _llm_reply(session: Session, app_row: BuApplication, doc: dict[str, Any], pa
         "mới trả lời."))]
     history += [LLMMessage(role="user", text=_fence(m.text)) if m.sender == "seller"
                 else LLMMessage(role="model", text=m.text) for m in earlier]
-    history.append(LLMMessage(role="user", text=_fence(text)))
+    history.append(LLMMessage(role="user", text=_fence(text) + _LANGUAGE_NOTE[i18n.lang()]))
     blocked_total = 0
     for _ in range(3):
         try:
-            reply = llm_tools.tool_loop(prov, AGENT2_SYSTEM, tools, history, calls)
+            reply = llm_tools.tool_loop(prov, AGENT2_SYSTEM + i18n.MODEL_LANGUAGE[i18n.lang()], tools, history, calls)
         except Exception as exc:  # noqa: BLE001 - model failure: deterministic router answers
             events.log(session, app_row.id, "agent2", "llm_failed", "Mô hình lỗi; dùng bộ định tuyến tất định",
                        {"error": type(exc).__name__, "hidden_from_seller": True})
@@ -1155,6 +1504,12 @@ def _llm_reply(session: Session, app_row: BuApplication, doc: dict[str, Any], pa
         if offer:
             bad += [tok for tok in amount_misquotes(reply, computed_amounts(offer, seen)) if tok not in bad]
         said = promises(reply)
+        if not bad and not said and wrong_language(reply):
+            events.log(session, app_row.id, "agent2", "language_filter", "Bản nháp sai ngôn ngữ người bán chọn",
+                       {"lang": i18n.lang(), "hidden_from_seller": True})
+            history += [LLMMessage(role="model", text=reply),
+                        LLMMessage(role="user", text=_REWRITE_LANGUAGE[i18n.lang()])]
+            continue
         if not bad and not said:
             store(app_row, doc)
             return _post(session, app_row.id, "agent2", reply, blocked_count=blocked_total)
@@ -1164,11 +1519,34 @@ def _llm_reply(session: Session, app_row: BuApplication, doc: dict[str, Any], pa
         history += [LLMMessage(role="model", text=reply),
                     LLMMessage(role="user", text="Bản nháp bị chặn vì có số không có trong phiếu hoặc lời hứa: "
                                                  + json.dumps(bad + said, ensure_ascii=False)
-                                                 + ". Viết lại, chỉ dùng số trong phiếu hoặc kết quả công cụ.")]
+                                                 + ". Viết lại, chỉ dùng số trong phiếu hoặc kết quả công cụ."
+                                                 + i18n.MODEL_LANGUAGE[i18n.lang()])]
     store(app_row, doc)
-    fallback = template_explanation(offer) if offer else ("Em chưa trả lời chính xác được câu này. Chị hỏi lại cụ "
-                                                          "thể hơn, hoặc bấm “Tôi muốn gặp cán bộ” nhé.")
+    fallback = template_explanation(offer) if offer else pick(
+        "Em chưa trả lời chính xác được câu này. Bạn hỏi lại cụ thể hơn, hoặc bấm “Tôi muốn gặp cán bộ” nhé.",
+        "I can't answer that one accurately yet. Please ask more specifically, or press “I want to talk to an officer”.",
+        "这个问题我暂时无法准确回答。请问得更具体一些，或点击“我想联系信贷员”。")
     return _post(session, app_row.id, "agent2", fallback, blocked_count=blocked_total)
+
+
+_LANGUAGE_NOTE = {"vi": "", "en": "\n[Reply in English.]", "zh": "\n[请用简体中文回答。]"}
+_REWRITE_LANGUAGE = {"vi": "Viết lại bằng tiếng Việt.",
+                     "en": "Rewrite the whole answer in English, keeping exactly the same figures.",
+                     "zh": "请用简体中文重写整个回答，数字保持完全不变。"}
+_VI_MARKS = re.compile(r"[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]", re.I)
+_CJK = re.compile(r"[\u4e00-\u9fff]")
+
+
+def wrong_language(text: str) -> bool:
+    """A model draft not written in the seller's language (Vietnamese marks in an English answer, no
+    Chinese characters in a Chinese one). Names and quoted Vietnamese words are tolerated."""
+    lang = i18n.lang()
+    letters = len(re.findall(r"[^\W\d_]", text))
+    if lang == "zh":
+        return len(_CJK.findall(text)) < max(4, letters // 10)
+    if lang == "en":
+        return len(_VI_MARKS.findall(text)) > max(3, letters // 40)
+    return False
 
 
 def _log_calls(session: Session, app_row: BuApplication, calls: list[dict[str, Any]]) -> None:

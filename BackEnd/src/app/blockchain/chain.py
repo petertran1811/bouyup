@@ -3,12 +3,12 @@
 What is real here: per-case hash chains, salted SHA-256 fingerprints, block
 linking, tamper detection on verify. What is simulated: the four nodes and the
 consensus (one process seals every block, the sealer label rotates like a PBFT
-leader). The UI must label chain data "mô phỏng" unless ``mode() == "remote"``.
+leader). The API marks chain data ``simulated: true`` unless ``mode() == "remote"`` (no UI badge since 18/10/2026).
 
 Remote mode (``BUOYUP_CHAIN_BACKEND=remote``): every :func:`record` still writes
 the local entry (the UI and the trace read it) and mirrors its fingerprint to the
 BuoyUp Chain service as an audit anchor (``chain_remote``), whose own head chain
-uses keccak256. The local head stays sha3-256 (labelled "mô phỏng"). A mirror that
+uses keccak256. The local head stays sha3-256 (``simulated: true``). A mirror that
 fails is queued in ``bu_chain_outbox`` — except the kinds in :data:`CRITICAL_KINDS`
 (Agent 3 seal/conclusion, gate decision): those raise 503 ``CHAIN_UNAVAILABLE`` so
 the request rolls back and the case is never auto-approved without its seal
@@ -320,7 +320,7 @@ def status(session: Session) -> dict[str, Any]:
         "consensus": "PBFT",
         "height": height,
         "nodes": [{"id": n, "status": "up", "leader": n == leader} for n in NODES],
-        "hash_alg": "sha3-256 (mô phỏng)",
+        "hash_alg": "sha3-256",
         "simulated": True,
     }
 

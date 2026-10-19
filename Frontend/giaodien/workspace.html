@@ -10,9 +10,10 @@
   <link rel="stylesheet" href="../src/chung/chat.css" />
   <link rel="stylesheet" href="../src/nguoi-ban/workspace.css" />
   <link rel="stylesheet" href="../src/chung/bu/v4.css" />
-  <link rel="stylesheet" href="../src/nguoi-ban/workspace-v4.css" />
-  <link rel="stylesheet" href="../src/xac-thuc-khuon-mat/face-capture.css" />
-<style>body,input,textarea,select,button{font-family:"Be Vietnam Pro",sans-serif}html[data-bu-paused] *,html[data-bu-paused] *::before,html[data-bu-paused] *::after{animation-play-state:paused!important}</style>
+  <link rel="stylesheet" href="../src/nguoi-ban/workspace-v4.css?v=20261018d" />
+  <link rel="stylesheet" href="../src/xac-thuc-khuon-mat/face-capture.css" /><link rel="stylesheet" href="../src/xac-thuc-khuon-mat/otp-sms.css" />
+<style>body,input,textarea,select,button{font-family:"Be Vietnam Pro","Noto Sans SC",sans-serif}html[data-bu-paused] *,html[data-bu-paused] *::before,html[data-bu-paused] *::after{animation-play-state:paused!important}</style>
+  <link rel="stylesheet" href="../src/chung/bu/i18n.css?v=20261018d" /><script src="../src/chung/bu/i18n-dict.js?v=20261019a"></script><script src="../src/chung/bu/i18n.js?v=20261019a"></script>
 </head>
 <body class="workspace-body">
   <div class="workspace-background" aria-hidden="true"></div>
@@ -23,7 +24,6 @@
     <button class="btn btn-sm" data-theme-toggle aria-label="Chuyển giao diện sáng hoặc tối">Sáng / tối</button>
     <button class="btn btn-sm" id="logout">Đăng xuất</button>
   </header>
-  <div class="banner banner-demo" id="demo-banner" hidden><strong>MÔ PHỎNG</strong><span>Dữ liệu mẫu và giải ngân mô phỏng; không phải cam kết tín dụng.</span></div>
   <div id="notice" class="workspace-notice" role="status" hidden></div>
   <div class="workspace-shell" id="workspace-shell">
     <button class="sidebar-backdrop" id="sidebar-backdrop" aria-label="Đóng thanh dự án" hidden></button>
@@ -32,21 +32,21 @@
       <div class="sidebar-section"><h2>Vay vốn BuoyUp</h2><div id="project-list" aria-live="polite">Đang tải hồ sơ…</div></div>
       <div id="profile-nav" class="sidebar-section"></div>
       <div id="application-nav" class="sidebar-section"></div>
-      <label class="sidebar-width">Độ rộng thanh dự án<input id="sidebar-width" type="range" min="240" max="380" step="10" value="280" /></label>
       <p class="sidebar-foot">Hồ sơ được lưu sau mỗi bước.<br />Bạn có thể quay lại bất cứ lúc nào.</p>
     </aside>
+    <div id="sidebar-resizer" class="sidebar-resizer" role="separator" aria-orientation="vertical" aria-controls="sidebar" aria-label="Kéo để đổi độ rộng thanh bên (nhấp đúp để đặt lại)" aria-valuemin="200" aria-valuemax="420" aria-valuenow="280" tabindex="0"></div>
     <main id="workspace-main" tabindex="-1"><div class="empty">Đang mở gian hàng…</div></main>
   </div>
   <dialog id="seller-wizard" class="seller-wizard" aria-labelledby="wizard-title" aria-describedby="wizard-count">
     <div class="wizard-header">
       <button type="button" id="wizard-back" class="wizard-back" data-action="wizard-back">← Quay lại</button>
       <div class="wizard-center"><span class="wizard-brand"><img src="../src/chung/assets/logo.webp" alt="" />BuoyUp</span><span id="wizard-count" class="wizard-count">Bước 1/8</span></div>
-      <button type="button" class="wizard-close" data-action="wizard-close" aria-label="Đóng và lưu tiến độ">×</button>
+      <div class="wizard-top-actions"><div class="wizard-lang" data-lang-switch data-lang-class="btn btn-sm"></div><button type="button" class="wizard-close" data-action="wizard-close" aria-label="Đóng và lưu tiến độ">×</button></div>
     </div>
     <progress id="wizard-progress" class="wizard-progress" max="8" value="1" aria-label="Tiến độ hồ sơ"></progress>
     <div class="wizard-body">
       <div class="wizard-main">
-        <div id="wizard-demo" hidden><span class="v4-badge warning">Mô phỏng</span></div>
+        
         <div id="wizard-screen" class="wizard-screen"></div>
         <p id="wizard-notice" class="wizard-error" role="status" hidden></p>
       </div>
@@ -72,7 +72,7 @@
       </aside>
     </div>
   </dialog>
-  <script src="../src/chung/bu/api.js"></script><script src="../src/chung/bu/session.js"></script>
-  <script src="../src/chung/bu/motion.js"></script><script src="../src/xac-thuc-khuon-mat/face-capture.js"></script><script src="../src/nguoi-ban/workspace-v4.js"></script>
+  <script src="../src/chung/bu/api.js?v=20261019a"></script><script src="../src/chung/bu/session.js"></script>
+  <script src="../src/chung/bu/motion.js"></script><script src="../src/xac-thuc-khuon-mat/face-capture.js"></script><script src="../src/xac-thuc-khuon-mat/otp-sms.js?v=20261018d"></script><script src="../src/nguoi-ban/charts.js?v=20261019a"></script><script src="../src/nguoi-ban/workspace-v4.js?v=20261019a"></script>
 </body>
 </html>

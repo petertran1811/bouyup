@@ -123,7 +123,7 @@ def test_first_loan_is_a_seed_loan(bu_client, as_seller):
 @pytest.mark.seed_loan
 def test_second_loan_waits_for_webank_money(bu_client, as_seller, as_officer):
     loan = lc.loan_for(bu_client, as_seller, amount=60_000, tenor_m=6)
-    lc.ok(bu_client.post(f"/v4/loans/{loan['id']}/prepay", headers=as_seller, json={}))
+    lc.ok(bu_client.post(f"/v4/loans/{loan['id']}/prepay", headers=as_seller, json={"confirm": True}))
     app = lc.offered(bu_client, as_seller)
     full = bu_client.get(f"/v4/applications/{app['id']}", headers=as_officer).json()
     flags = {f["code"]: f for f in full["verification"]["flags"]}
@@ -134,7 +134,7 @@ def test_second_loan_waits_for_webank_money(bu_client, as_seller, as_officer):
 @pytest.mark.seed_loan
 def test_second_loan_steps_up_with_webank_money(bu_client, as_seller, as_officer):
     loan = lc.loan_for(bu_client, as_seller, amount=60_000, tenor_m=6)
-    lc.ok(bu_client.post(f"/v4/loans/{loan['id']}/prepay", headers=as_seller, json={}))
+    lc.ok(bu_client.post(f"/v4/loans/{loan['id']}/prepay", headers=as_seller, json={"confirm": True}))
     # Three months of sales money ≥ 80 % of the 166.700 tax revenue reached the WeBank account.
     _add_webank_months(loan["id"], ["2026-07", "2026-08", "2026-09"], 140_000)
     app = lc.offered(bu_client, as_seller)

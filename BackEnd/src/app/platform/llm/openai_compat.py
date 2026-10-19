@@ -11,6 +11,7 @@ It talks plain HTTP to ``/v1/chat/completions`` so no extra SDK is needed. A new
 from __future__ import annotations
 
 import asyncio
+import time
 import json
 from typing import Any
 
@@ -26,6 +27,21 @@ from app.platform import audit
 TRANSIENT_RETRIES = 2
 TRANSIENT_BACKOFF = (1.0, 3.0)
 CONNECT_TIMEOUT_SECONDS = 5.0
+# 18/10/2026: when the model server times out or cannot be reached, stop calling it for a while. Every agent
+# then falls back to its template at once, instead of each request (often inside a database transaction)
+# waiting timeout × retries for a server that is down or overloaded.
+BREAKER_SECONDS = 120.0
+_breaker_until = 0.0
+
+
+def _trip(reason: str) -> None:
+    global _breaker_until
+    _breaker_until = time.monotonic() + BREAKER_SECONDS
+    audit.logger.warning("llm_breaker_open", seconds=BREAKER_SECONDS, reason=reason)
+
+
+def breaker_open() -> bool:
+    return time.monotonic() < _breaker_until
 
 
 def _to_openai_schema(spec: Any) -> Any:
@@ -56,7 +72,7 @@ class OpenAICompatProvider:
         self.last_model: str | None = None
 
     def available(self) -> bool:
-        return bool(self._base_url and self.model)
+        return bool(self._base_url and self.model) and not breaker_open()
 
     def status(self) -> list[dict[str, Any]]:
         """Per-model availability, for /v1/system/info."""
@@ -118,8 +134,9 @@ class OpenAICompatProvider:
                     "llm_call_failed", provider=self.name, model=self.model, attempt=attempt + 1,
                     error_type=last_error, error=str(exc)[:300],
                 )
-                # A server that cannot be reached will not be back within the backoff.
-                if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)):
+                # A server that cannot be reached, or too slow to answer, will not be back within the backoff.
+                if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout)):
+                    _trip(last_error)
                     break
             else:
                 if response.status_code < 400:

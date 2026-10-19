@@ -3,22 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>BuoyUp — Vốn mùa vụ cho người bán online, từng con số có căn cứ</title>
+    <title>BuoyUp — Vốn theo nhịp bán hàng, rõ ràng đến từng con số</title>
     <meta
       name="description"
       content="BuoyUp kết nối người bán với nguồn vốn đa ngân hàng. Xác minh có bằng chứng, tư vấn rõ ràng, trả dần từ dòng tiền bán hàng."
     />
     <meta name="theme-color" content="#000000" />
 
-    <!-- Keep the original dot-matrix display face; UI fonts are locally hosted. -->
-    <link href="https://db.onlinewebfonts.com/c/8cb707a9b8a73f8a7403336b861c3074?family=BubbledotICG-FinePos" rel="stylesheet" media="print" onload="this.media='all'" />
+    <!-- Hero display faces with full Vietnamese coverage; UI fonts are locally hosted. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;1,500;1,600&amp;subset=vietnamese&amp;display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="../src/chung/vendor/lenis-1.3.26/lenis.css" />
     <link rel="stylesheet" href="../src/chung/bu/tokens.css" />
     <link rel="stylesheet" href="../src/chung/bu/base.css" />
     <link rel="stylesheet" href="../src/chung/bu/components.css" />
     <link rel="icon" type="image/webp" href="../src/chung/assets/logo.webp" />
-    <link rel="stylesheet" href="../src/chung/styles.css" />
-  </head>
+    <link rel="stylesheet" href="../src/chung/styles.css?v=20261018d" />
+    <link rel="stylesheet" href="../src/chung/bu/i18n.css?v=20261018d" />
+    <script src="../src/chung/bu/i18n-dict.js?v=20261019a"></script><script src="../src/chung/bu/i18n.js?v=20261019a"></script>
+</head>
 
   <body class="marketing">
     <a class="skip-link" href="#how">Bỏ qua phần giới thiệu</a>
@@ -45,6 +49,7 @@
           <a class="nav-link" href="#faq">Hỏi đáp</a>
         </nav>
 
+        <div class="bu-lang-slot" data-lang-switch></div>
         <a class="sign-in" data-login-link href="login.html">Đăng nhập</a>
         <a class="header-register" data-register-link href="register.html">Đăng ký <span aria-hidden="true">↗</span></a>
 
@@ -69,14 +74,14 @@
         </div>
 
         <h1 class="headline anim-none">
-          <span class="headline-line l1">Vốn cho mùa bán hàng</span>
-          <span class="headline-line l2">Từng số đều có căn cứ</span>
+          <span class="headline-line l1">Vốn theo nhịp bán hàng.</span>
+          <span class="headline-line l2"><em>Rõ ràng đến từng con số.</em></span>
         </h1>
 
         <p class="subhead anim" style="--d: 0.28s">
-          Từ dòng tiền hôm nay đến mùa bán hàng tiếp theo.
-          Kết nối nguồn vốn đa ngân hàng, hiểu rõ từng đề xuất,
-          trả dần từ tiền sàn chuyển về.
+          Vốn lưu động cho người bán trên sàn, nhiều ngân hàng cùng cấp.
+          AI giải thích từng con số; khoản vay trả dần từ tiền sàn về,
+          dòng tiền và báo cáo theo bạn suốt kỳ vay.
         </p>
 
         <a class="cta anim-pulse" href="register.html" style="--d: 0.4s">Bắt đầu hành trình ↗</a>
@@ -101,7 +106,7 @@
       <section class="network-section" id="network" aria-labelledby="network-title">
         <div class="story-section network-grid">
           <div class="section-intro" data-reveal><p class="eyebrow">KẾT NỐI NHIỀU NGUỒN VỐN</p><h2 id="network-title">Cùng cấp vốn.<br><em>Cùng nâng bước.</em></h2><p>Các ngân hàng đối tác cùng cấp vốn theo tỷ lệ và chính sách riêng. Tiền đến người vay hoặc nhà cung cấp đã kiểm tra; tiền bán hàng về được phân bổ trả nợ theo tỷ lệ.</p><a class="text-link" href="register.html">Tìm nguồn vốn cho cửa hàng <span aria-hidden="true">↗</span></a></div>
-          <div class="money-flow" data-reveal aria-label="Sơ đồ dòng tiền"><span class="bu-badge bu-badge--simulation" id="bank-simulation-badge" hidden>Mô phỏng</span><div class="flow-banks" id="public-banks" aria-live="polite"><span class="data-skeleton">Đang tải ngân hàng…</span></div><div class="flow-line" aria-hidden="true"></div><div class="flow-hub"><span class="hub-symbol" aria-hidden="true">✳</span><strong>BuoyUp</strong><span>Điều phối nguồn vốn</span></div><div class="flow-line" aria-hidden="true"></div><div class="flow-destinations"><span>Cửa hàng của bạn</span><span>Nhà cung cấp</span></div><p class="flow-return">↶ Tiền hàng về · Trích nợ theo tỷ lệ</p></div>
+          <div class="money-flow" data-reveal aria-label="Sơ đồ dòng tiền"><div class="flow-banks" id="public-banks" aria-live="polite"><span class="data-skeleton">Đang tải ngân hàng…</span></div><div class="flow-line" aria-hidden="true"></div><div class="flow-hub"><span class="hub-symbol" aria-hidden="true">✳</span><strong>BuoyUp</strong><span>Điều phối nguồn vốn</span></div><div class="flow-line" aria-hidden="true"></div><div class="flow-destinations"><span>Cửa hàng của bạn</span><span>Nhà cung cấp</span></div><p class="flow-return">↶ Tiền hàng về · Trích nợ theo tỷ lệ</p></div>
         </div>
       </section>
 
@@ -111,17 +116,16 @@
           <article class="security-card security-primary" data-reveal data-tilt><div class="privacy-art" aria-hidden="true"><span>◇</span><span>◇</span><span>◇</span></div><p class="eyebrow">FISCO BCOS · NHẬT KÝ KIỂM TOÁN</p><h3>Mỗi ngân hàng<br>chỉ thấy phần của mình.</h3><p>Lệnh giải ngân mã hóa riêng cho từng ngân hàng. Dấu vân tay của hồ sơ và quyết định giúp đối chiếu, phát hiện thay đổi trong nhật ký.</p></article>
           <article class="security-card" data-reveal data-tilt><span class="agent-glyph" aria-hidden="true">⌘</span><p class="eyebrow">FATE · HỌC LIÊN KẾT</p><h3>Hiểu rủi ro chung.<br>Giữ dữ liệu riêng.</h3><p>Các ngân hàng cùng chấm điểm rủi ro mà dữ liệu gốc không rời ngân hàng. Chỉ thực hiện trong phạm vi bạn đã ủy quyền.</p><div class="security-note">AI điều phối và giải thích.<br>Giải thuật tính toán. Con người giám sát.</div></article>
         </div>
-        <p class="quiet-note">Trong trải nghiệm demo, công cụ dữ liệu, FATE và chuỗi được mô phỏng.</p>
       </section>
 
-      <section class="live-section" id="live" aria-labelledby="live-title"><div class="story-section"><div class="live-heading" data-reveal><div><p class="eyebrow">NHỊP HOẠT ĐỘNG</p><h2 id="live-title">Những con số có nguồn.</h2></div><span class="simulation-badge" id="simulation-badge" hidden>Mô phỏng</span></div><p class="live-caption">Tổng quan được cập nhật từ hệ thống BuoyUp.</p><div class="live-stats" id="public-stats" aria-live="polite"><div class="data-skeleton">Đang tải dữ liệu tổng quan…</div></div><div class="public-status" role="status"><span id="overview-status">Đang kết nối hệ thống…</span><button id="overview-retry" type="button" hidden>Thử lại</button></div></div></section>
+      <section class="live-section" id="live" aria-labelledby="live-title"><div class="story-section"><div class="live-heading" data-reveal><div><p class="eyebrow">NHỊP HOẠT ĐỘNG</p><h2 id="live-title">Những con số có nguồn.</h2></div></div><p class="live-caption">Tổng quan được cập nhật từ hệ thống BuoyUp.</p><div class="live-stats" id="public-stats" aria-live="polite"><div class="data-skeleton">Đang tải dữ liệu tổng quan…</div></div><div class="public-status" role="status"><span id="overview-status">Đang kết nối hệ thống…</span><button id="overview-retry" type="button" hidden>Thử lại</button></div></div></section>
 
       <section class="story-section faq-section" id="faq" aria-labelledby="faq-title"><div class="section-intro" data-reveal><p class="eyebrow">ĐIỀU BẠN MUỐN BIẾT</p><h2 id="faq-title">Rõ ràng trước<br><em>khi bắt đầu.</em></h2></div><div class="faq-list" data-reveal>
         <details><summary>Tôi cần chuẩn bị gì để bắt đầu?</summary><p>Link cửa hàng, giấy tờ định danh và tài khoản nhận tiền hàng. Bạn xem và xác nhận phạm vi ủy quyền trước khi hệ thống kiểm tra dữ liệu.</p></details>
         <details><summary>AI có tự quyết định hạn mức không?</summary><p>Hạn mức, lãi và lịch trả nợ do giải thuật tính từ dữ liệu đã xác minh. AI giải thích phương án và dẫn lại căn cứ, không tự đặt con số.</p></details>
         <details><summary>Tôi trả khoản vay như thế nào?</summary><p>Khoản vay được trích trả theo tỷ lệ từ tiền bán hàng chuyển về. Bạn xem điều kiện, lịch và phương án trả nợ trong đề xuất trước khi chấp nhận.</p></details>
         <details><summary>Các ngân hàng có xem được dữ liệu của nhau?</summary><p>Dữ liệu gốc được giữ tại từng ngân hàng. FATE phối hợp đánh giá rủi ro; mỗi ngân hàng chỉ giải mã được phần lệnh giải ngân dành cho mình.</p></details>
-        <details><summary>Đây có phải khoản vay thực tế không?</summary><p>Đây là trải nghiệm mô phỏng. Dữ liệu tổng quan có nhãn “Mô phỏng” khi hệ thống trả về dữ liệu giả lập; trải nghiệm demo không thực hiện giải ngân tiền thật.</p></details>
+        <details><summary>Đây có phải khoản vay thực tế không?</summary><p>Trên BuoyUp, hồ sơ, hạn mức và lịch trả được tính đầy đủ theo quy trình, nhưng chưa có khoản tiền nào được chuyển cho bạn. Khoản vay chỉ có hiệu lực khi ngân hàng đối tác ký hợp đồng chính thức với bạn.</p></details>
       </div></section>
       <section class="final-cta" data-reveal><p class="eyebrow">MÙA BÁN HÀNG TIẾP THEO ĐANG ĐỢI</p><h2>Để vốn theo kịp<br><em>điều bạn đang xây.</em></h2><a class="cta" href="register.html">Bắt đầu cùng BuoyUp ↗</a><p>Hiểu rõ khoản vay. Chủ động hành trình.</p></section>
     </main>
@@ -142,7 +146,7 @@
 
     <script src="../src/chung/vendor/gsap-3.12.7/gsap.min.js"></script>
     <script src="../src/chung/vendor/gsap-3.12.7/ScrollTrigger.min.js"></script>
-    <script src="../src/chung/bu/api.js"></script>
+    <script src="../src/chung/bu/api.js?v=20261019a"></script>
     <script src="../src/chung/bu/session.js"></script>
     <script src="../src/chung/vendor/lenis-1.3.26/lenis.js"></script>
     <script src="../src/chung/bu/motion.js"></script>

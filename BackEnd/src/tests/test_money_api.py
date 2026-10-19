@@ -221,7 +221,7 @@ def test_http_end_to_end_lan(bu_client, as_seller, as_officer):
     assert loan["schedule"][0]["status"] == "paid" and loan["repayments"][0]["amount"] == loan["schedule"][0]["paid"]
     loan = lc.ok(bu_client.post(f"/v4/loans/{loan['id']}/simulate-inflow", json={"amount": 60_000},
                                 headers=as_seller))
-    loan = lc.ok(bu_client.post(f"/v4/loans/{loan['id']}/prepay", json={}, headers=as_seller))
+    loan = lc.ok(bu_client.post(f"/v4/loans/{loan['id']}/prepay", json={"confirm": True}, headers=as_seller))
     assert loan["status"] == "closed" and loan["repaid"] == sum(s["repaid"] for s in loan["shares"])
     assert bu_client.get(f"/v4/applications/{app['id']}", headers=as_seller).json()["status"] == "closed"
     assert bu_client.get(f"/v4/chain/cases/{app['id']}/verify", headers=as_officer).json()["ok"] is True

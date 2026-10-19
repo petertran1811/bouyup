@@ -127,7 +127,11 @@ def test_bank_hard_rules_and_own_decision(bu_client, as_seller):
         assert syndicate.bank_decides(bank["CMB"], {**case, "industry": "điện tử"}, 200_000)["decision"] == "decline"
         assert syndicate.bank_decides(bank["GZRCB"], case, 200_000)["reason"] == "Chỉ nhận hạng A trở lên"
         assert "50.000" in syndicate.bank_decides(bank["CCB"], case, 40_000)["reason"]
-        assert syndicate.bank_decides(bank["BOC"], case, 200_000)["ms"] > 30_000  # → a timeout in the round
+        # Bank of China is slow: 26 s × a steady 0,6–1,4 factor per case, so it misses the 30 s window on some cases.
+        times = [syndicate.bank_decides(bank["BOC"], {**case, "case_id": f"APP-{i}"}, 200_000)["ms"] for i in range(40)]
+        assert min(times) < 30_000 < max(times)
+        assert syndicate.bank_decides(bank["BOC"], {**case, "case_id": "APP-1"}, 200_000)["ms"] == \
+            syndicate.bank_decides(bank["BOC"], {**case, "case_id": "APP-1"}, 200_000)["ms"]
 
 
 def test_reserve_at_signing_takes_room_and_budget(bu_client):

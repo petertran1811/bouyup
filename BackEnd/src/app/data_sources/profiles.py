@@ -122,6 +122,15 @@ def tax_revenue(tax: dict[str, Any], as_of: date) -> dict[str, Any]:
     }
 
 
+def _goods_mix(purchases: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_item: dict[str, dict[str, int]] = {}
+    for p in purchases:
+        row = by_item.setdefault(p["item"], {"cost": 0, "qty": 0})
+        row["cost"] += int(p["amount"])
+        row["qty"] += int(p.get("qty") or 0)
+    return sorted(({"item": k, **v} for k, v in by_item.items()), key=lambda r: -r["cost"])
+
+
 def derive(raw: dict[str, Any]) -> dict[str, Any]:
     """Scenario data in the shape sources.py serves to the agents."""
     as_of = date.fromisoformat(raw["as_of"])
@@ -182,7 +191,9 @@ def derive(raw: dict[str, Any]) -> dict[str, Any]:
         "registry": {"exists": True, "status": raw["registry"]["status"], "registered": raw["registry"]["registered"],
                      "type": raw["registry"]["type"],
                      "beneficial_owner_verified": raw["registry"]["beneficial_owner_verified"]},
-        "entity_match": store["operator"] == raw["registry"]["name"] and store["reg_no"] == raw["registry"]["reg_no"],
+        # The store page and the registry name the same subject (data consistency). Whether the BORROWER is that
+        # subject is computed at the identity step (sources.verify_identity), never stored in the dossier.
+        "store_matches_registry": store["operator"] == raw["registry"]["name"] and store["reg_no"] == raw["registry"]["reg_no"],
         "inflows": {
             **volume,
             "to_declared_accounts_vs_tax_sales": round(to_declared / sales12, 2) if sales12 else 0.0,
@@ -217,6 +228,9 @@ def derive(raw: dict[str, Any]) -> dict[str, Any]:
             "network_history": "none",
         },
         "revenue": revenue,
+        # Thống kê (18/10/2026): what the seller bought over the 12 months, per item (purchase invoices),
+        # so the seller's page can show which goods carry the sales.
+        "goods_mix": _goods_mix(purchases12),
         "fate": {"value": raw["interbank"]["value"], "run_id": raw["interbank"]["run_id"],
                  "coverage": raw["interbank"].get("coverage")},
         "suppliers": json.loads(json.dumps(raw["suppliers"])),

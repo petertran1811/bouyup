@@ -23,6 +23,8 @@
     var token;
     try { token = localStorage.getItem('bu_token'); } catch (_) { /* optional storage */ }
     if (token && opts.auth !== false) headers.Authorization = 'Bearer ' + token;
+    var lang = BU.i18n && BU.i18n.lang ? BU.i18n.lang() : 'vi';
+    if (lang && lang !== 'vi') headers['X-BU-Lang'] = lang;
     var init = { method: opts.method || 'GET', headers: headers, credentials: 'same-origin' };
     if (opts.body !== undefined) {
       headers['Content-Type'] = 'application/json';
@@ -100,8 +102,9 @@
     simulateInflow: function (key, amount) { return write('/v4/loans/' + id(key) + '/simulate-inflow', { amount: amount }); },
     simulateTransfer: function (key, body) { return write('/v4/loans/' + id(key) + '/simulate-transfer', body); },
     simulateAdvance: function (key, to) { return write('/v4/loans/' + id(key) + '/simulate-advance', { to: to }); },
-    minimum: function (key) { return write('/v4/loans/' + id(key) + '/minimum'); },
-    prepay: function (key) { return write('/v4/loans/' + id(key) + '/prepay'); },
+    // The seller confirms money actions on screen first: body {confirm: true, method, face_verify_id?, amount?}.
+    minimum: function (key, body) { return write('/v4/loans/' + id(key) + '/minimum', body); },
+    prepay: function (key, body) { return write('/v4/loans/' + id(key) + '/prepay', body); },
     receivingAccount: function (key, body) { return write('/v4/loans/' + id(key) + '/receiving-account', body, 'PUT'); }
   };
   BU.api.officer = { queue: function () { return get('/v4/officer/queue'); }, decision: function (key, body) { return write('/v4/officer/applications/' + id(key) + '/decision', body); } };

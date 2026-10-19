@@ -33,7 +33,7 @@ def test_lan_figures_come_from_raw_rows():
                         "b2b_sales_share": 0.0}
     assert {k: d["credit"][k] for k in ("late_max_days_24m", "late_12m", "inquiries_3m", "monthly_installments")} == \
         {"late_max_days_24m": 0, "late_12m": 0, "inquiries_3m": 2, "monthly_installments": 25005}
-    assert d["entity_match"] is True and d["fate"]["value"] == 3
+    assert d["store_matches_registry"] is True and d["fate"]["value"] == 3
     assert sources.SCENARIOS["lan"][3]["revenue"]["monthly_avg_12m"] == 166700
     assert sources.pull_revenue(sources.SCENARIOS["lan"][3]) == sources.SCENARIOS["lan"][3]["revenue"]
 

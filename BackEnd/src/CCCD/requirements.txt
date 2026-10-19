@@ -1,0 +1,4 @@
+# CCCD OCR (PRC resident ID card): PaddleOCR Chinese det/cls/rec models on onnxruntime.
+# onnxruntime itself comes from Reid/requirements.txt (1.19.2, shared with InsightFace and fastembed).
+rapidocr_onnxruntime==1.4.4
+Pillow>=10.0,<12

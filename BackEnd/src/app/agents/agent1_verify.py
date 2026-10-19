@@ -24,6 +24,7 @@ Steps 1–2 run at create, 3 at /identity, 4 at /consent, 5–10 at /verify; ste
 from __future__ import annotations
 
 import copy
+import re
 from datetime import date, timedelta
 from typing import Any
 
@@ -31,6 +32,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.platform.errors import api_error
+from app.platform.config import settings
 from app.core import algorithm
 from app.blockchain import chain
 from app.data_sources import consent as consent_mod
@@ -41,10 +43,10 @@ from app.platform.tables import BuApplication, BuLoan
 from app.api.views import QUESTION_ALIASES, now_iso, store
 from app.blockchain.withdrawals import reference_code
 
-BORROWER_TYPES = {"individual_business": "Hộ kinh doanh", "company": "Doanh nghiệp"}
+BORROWER_TYPES = {"individual": "Cá nhân", "individual_business": "Hộ kinh doanh", "company": "Doanh nghiệp"}
 
 STEPS = (
-    (1, "link", "Đọc link và hồ sơ", "lookup_public_store(url)"),
+    (1, "link", "Kết nối cửa hàng và đọc hồ sơ", "connect_shop · lookup_public_store(url)"),
     (2, "registry", "Tra đăng ký", "lookup_business_registry(reg_no)"),
     (3, "identity", "Định danh", "verify_identity(face, liveness)"),
     (4, "consent", "Ba ô đồng ý", "request_consent(credit, share, data)"),
@@ -77,12 +79,12 @@ def _internal(doc: dict[str, Any]) -> dict[str, Any]:
 
 
 def _tool(session: Session, app_row: BuApplication, doc: dict[str, Any], name: str,
-          inp: dict[str, Any], out: dict[str, Any]) -> str:
+          inp: dict[str, Any], out: dict[str, Any], simulated: bool = True) -> str:
     internal = _internal(doc)
     internal["tc_seq"] += 1
     tc_id = f"TC-{internal['tc_seq']}"
     doc["verification"]["tool_calls"].append(
-        {"id": tc_id, "tool": name, "input": inp, "output": out, "at": now_iso(), "simulated": True})
+        {"id": tc_id, "tool": name, "input": inp, "output": out, "at": now_iso(), "simulated": simulated})
     events.log(session, app_row.id, "agent1", "tool_call", f"{tc_id} · {name}", {"tool_call": tc_id})
     return tc_id
 
@@ -96,15 +98,25 @@ def _flag(doc: dict[str, Any], code: str) -> dict[str, Any] | None:
     return next((f for f in doc["verification"]["flags"] if f["code"] == code), None)
 
 
+def _params(session: Session) -> dict[str, Any]:
+    from app.core.params import active_params
+
+    return active_params(session)
+
+
 def _fmt(x: float) -> str:
     return algorithm.fmt_num(x)
 
 
 # --- steps 1–2 (create) ----------------------------------------------------------
 
-def new_doc(scenario_data: dict[str, Any], owner_name: str, borrower_type: str = "individual_business") -> dict[str, Any]:
+def new_doc(scenario_data: dict[str, Any], owner_name: str, borrower_type: str = "individual_business",
+            connection: dict[str, Any] | None = None) -> dict[str, Any]:
+    """``connection``: the store connection the application is made from (HANDOVER 16.7: platform OAuth or the
+    store's registered-phone code); None only where SHOP_CONNECT_REQUIRED is off (``self_declared``)."""
     industry = scenario_data["store"]["industry"]
     return {
+        "shop_connection": connection,
         "region": sources.REGION, "currency": sources.CURRENCY,
         "province": scenario_data["store"].get("province", ""),
         "category": GROUP_BY_INDUSTRY.get(industry, "khác"), "borrower_type": borrower_type,
@@ -112,7 +124,7 @@ def new_doc(scenario_data: dict[str, Any], owner_name: str, borrower_type: str =
         "verification": {"state": "IN_PROGRESS",
                          "steps": [{"n": n, "key": k, "title": t, "tool": tool, "status": "pending", "summary": ""}
                                    for n, k, t, tool in STEPS],
-                         "flags": [], "questions": [], "derived": {}, "tool_calls": [],
+                         "flags": [], "questions": [], "derived": {}, "tool_calls": [], "evidence": None,
                          "record_hash": None, "chain_tx": None, "reason": None},
         "offer": None, "proposal": None, "control": None, "decision": None, "payee": None,
         "syndicate": None, "selection": None, "contract": None,
@@ -128,36 +140,84 @@ def read_store(session: Session, app_row: BuApplication, doc: dict[str, Any],
     at submission must be the one registered (a company cannot apply as an individual business)."""
     data = _internal(doc)["data"]
     s = data["store"]
+    conn = doc.get("shop_connection")
+    via = conn["verified_via"] if conn else None
+    evidence = sources.evidence_levels(data, via, reg_no_typed=not urls)
+    doc["verification"]["evidence"] = evidence
+    if conn:
+        # Step 1 starts from the proof of ownership: who connected which store, and how.
+        _tool(session, app_row, doc, "connect_shop", {"platform": conn["platform"], "shop_id": conn["shop_id"]},
+              {"connection_id": conn["id"], "verified_via": via, "verified_at": conn["verified_at"],
+               "shop_name": conn.get("shop_name"), "phone_masked": conn.get("phone_masked") or None,
+               "evidence_level": evidence}, simulated=bool(data.get("sample")))
+    proof = {"otp_registered_phone": " · chủ cửa hàng xác minh qua số điện thoại đăng ký",
+             "oauth": " · chủ cửa hàng xác minh qua đăng nhập sàn"}.get(via or "", " · chưa xác minh chủ cửa hàng")
     if urls:
         for url in urls:
             out = sources.lookup_public_store(data, url)
-            _tool(session, app_row, doc, "lookup_public_store", {"url": url}, out)
-            doc["stores"].append({"url": url, "platform": sources.detect_platform(url), "entity": s["entity"],
-                                  "reg_no": s["reg_no"], "rating": s["rating"], "category": s["category"],
-                                  "licenses": list(s["licenses"]), "province": s.get("province", ""),
-                                  "opened": s.get("opened"), "registry": None})
+            _tool(session, app_row, doc, "lookup_public_store", {"url": url},
+                  {**out, "evidence_level": evidence["store"]}, simulated=evidence["store"] != "platform_oauth")
+            doc["stores"].append({"url": url, "platform": sources.detect_platform(url) or s["platform"],
+                                  "entity": s["entity"], "reg_no": s["reg_no"], "rating": s["rating"],
+                                  "category": s["category"], "licenses": list(s["licenses"]),
+                                  "province": s.get("province", ""), "opened": s.get("opened"), "registry": None,
+                                  "shop_name": (data.get("shop") or {}).get("shop_name"),
+                                  "verified_via": via, "connection_id": conn["id"] if conn else None})
         _step(doc, 1, "ok", f"{s['entity']} · {s['reg_no']} · điểm {_fmt(s['rating'])} · "
-                            f"{BORROWER_TYPES[doc['borrower_type']]}")
+                            f"{BORROWER_TYPES[doc['borrower_type']]}{proof}")
     else:
         doc["stores"].append({"url": None, "platform": s["platform"], "entity": s["entity"], "reg_no": reg_no,
                               "rating": None, "category": None, "licenses": [], "registry": None,
-                              "via": "reg_no"})
-        _step(doc, 1, "warn", "Người vay nhập số đăng ký; cửa hàng xác nhận qua hồ sơ thuế")
+                              "via": "reg_no", "verified_via": via, "connection_id": conn["id"] if conn else None})
+        _step(doc, 1, "warn", f"Người vay nhập số đăng ký; cửa hàng xác nhận qua hồ sơ thuế{proof}")
     reg = sources.lookup_business_registry(data, s["reg_no"])
-    _tool(session, app_row, doc, "lookup_business_registry", {"reg_no": s["reg_no"]}, reg)
+    _tool(session, app_row, doc, "lookup_business_registry", {"reg_no": s["reg_no"]},
+          {**reg, "evidence_level": evidence["registry"]}, simulated=evidence["registry"] != "platform_oauth")
     for st in doc["stores"]:
         st["registry"] = {"status": reg["status"], "registered": reg["registered"], "type": reg.get("type")}
+    if doc["borrower_type"] == "individual" and not reg["exists"]:
+        # A personal seller with no business registration at all: allowed as an individual borrower.
+        _step(doc, 2, "ok", "Vay với tư cách cá nhân · cửa hàng chưa đăng ký kinh doanh · trần cá nhân")
+        events.log(session, app_row.id, "agent1", "steps_1_2", "Đọc link: người bán cá nhân chưa đăng ký")
+        store(app_row, doc, "draft")
+        return
+    if not reg["exists"] and doc["borrower_type"] != "individual":
+        # 18/10/2026: a store with no business registration at all is a personal seller, not a dissolved
+        # entity: say which borrower type fits instead of "thu hồi hoặc giải thể".
+        _step(doc, 2, "fail", f"Cửa hàng chưa đăng ký kinh doanh, chọn {BORROWER_TYPES[doc['borrower_type']]} "
+                              "→ POL_BORROWER_TYPE")
+        _hard(session, app_row, doc, "POL_BORROWER_TYPE", "cửa hàng chưa đăng ký kinh doanh: chỉ vay được với tư "
+                                                          "cách Cá nhân")
+        return
     if not reg["exists"] or reg["status"] != "active":
         _step(doc, 2, "fail", "Chủ thể không còn hoạt động → POL_ENTITY_INACTIVE")
         _hard(session, app_row, doc, "POL_ENTITY_INACTIVE", "chủ thể bị thu hồi hoặc đã giải thể")
         return
     registered_type = reg.get("type") or "individual_business"
+    if doc["borrower_type"] == "individual" and registered_type == "individual_business":
+        # A personal seller: the registry entry (when there is one) must be the person's own household
+        # business; the loan is personal, with the lower individual cap, and identity is the CCCD check.
+        _step(doc, 2, "ok", "Vay với tư cách cá nhân · chủ cửa hàng là người vay · trần cá nhân")
+        events.log(session, app_row.id, "agent1", "steps_1_2", "Đọc link và tra đăng ký: vay cá nhân")
+        # 18/10/2026: allowed (the product rule of 17/10), but the seller is told plainly why the cap is the
+        # individual one and which borrower type the registration supports.
+        doc["borrower_type_hint"] = {
+            "registered": registered_type, "chosen": "individual",
+            "text": "Cửa hàng này đăng ký hộ kinh doanh; bạn đang vay với tư cách Cá nhân nên áp trần cá nhân "
+                    f"{algorithm.fmt_num(int(_params(session)['product']['type_cap']['individual']))} tệ. "
+                    "Muốn được xét theo trần hộ kinh doanh, hãy nộp lại và chọn Hộ kinh doanh."}
+        from app.agents import notify
+
+        notify.push_app_notice(doc, "borrower_type", doc["borrower_type_hint"]["text"], "info", {"view": "apply"})
+        store(app_row, doc, "draft")
+        return
     if registered_type != doc["borrower_type"]:
         _step(doc, 2, "fail", f"Đăng ký là {BORROWER_TYPES.get(registered_type, registered_type)}, chọn "
                               f"{BORROWER_TYPES[doc['borrower_type']]} → POL_BORROWER_TYPE")
         _hard(session, app_row, doc, "POL_BORROWER_TYPE", "loại người vay không khớp đăng ký")
         return
-    reg_date = date.fromisoformat(reg["registered"]).strftime("%d/%m/%Y")
+    reg_date = (date.fromisoformat(reg["registered"]).strftime("%d/%m/%Y") if reg.get("registered")
+                else "chưa rõ ngày")  # a store connected through OAuth: the platform may not give the date
     _step(doc, 2, "ok", f"Đang hoạt động · đăng ký {reg_date} · {BORROWER_TYPES[registered_type]}")
     events.log(session, app_row.id, "agent1", "steps_1_2", "Đọc link và tra đăng ký: đạt")
     store(app_row, doc, "draft")
@@ -166,22 +226,105 @@ def read_store(session: Session, app_row: BuApplication, doc: dict[str, Any],
 # --- step 3 ----------------------------------------------------------------------
 
 def identify(session: Session, app_row: BuApplication, doc: dict[str, Any],
-             face_check: dict[str, Any] | None = None) -> None:
-    """``face_check``: the live ArcFace 1:1 re-check against the face registered at sign-up, when there is one."""
+             face_check: dict[str, Any] | None = None, otp_check: dict[str, Any] | None = None) -> None:
+    """``face_check``: the live ArcFace 1:1 re-check against the face registered at sign-up, when there is one.
+    ``otp_check``: the seller verified with an SMS OTP instead of the face (no camera, no face model, failed
+    scan); the CCCD checks below run the same way."""
     data = _internal(doc)["data"]
-    result = sources.verify_identity(data)
     entity = doc["stores"][0]["entity"]
-    face = face_check["method"] if face_check else "liveness"
-    _tool(session, app_row, doc, "verify_identity", {"cccd": "••••", "face": face, "entity": entity}, result)
-    doc["identity"] = {"cccd": True, "face": True, "liveness": True, "result": result,
-                       **({"face_check": face_check} if face_check else {})}
-    if not (result["face_match"] and result["entity_match"]):
-        _step(doc, 3, "fail", "Chủ thể trên trang cửa hàng không khớp CCCD → LAW_ID_MISMATCH")
-        _hard(session, app_row, doc, "LAW_ID_MISMATCH", "người và chủ thể không khớp")
+    face = face_check["method"] if face_check else "sms_otp" if otp_check else "liveness"
+    card = cccd_checks(doc, data)
+    conn = doc.get("shop_connection")
+    ownership = ({"verified_via": conn["verified_via"], "connection_id": conn["id"], "verified_at": conn["verified_at"]}
+                 if conn else {"verified_via": "self_declared", "accepted": not settings.shop_connect_required})
+    # Computed here (18/10/2026): proof of ownership from the store connection, then the CCCD against the
+    # store's owner. Nothing about the match is read from the dossier any more.
+    result = sources.verify_identity(data, ownership, card)
+    evidence = doc["verification"].get("evidence") or {}
+    _tool(session, app_row, doc, "verify_identity", {"cccd": "••••", "face": face, "entity": entity,
+                                                     "ownership": ownership["verified_via"]},
+          {**result, "evidence_level": evidence.get("identity")}, simulated=bool(data.get("sample")))
+    if card is not None:
+        tc = _tool(session, app_row, doc, "read_cccd", {"engine": card["engine"], "sides": card["sides"]},
+                   {k: v for k, v in card.items() if k not in ("id_masked", "id_tail")} | {"id_masked": card["id_masked"]},
+                   simulated=False)
+        card["tool_call"] = tc
+    doc["identity"] = {"cccd": True, "face": otp_check is None, "liveness": otp_check is None,
+                       "method": "otp" if otp_check else "face", "result": result,
+                       **({"face_check": face_check} if face_check else {}),
+                       **({"otp_check": otp_check} if otp_check else {}),
+                       **({"card": {k: v for k, v in card.items() if k != "id_tail"}} if card is not None else {})}
+    if card is not None and card["under_18"]:
+        _step(doc, 3, "fail", "CCCD: người vay chưa đủ 18 tuổi → LAW_ID_MINOR")
+        _hard(session, app_row, doc, "LAW_ID_MINOR", "người vay chưa đủ 18 tuổi")
         return
-    _step(doc, 3, "ok", "CCCD ↔ khuôn mặt (người thật) ↔ chủ thể: khớp")
+    if card is not None and card["problems"]:
+        # Checksum, expiry or a name that differs from the store owner: an officer looks (never auto-approved).
+        doc["verification"]["flags"].append({"code": "RISK_ID_REVIEW", "status": "open", "evidence_tool_call": card["tool_call"],
+                                             "note": "CCCD cần cán bộ kiểm: " + "; ".join(card["problems"])})
+    if result["account_owner_match"] is False:
+        doc["verification"]["flags"].append({
+            "code": "RISK_ID_REVIEW", "status": "open",
+            "note": "Tài khoản quyết toán của cửa hàng không đứng tên chủ thể hoặc chủ cửa hàng"})
+    if not (result["face_match"] and result["entity_match"]):
+        why = "; ".join(result.get("mismatch") or []) or "người và chủ thể không khớp"
+        _step(doc, 3, "fail", f"Người vay không khớp chủ thể của cửa hàng ({why}) → LAW_ID_MISMATCH")
+        _hard(session, app_row, doc, "LAW_ID_MISMATCH", why)
+        return
+    who = "số điện thoại (mã OTP)" if otp_check else "khuôn mặt (người thật)"
+    owner = {"otp_registered_phone": "chủ thể (mã gửi số đăng ký cửa hàng)", "oauth": "chủ thể (đăng nhập sàn)"}.get(
+        result["ownership"]["verified_via"], "chủ thể (tự khai)")
+    _step(doc, 3, "warn" if card and card["problems"] else "ok",
+          f"CCCD ↔ {who} ↔ {owner}: khớp" + (f" · CCCD cần kiểm: {', '.join(card['problems'])}"
+                                              if card and card["problems"] else
+                                              " · CCCD đọc bằng OCR, số hợp lệ" if card else ""))
     events.log(session, app_row.id, "agent1", "identity", "Định danh khớp")
     store(app_row, doc, "identified")
+
+
+def cccd_checks(doc: dict[str, Any], data: dict[str, Any]) -> dict[str, Any] | None:
+    """Checks on the OCR'd CCCD (never the image): GB 11643 number and checksum, age ≥ 18, validity
+    period not expired, and, when the store owner's registered name is in Chinese, that it matches."""
+    scans = doc.get("cccd_scans") or {}
+    front = (scans.get("front") or {}).get("fields") or {}
+    if not front:
+        return None
+    back = (scans.get("back") or {}).get("fields") or {}
+    number = (front.get("id_number") or {}).get("value") or ""
+    checks = front.get("id_number_validation") or {}
+    name = (front.get("name") or {}).get("value") or ""
+    problems: list[str] = []
+    if not checks.get("format_valid"):
+        problems.append("số CCCD sai định dạng hoặc mã vùng")
+    elif not checks.get("checksum_valid"):
+        problems.append("số CCCD sai số kiểm tra")
+    birth = checks.get("birth_date") or (front.get("birth_date") or {}).get("value")
+    today_ = date.today()
+    under_18 = False
+    if birth:
+        b = date.fromisoformat(birth)
+        under_18 = (today_.year - b.year - ((today_.month, today_.day) < (b.month, b.day))) < 18
+    period = (back.get("validity_period") or {}).get("value") or ""
+    expired = False
+    m = re.search(r"[-~至到]\s*((?:19|20)\d{2})[.年/-](\d{1,2})[.月/-](\d{1,2})", period)
+    if m:
+        expired = date(int(m.group(1)), int(m.group(2)), int(m.group(3))) < today_
+    if not back:
+        problems.append("chưa chụp mặt sau (hạn hiệu lực)")
+    elif expired:
+        problems.append("CCCD đã hết hạn")
+    # The name and the last four digits are compared with the store's owner at step 3 (sources.verify_identity):
+    # a mismatch there is LAW_ID_MISMATCH, not a review flag.
+    shop = data.get("shop") or {}
+    name_check = sources.compare_card_name(name, [str(shop.get("owner_name") or ""),
+                                                  str((data.get("store") or {}).get("entity") or "")])
+    warnings = list((scans.get("front") or {}).get("warnings") or []) + list((scans.get("back") or {}).get("warnings") or [])
+    return {"engine": (scans.get("front") or {}).get("engine"), "sides": sorted(scans),
+            "id_masked": (number[:6] + "••••••••" + number[-4:]) if len(number) == 18 else None,
+            "name": name, "birth_date": birth, "under_18": under_18, "validity_period": period or None,
+            "expired": expired, "checksum_valid": bool(checks.get("checksum_valid")), "name_check": name_check,
+            "id_tail": number[-4:] if len(number) == 18 else None,
+            "problems": problems, "ocr_warnings": warnings[:10]}
 
 
 # --- step 4: three consents ----------------------------------------------------------
@@ -258,6 +401,24 @@ def set_plan(app_row: BuApplication, doc: dict[str, Any], plan: dict[str, Any],
     store(app_row, doc)
 
 
+DECLARATION_TEXT = ("Tôi cam đoan các thông tin trong kế hoạch vay, số liệu doanh thu và ảnh chụp tôi tải lên là đúng "
+                    "sự thật và do tôi tự kê khai. Tôi hiểu rằng kê khai gian dối để được cấp vốn có thể bị từ chối, "
+                    "thu hồi khoản vay trước hạn và chịu trách nhiệm theo pháp luật.")
+
+
+def record_declaration(session: Session, app_row: BuApplication, doc: dict[str, Any],
+                       statements: list[dict[str, Any]] | None, plan: dict[str, Any]) -> None:
+    """The "Tôi cam đoan" declaration: its text, time and what it covers go on the chain."""
+    images = [i["sha256"] for i in doc.get("statement_images") or []]
+    payload = {"text": DECLARATION_TEXT, "at": now_iso(), "plan_item": plan.get("item"),
+               "statements_months": [s["month"] for s in statements or []], "statement_images": images}
+    entry = chain.record(session, app_row.id, "declaration", payload)
+    doc["plan"]["declaration"] = {"text": DECLARATION_TEXT, "at": payload["at"], "chain_tx": entry.tx}
+    events.log(session, app_row.id, "seller", "declaration", "Người vay cam đoan thông tin kê khai",
+               hash_=entry.fingerprint)
+    store(app_row, doc)
+
+
 # --- steps 5–10 --------------------------------------------------------------------
 
 def network_history(session: Session, seller_user_id: str) -> str:
@@ -328,6 +489,12 @@ def fate_alt_signals(data: dict[str, Any]) -> dict[str, Any]:
 def run(session: Session, app_row: BuApplication, doc: dict[str, Any], params: dict[str, Any]) -> None:
     require_consent(doc)
     data = _internal(doc)["data"]
+    if data.get("sources_connected") is False:
+        # A store connected through the platform (not a sample): tax, credit and FATE are not connected yet, so
+        # no figure is invented; an officer takes the case (HANDOVER 16.7).
+        app_row.status = "verifying"
+        _source_gap(session, app_row, doc, ["tax", "credit"], step=5)
+        return
     src = sources.ScenarioSources(data)
     app_row.status = "verifying"
     rev = src.pull_revenue()
@@ -415,6 +582,29 @@ def run(session: Session, app_row: BuApplication, doc: dict[str, Any], params: d
         tc = _tool(session, app_row, doc, "verify_statements", {"months": [s["month"] for s in statements]}, st_result)
         st_result = {**st_result, "tool_call": tc}
         _internal(doc)["statements_verified"] = st_result["verdict"] == "verified"
+        images = doc.get("statement_images") or []
+        if (_internal(doc)["statements_verified"] and not images
+                and params["revenue"].get("bonus_requires_images", False)):
+            _internal(doc)["statements_verified"] = False
+            doc["verification"]["flags"].append({
+                "code": "DATA_STATEMENT_UNUSED", "status": "resolved_by_check", "evidence_tool_call": tc,
+                "note": "Số doanh thu tự khai không kèm ảnh chụp: không dùng để nâng hạn mức"})
+        if images:
+            # Screenshots uploaded (review 17/10/2026): the typed monthly revenue should appear on them.
+            seen = {n for i in images for n in i.get("numbers") or []}
+            read = any(i.get("ocr_read") for i in images)
+            found = [s["month"] for s in statements if int(s["revenue"]) in seen]
+            check = {"images": len(images), "ocr_read": read, "months_found": found,
+                     "months_typed": [s["month"] for s in statements],
+                     "supported": read and len(found) * 2 >= len(statements)}
+            itc = _tool(session, app_row, doc, "check_statement_images",
+                        {"images": [i["sha256"][:12] for i in images]}, check)
+            st_result["images"] = check
+            if read and not check["supported"] and _internal(doc)["statements_verified"]:
+                _internal(doc)["statements_verified"] = False  # no bonus on figures the screenshots do not show
+                doc["verification"]["flags"].append({
+                    "code": "DATA_STATEMENT_UNUSED", "status": "resolved_by_check", "evidence_tool_call": itc,
+                    "note": "Số doanh thu đã nhập không thấy trên ảnh chụp: không dùng để nâng hạn mức"})
     derived = sources.derive_financials(data)
     _tool(session, app_row, doc, "derive_financials", {}, derived)
     doc["verification"]["derived"] = {
@@ -494,7 +684,7 @@ def _apply_flag_table(session: Session, app_row: BuApplication, doc: dict[str, A
                       "note": "Tự đóng: B3 dùng giá hóa đơn"})
     if plan["inventory"] > fp["inventory_mult"] * tax["inventory_estimate"]:
         flags.append({"code": "RISK_INVENTORY_HIGH", "status": "open", "note": "Tồn kho khai cao hơn ước tính"})
-    if plan["supplier"] in links["linked"]:
+    if plan.get("supplier") and plan["supplier"] in links["linked"]:
         flags.append({"code": "RISK_SUPPLIER_LINKED", "status": "open",
                       "note": "Nhà cung cấp cùng nhóm liên kết với cửa hàng"})
 
@@ -611,23 +801,40 @@ _HANDLERS = {"RISK_SALES_SPIKE": _answer_sales_spike, "RISK_INVENTORY_HIGH": _an
 # --- step 10 -------------------------------------------------------------------------
 
 _HARD_REASONS = {
+    "LAW_ID_MINOR": lambda doc: {
+        "law": "Bộ luật Dân sự Trung Quốc, Điều 18 (năng lực hành vi dân sự đầy đủ từ 18 tuổi)",
+        "factor": "Theo ngày sinh trên CCCD, người vay chưa đủ 18 tuổi.",
+        "fix": "Người vay cần đủ 18 tuổi; người đại diện theo pháp luật có thể nộp hồ sơ."},
     "LAW_ID_MISMATCH": lambda doc: {
         "law": "Quy định định danh khách hàng (Luật Chống rửa tiền 2024, Điều 29)",
-        "factor": f"Chủ thể trên trang cửa hàng ({doc['stores'][0]['entity']}) không khớp với người quét CCCD.",
-        "fix": "Dán link cửa hàng do chính chị đăng ký."},
+        "factor": f"Chủ thể của cửa hàng ({doc['stores'][0]['entity']}) không khớp với người vay: "
+                  + ("; ".join(((doc.get("identity") or {}).get("result") or {}).get("mismatch") or [])
+                     or "người quét CCCD không phải chủ cửa hàng") + ".",
+        "fix": "Kết nối cửa hàng do chính bạn đăng ký và dùng CCCD của chính chủ cửa hàng."},
     "POL_ENTITY_INACTIVE": lambda doc: {
         "law": "Điều kiện phục vụ: chủ thể phải đang hoạt động trên hệ thống đăng ký doanh nghiệp",
         "factor": "Chủ thể kinh doanh đã bị thu hồi hoặc giải thể.",
         "fix": "Dùng cửa hàng của chủ thể đang hoạt động, hoặc khôi phục đăng ký rồi nộp lại."},
-    "POL_BORROWER_TYPE": lambda doc: {
-        "law": "Điều kiện sản phẩm: loại người vay theo đăng ký kinh doanh",
-        "factor": "Loại người vay chị chọn không khớp với đăng ký kinh doanh.",
-        "fix": "Nộp lại và chọn đúng loại: doanh nghiệp hoặc hộ kinh doanh."},
+    "POL_BORROWER_TYPE": lambda doc: _borrower_type_reason(doc),
     "POL_ACTIVE_NPL": lambda doc: {
         "law": "Chính sách tín dụng: không cho vay khi đang có nợ xấu",
         "factor": "Báo cáo tín dụng ghi nhận một khoản nợ xấu chưa tất toán.",
         "fix": "Tất toán khoản nợ xấu rồi nộp lại hồ sơ."},
 }
+
+
+def _borrower_type_reason(doc: dict[str, Any]) -> dict[str, str]:
+    """POL_BORROWER_TYPE in words the seller can act on: what the store is registered as and what to pick."""
+    reg = ((doc.get("stores") or [{}])[0] or {}).get("registry") or {}
+    chosen = BORROWER_TYPES.get(str(doc.get("borrower_type")), str(doc.get("borrower_type")))
+    if reg.get("status") in (None, "none") or not reg.get("registered"):
+        registered, fits = "chưa đăng ký kinh doanh", "Cá nhân"
+    else:
+        fits = BORROWER_TYPES.get(str(reg.get("type") or "individual_business"), "Hộ kinh doanh")
+        registered = f"đăng ký {fits.lower()}"
+    return {"law": "Điều kiện sản phẩm: loại người vay theo đăng ký kinh doanh",
+            "factor": f"Cửa hàng này {registered}; bạn đã chọn vay với tư cách {chosen}.",
+            "fix": f"Nộp lại hồ sơ và chọn tư cách {fits}."}
 
 
 def _hard(session: Session, app_row: BuApplication, doc: dict[str, Any], code: str, note: str) -> None:
@@ -637,12 +844,12 @@ def _hard(session: Session, app_row: BuApplication, doc: dict[str, Any], code: s
     store(app_row, doc, "rejected")
 
 
-def _source_gap(session: Session, app_row: BuApplication, doc: dict[str, Any], down: list[str]) -> None:
+def _source_gap(session: Session, app_row: BuApplication, doc: dict[str, Any], down: list[str], step: int = 6) -> None:
     names = {"tax": "thuế (银税互动)", "credit": "báo cáo tín dụng"}
     note = "Nguồn không trả lời: " + ", ".join(names.get(d, d) for d in down)
     doc["verification"]["flags"].append({"code": "DATA_SOURCE_GAP", "status": "open", "note": note,
                                          "sources": down})
-    _step(doc, 6, "fail", f"{note} → chuyển cán bộ")
+    _step(doc, step, "fail", f"{note} → chuyển cán bộ")
     events.log(session, app_row.id, "agent1", "source_unavailable", note, {"sources": down})
     conclude(session, app_row, doc, "ESCALATED")
     doc["escalation"] = {"why": "DATA_SOURCE_GAP", "at": now_iso()}
@@ -671,6 +878,7 @@ def conclude(session: Session, app_row: BuApplication, doc: dict[str, Any], stat
                                    "flags": [{k: f.get(k) for k in ("code", "status", "note")} for f in v["flags"]]})
     internal["llm_notes"] = f"{notes} {extra}".strip() if extra else notes
     internal["notes_source"] = "llm" if extra else "code"
+    internal["notes_code"] = notes  # the part written by code from the tool results (demo sample guard)
     # Recorded, never stripped: RISK-06 (Agent 3) reads both the text and this record.
     internal["notes_scan"] = llm_tools.scan_injection(internal["llm_notes"])
     if internal["notes_scan"]:
@@ -683,6 +891,8 @@ def conclude(session: Session, app_row: BuApplication, doc: dict[str, Any], stat
         "scope": "out" if state == "OUT_OF_SCOPE" else "in",
         "consent_id": (doc.get("consent") or {}).get("id"), "stores": doc["stores"],
         "identity": (doc.get("identity") or {}).get("result"), "derived": v["derived"],
+        # How far each source is checked (HANDOVER 16.7) and the store connection the case was made from.
+        "evidence_level": v.get("evidence"), "shop_connection": doc.get("shop_connection"),
         **(internal.get("record_sources") or {"credit": None, "interbank_score": None}),
         "plan": {k: plan[k] for k in plan if k not in ("suggested", "submitted")} if plan and plan.get("submitted") else None,
         "flags": [{k: f[k] for k in ("code", "status", "evidence_tool_call", "penalty") if k in f} for f in v["flags"]],

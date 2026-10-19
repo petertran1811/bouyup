@@ -77,6 +77,21 @@
   }
   // A finished face scan stays valid on the server for a few minutes, so a retried submit reuses it.
   let faceEnrollId = null;
+  // Sign-up without a face (no camera, camera refused, no face model, failed scan, or the person chose it):
+  // the phone number verified with an SMS OTP instead (otp-sms.js; checked in the browser for now).
+  let otpProof = null;
+  const FACE_OTP_REASONS = { FACE_UNAVAILABLE: 'Máy chủ chưa sẵn sàng nhận diện khuôn mặt, nên bạn xác thực số điện thoại bằng mã OTP để tạo tài khoản.' };
+  async function signupOtp(reason) {
+    const phone = form.elements.phone;
+    const proof = await BU.otp.verify({ phone: phone.value.trim(), editable: true, reason: reason || '',
+      sub: 'Nhận mã 6 chữ số qua SMS để xác nhận số điện thoại và hoàn tất tạo tài khoản.' });
+    phone.value = proof.phone;
+    return proof;
+  }
+  function passwordInstead(message) {
+    showError(message);
+    (form.elements.email.value ? form.elements.password : form.elements.email).focus();
+  }
   const faceLogin = document.getElementById('face-login');
   if (faceLogin && BU.face) {
     faceLogin.addEventListener('click', async function () {
@@ -89,7 +104,10 @@
         BU.session.set(result);
         location.assign(BU.session.next(next, result.user.role));
       } catch (error) {
-        if (error.code !== 'CANCELLED') showError(error.message);
+        // No passwordless OTP login: without a real SMS provider it would let anyone in. A face that cannot be
+        // checked sends the person back to the email and password form instead.
+        if (error.code === 'USE_PASSWORD') passwordInstead('Không xác thực được bằng khuôn mặt. Vui lòng đăng nhập bằng email và mật khẩu.');
+        else if (error.code !== 'CANCELLED') passwordInstead('Không xác thực được bằng khuôn mặt. Vui lòng đăng nhập bằng email và mật khẩu.');
       }
     });
   }
@@ -107,12 +125,23 @@
       if (password.length < 8 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) { fieldError('password', 'Mật khẩu cần ít nhất tám ký tự, có chữ và số.'); return; }
       if (password !== form.elements.confirm_password.value) { fieldError('confirm_password', 'Mật khẩu nhập lại chưa khớp.'); return; }
       if (!form.elements.accept_terms.checked) { fieldError('accept_terms', 'Vui lòng đồng ý với điều khoản sử dụng.'); return; }
-      if (BU.face && !faceEnrollId) {
+      // A number changed after the OTP needs a new code.
+      if (otpProof && BU.otp && BU.otp.normalize(form.elements.phone.value) !== otpProof.phone) otpProof = null;
+      if (BU.face && !faceEnrollId && !otpProof) {
         try { faceEnrollId = await BU.face.enroll(); } catch (error) {
-          // No face model on the server: it does not require a scan, so sign-up goes on without one.
-          if (error.code !== 'FACE_UNAVAILABLE') {
-            showError('Cần quét khuôn mặt để hoàn tất tạo tài khoản. Bấm “Tạo tài khoản” để quét lại.');
-            return;
+          if (error.code === 'CANCELLED' || !BU.otp) {
+            // No face model on the server (and no OTP box on the page): it does not require a scan, so sign-up goes on.
+            if (error.code !== 'FACE_UNAVAILABLE') {
+              showError('Cần quét khuôn mặt hoặc xác thực bằng mã OTP để hoàn tất tạo tài khoản. Bấm “Tạo tài khoản” để làm lại.');
+              return;
+            }
+          } else {
+            try { otpProof = await signupOtp(FACE_OTP_REASONS[error.code] || ''); } catch (_) {
+              showError('Cần quét khuôn mặt hoặc xác thực bằng mã OTP để hoàn tất tạo tài khoản. Bấm “Tạo tài khoản” để làm lại.');
+              return;
+            }
+            const note = document.querySelector('.auth-face-note span:last-child');
+            if (note) note.textContent = 'Đã xác thực số điện thoại ' + otpProof.phone_masked + ' bằng mã OTP.';
           }
         }
       }
@@ -127,6 +156,7 @@
         payload.accept_terms = true;
         if (form.elements.phone.value.trim()) payload.phone = form.elements.phone.value.trim();
         if (faceEnrollId) payload.face_enroll_id = faceEnrollId;
+        else if (otpProof) { payload.otp_verified = true; payload.phone = form.elements.phone.value.trim(); }
       }
       const result = await BU.api.auth[register ? 'register' : 'login'](payload);
       BU.session.set(result);
@@ -142,6 +172,7 @@
       const field = error.details && error.details.field;
       // An expired or already-registered face scan must be redone on the next submit.
       if (field === 'face_enroll_id' || error.code === 'FACE_ALREADY_REGISTERED') faceEnrollId = null;
+      if (field === 'phone') otpProof = null;
       if (!fieldError(field || (error.code === 'CONFLICT' ? 'email' : ''), message)) showError(message);
     } finally {
       submit.disabled = false;

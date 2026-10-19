@@ -46,7 +46,7 @@ class PolicyIn(BaseModel):
     min_share: float | None = Field(default=None, le=1.0)
     # Loan circle: what the bank's own (simulated) decision in the syndicate round looks at.
     exclude_industries: list[Literal["thời trang", "mỹ phẩm", "tạp hóa", "điện tử", "khác"]] | None = None
-    borrower_types: list[Literal["individual_business", "company"]] | None = Field(default=None, min_length=1)
+    borrower_types: list[Literal["individual", "individual_business", "company"]] | None = Field(default=None, min_length=1)
     max_tenor_m: int | None = Field(default=None, ge=3, le=36)
     max_late_days: int | None = Field(default=None, ge=0, le=90)
 

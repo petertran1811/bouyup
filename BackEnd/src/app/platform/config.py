@@ -94,12 +94,61 @@ class Settings(BaseSettings):
     buoyup_autopilot: bool = True
     buoyup_agent4_interval_seconds: int = 300
     buoyup_agent5_interval_seconds: int = 21600
+    # Agent 5's seller reports (SELLER_SERVICES_PLAN §6.4): how often the loop looks for reports that are due
+    # (monthly, quarterly, yearly, the business-registration reminder); also run right after a loan closes.
+    buoyup_reports_interval_seconds: int = 3600
     # Agent 5 §6/§8: below this many samples in a segment no prudence change is proposed. The demo's
     # synthetic backtest has 20 rows: set 20 only to show the proposal flow (labelled synthetic).
     buoyup_agent5_min_sample: int = 30
 
     # Review item 2: in production Agent 3 must run on another model than Agent 2 (startup check).
     agent3_require_distinct_model: bool = True
+
+    # --- WeBank core-banking notifications (money reaching the business account) ----------------
+    # HMAC-SHA256 secret of POST /v4/webank/inflows (header X-WeBank-Signature: hex digest of the body).
+    # Empty: only a signed-in WeBank bank user may post.
+    webank_webhook_secret: str = ""
+    # Demo stand-in for the platforms' settlement runs (app/autopilot/settlement.py): each open loan's WeBank
+    # account gets one payout per business day, booked on that day, caught up to the loan's clock; simulate-advance
+    # settles each day it moves through. ``platform_payout_minutes`` only paces how often the autopilot runs the job.
+    platform_payout_feed: bool = False
+    platform_payout_minutes: int = 5
+    # 18/10/2026: a case opened from a demo "Gian hàng mẫu" link (APP_ENV dev/demo/test only) must end as the
+    # store's "expect" every time. Its verdict then follows the code path: the models (Agent 1 notes,
+    # Agent 2's answer to Agent 3, Agent 3 phase 1) may only add warnings there. Real stores are unaffected.
+    demo_sample_guard: bool = True
+
+    # --- CCCD (BackEnd/src/CCCD: OCR of the PRC resident ID card, from the team's Backend_CCCD) ----
+    # The identity step needs an OCR scan of the card's front (and the back's validity period).
+    cccd_ocr_required: bool = True
+    # Uploaded revenue screenshots (kept for the officer; the CCCD image itself is never stored).
+    upload_dir: str = str(BACKEND_DIR.parent / "data" / "uploads")
+    # The plan (and the screenshots) need the borrower's "Tôi cam đoan" declaration.
+    plan_declaration_required: bool = True
+
+    # --- shop connection (app/data_sources/shop_connect.py, HANDOVER 16.7) ----------------------------
+    # An application is made from a connected store: the seller proves the store is theirs through the
+    # platform's OAuth or a code sent to the store's registered phone. False only for the older tests / a
+    # pilot that accepts a pasted sample-store link without that proof (recorded as "self_declared").
+    shop_connect_required: bool = True
+    # How long a proven connection may be used to open new applications.
+    shop_connection_ttl_days: int = 30
+    # Public base URL the platforms redirect back to (OAuth callback). Empty: the request's own base URL.
+    shop_oauth_redirect_base: str = ""
+    # Open-platform app keys, one pair per platform. Empty = that platform's OAuth connector is off.
+    # Taobao and Tmall share the Taobao open platform (TOP), so TAOBAO_* serves both.
+    douyin_app_key: str = ""
+    douyin_app_secret: str = ""
+    # 抖店 service-market service id (authorisation link of a published app), see shop_connect.DouyinConnector.
+    douyin_service_id: str = ""
+    taobao_app_key: str = ""
+    taobao_app_secret: str = ""
+    jd_app_key: str = ""
+    jd_app_secret: str = ""
+    pinduoduo_app_key: str = ""
+    pinduoduo_app_secret: str = ""
+    kuaishou_app_key: str = ""
+    kuaishou_app_secret: str = ""
 
     # --- face authentication (BackEnd/src/Reid, InsightFace buffalo_l) ------
     face_auth_enabled: bool = True

@@ -176,8 +176,24 @@ RULESET_HASH = "sha256:" + hashlib.sha256(json.dumps(
 ).encode("utf-8")).hexdigest()
 
 
+# Advice to the seller after the loan (SELLER_SERVICES_PLAN §6.2 việc 8), not part of Agent 3's decision set:
+# kept apart so the case rule set (and its anchored hash) does not change. Citations are checked the same way.
+# The plan named "Điều 50 市场主体登记管理条例实施细则 (2022)"; that text is not in the extracted corpus (no
+# source document in docs/agents/TQ), while the verbatim threshold "年交易额累计不超过10万元" is in the extracted
+# NETTRADE-2021#8 (网络交易监督管理办法), which applies 电子商务法 Art. 10 (ECOM-2018#10). Those are cited.
+SELLER_RULES: tuple[Rule, ...] = (
+    Rule("LAW-REG-01", "Cá nhân bán hàng qua mạng, doanh thu năm vượt 100.000 tệ phải đăng ký chủ thể kinh doanh",
+         "code", "info", True,
+         (("NETTRADE-2021#8", "个人从事网络交易活动，年交易额累计不超过10万元的，依照《中华人民共和国电子商务法》第十条的规定不需要进行登记"),
+          ("NETTRADE-2021#8", "同一经营者在同一平台或者不同平台开设多家网店的，各网店交易额合并计算"),
+          ("ECOM-2018#10", "电子商务经营者应当依法办理市场主体登记"))),
+)
+ENABLED_SELLER_RULES, DISABLED_SELLER_RULES = load_rules(SELLER_RULES)
+SELLER_RULES_BY_CODE = {r.code: r for r in ENABLED_SELLER_RULES}
+
+
 def citations(code: str, review_date: date) -> list[dict[str, Any]]:
-    rule = RULES_BY_CODE.get(code)
+    rule = RULES_BY_CODE.get(code) or SELLER_RULES_BY_CODE.get(code)
     return [verify_citation(a, q, review_date) for a, q in rule.cite] if rule else []
 
 

@@ -1,0 +1,1115 @@
+{
+  "generated_at": "2026-10-17T23:16:34",
+  "plan": "SELLER_SERVICES_PLAN.md mục 8",
+  "settings": {
+    "database": "SQLite tạm",
+    "llm": "tắt",
+    "chain": "local",
+    "autopilot": "tắt"
+  },
+  "steps": [
+    {
+      "step": 1,
+      "title": "Đăng ký người bán, hồ sơ lan, giá khai 120 tệ",
+      "status": "offered",
+      "decision_kind": "approve",
+      "decision_explanation": {
+        "headline": "Ngân hàng đã duyệt hạn mức 70.000 tệ, thấp hơn mức đề xuất",
+        "because": [
+          {
+            "text": "Mô hình kiểm soát độc lập đánh giá kế hoạch thận trọng hơn, nên hạn mức gửi ngân hàng là phương án nhỏ hơn."
+          },
+          {
+            "text": "Giá nhập bạn khai (120 tệ) cao hơn giá trên hóa đơn mua vào ba tháng gần nhất (62 tệ) 94%, nên số tiền được tính theo giá hóa đơn."
+          },
+          {
+            "text": "Ngân hàng Nông thương Quảng Châu chưa nhận hồ sơ: chỉ nhận hạng A trở lên."
+          },
+          {
+            "text": "Bank of China không trả lời kịp nên được tính là chưa đồng ý."
+          }
+        ],
+        "improve": [
+          {
+            "text": "Muốn xét mức đầy đủ thì gửi khiếu nại hoặc nhắn trợ lý để gặp cán bộ.",
+            "action": {
+              "view": "chat"
+            }
+          },
+          {
+            "text": "Tải hóa đơn mua vào hoặc báo giá của xưởng cho lô hàng này.",
+            "action": {
+              "view": "apply",
+              "data_type": "invoice"
+            }
+          },
+          {
+            "text": "Đây là điều kiện riêng của từng ngân hàng; bạn không cần làm gì, các ngân hàng khác vẫn cấp vốn.",
+            "action": null
+          }
+        ],
+        "hidden": false,
+        "source": "template"
+      },
+      "offer": {
+        "limit": 70000,
+        "suggested": 70000,
+        "tenor_max": 12,
+        "explanation": "Hạn mức của bạn là 70.000 tệ, lãi 10% một năm, kỳ hạn tối đa 12 tháng, không thu phí nào ngoài lãi. Các ngân hàng đối tác duyệt hạn mức 70.000 tệ, thấp hơn mức 100.000 tệ BuoyUp tính được. Mức này thấp hơn 600.000 bạn xin vì bốn lý do. Thứ nhất, giá nhập được tính theo hóa đơn mua vào ba tháng gần nhất là 62 tệ, thay vì giá bạn khai 120 tệ, nên nhu cầu vay giảm 290.000. Thứ hai, phần tồn kho bạn đang có và vốn bạn tự bỏ vào được trừ khỏi nhu cầu vay, giảm 100.000. Thứ ba, hộ kinh doanh vay hoàn toàn trực tuyến được tối đa 200.000 tệ, nên giảm thêm 10.000. Thứ tư, đây là khoản vay đầu tiên của bạn với BuoyUp nên hạn mức bằng 50% mức tính được 200.000 tệ, giảm 100.000.",
+        "explanation_source": "template",
+        "bank_adjust": {
+          "limit_from": 100000
+        }
+      },
+      "notices": [
+        {
+          "kind": "limit_approved",
+          "title": "Ngân hàng đã duyệt hạn mức",
+          "text": "Ngân hàng đã duyệt hạn mức 70.000 tệ, hiệu lực đến 24/10. Mời bạn chọn số tiền và ngày trả.",
+          "level": "info",
+          "scope": "application",
+          "at": "2026-10-17T15:16:32.988891Z"
+        },
+        {
+          "kind": "decision",
+          "title": "Kết quả xét hồ sơ",
+          "text": "Ngân hàng đã duyệt hạn mức 70.000 tệ, thấp hơn mức đề xuất · Mô hình kiểm soát độc lập đánh giá kế hoạch thận trọng hơn, nên hạn mức gửi ngân hàng là phương án nhỏ hơn.",
+          "level": "info",
+          "scope": "application",
+          "at": "2026-10-17T15:16:32.990256Z"
+        }
+      ]
+    },
+    {
+      "step": 2,
+      "title": "Duyệt, ký, giải ngân 60.000 tệ / 12 tháng",
+      "approved_by": "cổng tự động (không cần cán bộ: đủ 5 điều kiện)",
+      "status": "disbursed",
+      "loan_id": "loan_affeb64e728e9769",
+      "amount": 60000,
+      "tenor_m": 12,
+      "rate": 0.1,
+      "first_due_date": "2026-11-28",
+      "first_payment": 5690,
+      "notices": [
+        {
+          "kind": "disbursed",
+          "title": "Đã giải ngân",
+          "text": "Đã giải ngân 60.000 CNY. Kỳ trả đầu ngày 28/11/2026, khoảng 5.690. Bạn để tiền hàng về tài khoản kinh doanh WeBank để hệ thống tự trích đúng hạn.",
+          "level": "info",
+          "scope": "loan",
+          "at": "2026-10-17T15:16:33.081973Z"
+        }
+      ]
+    },
+    {
+      "step": 3,
+      "title": "20 ngày tiền về, 4 khoản chi 4 nhóm qua webhook có HMAC",
+      "inflows": [
+        {
+          "on": "2026-10-17",
+          "amount": 300,
+          "balance": 60300
+        },
+        {
+          "on": "2026-10-18",
+          "amount": 310,
+          "balance": 60610
+        },
+        {
+          "on": "2026-10-19",
+          "amount": 320,
+          "balance": 60930
+        },
+        {
+          "on": "2026-10-20",
+          "amount": 330,
+          "balance": 61260
+        },
+        {
+          "on": "2026-10-21",
+          "amount": 340,
+          "balance": 61600
+        },
+        {
+          "on": "2026-10-22",
+          "amount": 300,
+          "balance": 61900
+        },
+        {
+          "on": "2026-10-23",
+          "amount": 310,
+          "balance": 62210
+        },
+        {
+          "on": "2026-10-24",
+          "amount": 320,
+          "balance": 62530
+        },
+        {
+          "on": "2026-10-25",
+          "amount": 330,
+          "balance": 62860
+        },
+        {
+          "on": "2026-10-26",
+          "amount": 340,
+          "balance": 63200
+        },
+        {
+          "on": "2026-10-27",
+          "amount": 300,
+          "balance": 63500
+        },
+        {
+          "on": "2026-10-28",
+          "amount": 310,
+          "balance": 63810
+        },
+        {
+          "on": "2026-10-29",
+          "amount": 320,
+          "balance": 64130
+        },
+        {
+          "on": "2026-10-30",
+          "amount": 330,
+          "balance": 64460
+        },
+        {
+          "on": "2026-10-31",
+          "amount": 340,
+          "balance": 64800
+        },
+        {
+          "on": "2026-11-01",
+          "amount": 300,
+          "balance": 65100
+        },
+        {
+          "on": "2026-11-02",
+          "amount": 310,
+          "balance": 65410
+        },
+        {
+          "on": "2026-11-03",
+          "amount": 320,
+          "balance": 65730
+        },
+        {
+          "on": "2026-11-04",
+          "amount": 330,
+          "balance": 66060
+        },
+        {
+          "on": "2026-11-05",
+          "amount": 340,
+          "balance": 66400
+        }
+      ],
+      "outflows": [
+        {
+          "transfer_id": "wb-out-demo-001",
+          "amount": 1200,
+          "memo": "Phí sàn Douyin",
+          "group": "platform",
+          "balance": 65200
+        },
+        {
+          "transfer_id": "wb-out-demo-002",
+          "amount": 800,
+          "memo": "Phí vận chuyển 快递费",
+          "group": "logistics",
+          "balance": 64400
+        },
+        {
+          "transfer_id": "wb-out-demo-003",
+          "amount": 2500,
+          "memo": "Quảng cáo Douyin",
+          "group": "marketing",
+          "balance": 61900
+        },
+        {
+          "transfer_id": "wb-out-demo-004",
+          "amount": 58000,
+          "memo": "Nhập vải lô mới",
+          "group": "goods",
+          "balance": 3900
+        }
+      ],
+      "unsigned_webhook_status": 401,
+      "notices": [
+        {
+          "kind": "month",
+          "title": "Báo cáo tháng 2026-10",
+          "text": "Tháng 10 tiền hàng về WeBank 4.800 tệ, bằng 2 % doanh thu dự báo trong hồ sơ vay (200.040 tệ). Chi lớn nhất là chi phí trên sàn 253 tệ. Cuối tháng tài khoản WeBank còn 64.800 tệ, thấp nhất 60.000 tệ hôm 17/10.",
+          "level": "info",
+          "scope": "report",
+          "at": "2026-10-17T15:16:33.388876Z"
+        },
+        {
+          "kind": "spend_below_due",
+          "title": "Số dư thấp hơn kỳ tới",
+          "text": "Bạn vừa chi 58.000 tệ (Nhập vải lô mới). Số dư còn 3.900 tệ, thấp hơn 5.690 tệ phải trả ngày 28/11. Nhớ để tiền hàng về WeBank trước ngày đó.",
+          "level": "warn",
+          "scope": "loan",
+          "at": "2026-10-17T15:16:33.543373Z"
+        }
+      ]
+    },
+    {
+      "step": 4,
+      "title": "Tới 21/11 (kỳ 1 − 7 ngày) rồi tới 01/12/2026",
+      "due_minus_7": "2026-11-21",
+      "notices_due_minus_7": [
+        {
+          "kind": "shortfall_forecast",
+          "title": "Có thể thiếu tiền kỳ tới",
+          "text": "Còn 7 ngày đến kỳ 1 (28/11): phải trả 5.690 tệ. Số dư 3.900 tệ; với nhịp tiền về 30 ngày qua, đến ngày trả dự kiến có khoảng 0 tệ, thiếu khoảng 5.700 tệ. Bạn có thể nộp thêm vào tài khoản WeBank hoặc chọn trả tối thiểu 2.190 tệ cho kỳ này.",
+          "level": "warn",
+          "scope": "loan",
+          "at": "2026-10-17T15:16:33.604814Z"
+        },
+        {
+          "kind": "reminder",
+          "title": "Nhắc kỳ trả sắp tới",
+          "text": "Còn 7 ngày đến kỳ 1 (28/11/2026): khoảng 5.690. Số dư tài khoản kinh doanh 3.900.",
+          "level": "info",
+          "scope": "loan",
+          "at": "2026-10-17T15:16:33.605361Z"
+        }
+      ],
+      "topup_balance": 28900,
+      "first_of_month": "2026-12-01",
+      "schedule_row_1": {
+        "k": 1,
+        "due_date": "2026-11-28",
+        "principal": 5000,
+        "interest_est": 690,
+        "payment_est": 5690,
+        "status": "paid",
+        "choice": null,
+        "interest": 690,
+        "principal_due": 5000,
+        "amount_due": 5690,
+        "processed_on": "2026-11-28",
+        "paid": 5690
+      },
+      "notices": [
+        {
+          "kind": "reminder",
+          "title": "Nhắc kỳ trả sắp tới",
+          "text": "Còn 1 ngày đến kỳ 1 (28/11/2026): khoảng 5.690. Số dư tài khoản kinh doanh 28.900.",
+          "level": "info",
+          "scope": "loan",
+          "at": "2026-10-17T15:16:33.646880Z"
+        },
+        {
+          "kind": "due",
+          "title": "Đã trích kỳ trả",
+          "text": "Kỳ 1 ngày 28/11/2026: đã trích 5.690 (lãi 690 cho 42 ngày, gốc 5.000). Dư nợ gốc còn 55.000.",
+          "level": "info",
+          "scope": "loan",
+          "at": "2026-10-17T15:16:33.653766Z"
+        },
+        {
+          "kind": "month",
+          "title": "Báo cáo tháng 2026-11",
+          "text": "Tháng 11 tiền hàng về WeBank 26.600 tệ, bằng 13 % doanh thu dự báo trong hồ sơ vay (200.040 tệ). Chi lớn nhất là hàng hóa và nguyên liệu 58.000 tệ; trả nợ BuoyUp 5.690 tệ. Cuối tháng tài khoản WeBank còn 23.210 tệ, thấp nhất 3.900 tệ hôm 05/11.",
+          "level": "info",
+          "scope": "report",
+          "at": "2026-10-17T15:16:33.670307Z"
+        }
+      ],
+      "reports": [
+        {
+          "id": "srp_f1689ee9e3ce56e3",
+          "kind": "month",
+          "period": "2026-10",
+          "title": "Báo cáo tháng 10/2026",
+          "hash": "sha256:23db4ed3e4a560ad78e5d2c7d509f2f81a589dbc84ecc62b5b55c0f9c73d5ff4",
+          "chain_tx": "0x45cd56a65d99c6a63608c55865288c240de27fbd",
+          "summary": "Tháng 10 tiền hàng về WeBank 4.800 tệ, bằng 2 % doanh thu dự báo trong hồ sơ vay (200.040 tệ). Chi lớn nhất là chi phí trên sàn 253 tệ. Cuối tháng tài khoản WeBank còn 64.800 tệ, thấp nhất 60.000 tệ hôm 17/10.",
+          "notes": [
+            "Báo cáo tính được 2 % doanh thu của cửa hàng (so với doanh thu dự báo trong hồ sơ vay); phần còn lại về tài khoản khác, BuoyUp không thấy.",
+            "Phí sàn ước tính theo biểu phí 5 % của Douyin."
+          ],
+          "coverage": {
+            "share": 0.024,
+            "basis": "forecast",
+            "webank_in": 4800,
+            "tax_revenue": null,
+            "revenue": 200040,
+            "estimate": 200040,
+            "month": "2026-10"
+          }
+        },
+        {
+          "id": "srp_d9c7516698aabcd8",
+          "kind": "month",
+          "period": "2026-11",
+          "title": "Báo cáo tháng 11/2026",
+          "hash": "sha256:b4cbb6bfaec19314a76294508b13668f5c49d9b2bba1fb2d9bdced8c49e44aab",
+          "chain_tx": "0x989035f1bb1635ef41fc27029edcc1833ab154cb",
+          "summary": "Tháng 11 tiền hàng về WeBank 26.600 tệ, bằng 13 % doanh thu dự báo trong hồ sơ vay (200.040 tệ). Chi lớn nhất là hàng hóa và nguyên liệu 58.000 tệ; trả nợ BuoyUp 5.690 tệ. Cuối tháng tài khoản WeBank còn 23.210 tệ, thấp nhất 3.900 tệ hôm 05/11.",
+          "notes": [
+            "Báo cáo tính được 13 % doanh thu của cửa hàng (so với doanh thu dự báo trong hồ sơ vay); phần còn lại về tài khoản khác, BuoyUp không thấy.",
+            "Phí sàn ước tính theo biểu phí 5 % của Douyin."
+          ],
+          "coverage": {
+            "share": 0.133,
+            "basis": "forecast",
+            "webank_in": 26600,
+            "tax_revenue": null,
+            "revenue": 200040,
+            "estimate": 200040,
+            "month": "2026-11"
+          }
+        }
+      ]
+    },
+    {
+      "step": 5,
+      "title": "Thêm 3 tháng, tới 01/03/2027: báo cáo quý",
+      "loan_status": "active",
+      "quarter": {
+        "id": "srp_f1681297c5c090ab",
+        "kind": "quarter",
+        "period": "2026-Q4",
+        "title": "Báo cáo quý 4/2026",
+        "hash": "sha256:ddc8f80cfaacb40ad0bd7d1185aba9f9c9440074cd838d886811dbb77bbf5454",
+        "chain_tx": "0xfbd9d1a733a76395d459950b26092da0e344e37a",
+        "summary": "Quý 4/2026 tiền hàng về WeBank 67.400 tệ. Chi lớn nhất là hàng hóa và nguyên liệu 58.000 tệ. Cuối quý tài khoản WeBank còn 53.758 tệ, đủ chi khoảng 2,6 tháng theo mức chi của quý.",
+        "notes": [
+          "Báo cáo tính được 11 % doanh thu của cửa hàng (so với doanh thu dự báo trong hồ sơ vay); phần còn lại về tài khoản khác, BuoyUp không thấy.",
+          "Phí sàn ước tính theo biểu phí 5 % của Douyin."
+        ],
+        "coverage": {
+          "share": 0.1123,
+          "basis": "forecast",
+          "webank_in": 67400,
+          "revenue": 600120,
+          "months_known": 3
+        }
+      },
+      "quarter_store": {
+        "store": {
+          "snapshots": 2,
+          "from": "2026-11",
+          "to": "2026-12",
+          "rating": {
+            "from": 4.6,
+            "to": 4.6,
+            "change": 0.0
+          },
+          "returns": {
+            "unavailable": "Sàn chưa cung cấp tỷ lệ hoàn hàng (chưa có)"
+          }
+        },
+        "notes": [
+          "Báo cáo tính được 11 % doanh thu của cửa hàng (so với doanh thu dự báo trong hồ sơ vay); phần còn lại về tài khoản khác, BuoyUp không thấy.",
+          "Phí sàn ước tính theo biểu phí 5 % của Douyin."
+        ]
+      },
+      "notices": [
+        {
+          "kind": "reminder",
+          "title": "Nhắc kỳ trả sắp tới",
+          "text": "Còn 7 ngày đến kỳ 2 (28/12/2026): khoảng 5.452. Số dư tài khoản kinh doanh 41.210.",
+          "level": "info",
+          "scope": "loan",
+          "at": "2026-10-17T15:16:33.775648Z"
+        },
+        {
+          "kind": "reminder",
+          "title": "Nhắc kỳ trả sắp tới",
+          "text": "Còn 1 ngày đến kỳ 2 (28/12/2026): khoảng 5.452. Số dư tài khoản kinh doanh 50.210.",
+          "level": "info",
+          "scope": "loan",
+          "at": "2026-10-17T15:16:33.813790Z"
+        },
+        {
+          "kind": "due",
+          "title": "Đã trích kỳ trả",
+          "text": "Kỳ 2 ngày 28/12/2026: đã trích 5.452 (lãi 452 cho 30 ngày, gốc 5.000). Dư nợ gốc còn 50.000.",
+          "level": "info",
+          "scope": "loan",
+          "at": "2026-10-17T15:16:33.819284Z"
+        },
+        {
+          "kind": "month",
+          "title": "Báo cáo tháng 2026-12",
+          "text": "Tháng 12 tiền hàng về WeBank 36.000 tệ, bằng 18 % doanh thu dự báo trong hồ sơ vay (200.040 tệ). Chi lớn nhất là chi phí trên sàn 1.895 tệ; trả nợ BuoyUp 5.452 tệ. Cuối tháng tài khoản WeBank còn 53.758 tệ, thấp nhất 23.210 tệ hôm 01/12.",
+          "level": "info",
+          "scope": "report",
+          "at": "2026-10-17T15:16:33.858006Z"
+        },
+        {
+          "kind": "quarter",
+          "title": "Báo cáo quý 2026-Q4",
+          "text": "Quý 4/2026 tiền hàng về WeBank 67.400 tệ. Chi lớn nhất là hàng hóa và nguyên liệu 58.000 tệ. Cuối quý tài khoản WeBank còn 53.758 tệ, đủ chi khoảng 2,6 tháng theo mức chi của quý.",
+          "level": "info",
+          "scope": "report",
+          "at": "2026-10-17T15:16:33.861501Z"
+        },
+        {
+          "kind": "reminder",
+          "title": "Nhắc kỳ trả sắp tới",
+          "text": "Còn 7 ngày đến kỳ 3 (28/01/2027): khoảng 5.425. Số dư tài khoản kinh doanh 71.758.",
+          "level": "info",
+          "scope": "loan",
+          "at": "2026-10-17T15:16:33.982136Z"
+        },
+        {
+          "kind": "reminder",
+          "title": "Nhắc kỳ trả sắp tới",
+          "text": "Còn 1 ngày đến kỳ 3 (28/01/2027): khoảng 5.425. Số dư tài khoản kinh doanh 71.758.",
+          "level": "info",
+          "scope": "loan",
+          "at": "2026-10-17T15:16:34.002761Z"
+        },
+        {
+          "kind": "due",
+          "title": "Đã trích kỳ trả",
+          "text": "Kỳ 3 ngày 28/01/2027: đã trích 5.425 (lãi 425 cho 31 ngày, gốc 5.000). Dư nợ gốc còn 45.000.",
+          "level": "info",
+          "scope": "loan",
+          "at": "2026-10-17T15:16:34.008138Z"
+        },
+        {
+          "kind": "month",
+          "title": "Báo cáo tháng 2027-01",
+          "text": "Tháng 1 tiền hàng về WeBank 27.000 tệ, bằng 14 % doanh thu dự báo trong hồ sơ vay (200.040 tệ). Chi lớn nhất là chi phí trên sàn 1.421 tệ; trả nợ BuoyUp 5.425 tệ. Cuối tháng tài khoản WeBank còn 75.333 tệ, thấp nhất 53.758 tệ hôm 01/01.",
+          "level": "info",
+          "scope": "report",
+          "at": "2026-10-17T15:16:34.053658Z"
+        },
+        {
+          "kind": "reminder",
+          "title": "Nhắc kỳ trả sắp tới",
+          "text": "Còn 7 ngày đến kỳ 4 (28/02/2027): khoảng 5.382. Số dư tài khoản kinh doanh 93.333.",
+          "level": "info",
+          "scope": "loan",
+          "at": "2026-10-17T15:16:34.178796Z"
+        },
+        {
+          "kind": "reminder",
+          "title": "Nhắc kỳ trả sắp tới",
+          "text": "Còn 1 ngày đến kỳ 4 (28/02/2027): khoảng 5.382. Số dư tài khoản kinh doanh 93.333.",
+          "level": "info",
+          "scope": "loan",
+          "at": "2026-10-17T15:16:34.199849Z"
+        },
+        {
+          "kind": "due",
+          "title": "Đã trích kỳ trả",
+          "text": "Kỳ 4 ngày 28/02/2027: đã trích 5.382 (lãi 382 cho 31 ngày, gốc 5.000). Dư nợ gốc còn 40.000.",
+          "level": "info",
+          "scope": "loan",
+          "at": "2026-10-17T15:16:34.205185Z"
+        },
+        {
+          "kind": "month",
+          "title": "Báo cáo tháng 2027-02",
+          "text": "Tháng 2 tiền hàng về WeBank 18.000 tệ, bằng 9 % doanh thu dự báo trong hồ sơ vay (200.040 tệ). Chi lớn nhất là chi phí trên sàn 947 tệ; trả nợ BuoyUp 5.382 tệ. Cuối tháng tài khoản WeBank còn 87.951 tệ, thấp nhất 75.333 tệ hôm 01/02.",
+          "level": "info",
+          "scope": "report",
+          "at": "2026-10-17T15:16:34.216067Z"
+        },
+        {
+          "kind": "year",
+          "title": "Báo cáo năm 2026",
+          "text": "Năm 2026 tờ khai thuế ghi khoảng 1.421.800 tệ doanh thu (9 tháng); tiền hàng về WeBank 67.400 tệ. 3 tháng đầu sau giải ngân, tiền hàng về WeBank 67.400 tệ. Nếu 3 tháng tới tiền hàng về WeBank ≥ 80 %, hạn mức lần sau có thể tới 150.000 tệ.",
+          "level": "info",
+          "scope": "report",
+          "at": "2026-10-17T15:16:34.222392Z"
+        }
+      ],
+      "reports": [
+        {
+          "id": "srp_f1689ee9e3ce56e3",
+          "kind": "month",
+          "period": "2026-10",
+          "title": "Báo cáo tháng 10/2026",
+          "hash": "sha256:23db4ed3e4a560ad78e5d2c7d509f2f81a589dbc84ecc62b5b55c0f9c73d5ff4",
+          "chain_tx": "0x45cd56a65d99c6a63608c55865288c240de27fbd",
+          "summary": "Tháng 10 tiền hàng về WeBank 4.800 tệ, bằng 2 % doanh thu dự báo trong hồ sơ vay (200.040 tệ). Chi lớn nhất là chi phí trên sàn 253 tệ. Cuối tháng tài khoản WeBank còn 64.800 tệ, thấp nhất 60.000 tệ hôm 17/10.",
+          "notes": [
+            "Báo cáo tính được 2 % doanh thu của cửa hàng (so với doanh thu dự báo trong hồ sơ vay); phần còn lại về tài khoản khác, BuoyUp không thấy.",
+            "Phí sàn ước tính theo biểu phí 5 % của Douyin."
+          ],
+          "coverage": {
+            "share": 0.024,
+            "basis": "forecast",
+            "webank_in": 4800,
+            "tax_revenue": null,
+            "revenue": 200040,
+            "estimate": 200040,
+            "month": "2026-10"
+          }
+        },
+        {
+          "id": "srp_d9c7516698aabcd8",
+          "kind": "month",
+          "period": "2026-11",
+          "title": "Báo cáo tháng 11/2026",
+          "hash": "sha256:b4cbb6bfaec19314a76294508b13668f5c49d9b2bba1fb2d9bdced8c49e44aab",
+          "chain_tx": "0x989035f1bb1635ef41fc27029edcc1833ab154cb",
+          "summary": "Tháng 11 tiền hàng về WeBank 26.600 tệ, bằng 13 % doanh thu dự báo trong hồ sơ vay (200.040 tệ). Chi lớn nhất là hàng hóa và nguyên liệu 58.000 tệ; trả nợ BuoyUp 5.690 tệ. Cuối tháng tài khoản WeBank còn 23.210 tệ, thấp nhất 3.900 tệ hôm 05/11.",
+          "notes": [
+            "Báo cáo tính được 13 % doanh thu của cửa hàng (so với doanh thu dự báo trong hồ sơ vay); phần còn lại về tài khoản khác, BuoyUp không thấy.",
+            "Phí sàn ước tính theo biểu phí 5 % của Douyin."
+          ],
+          "coverage": {
+            "share": 0.133,
+            "basis": "forecast",
+            "webank_in": 26600,
+            "tax_revenue": null,
+            "revenue": 200040,
+            "estimate": 200040,
+            "month": "2026-11"
+          }
+        },
+        {
+          "id": "srp_a6b0a91b6fc1b3bc",
+          "kind": "month",
+          "period": "2026-12",
+          "title": "Báo cáo tháng 12/2026",
+          "hash": "sha256:e0ac85968c9ff78703b086ad68683b87828226d11a0cb8d5f584b3fc4e629c05",
+          "chain_tx": "0xb2d6013ce9bdd200979234917aae0cf6fb80e952",
+          "summary": "Tháng 12 tiền hàng về WeBank 36.000 tệ, bằng 18 % doanh thu dự báo trong hồ sơ vay (200.040 tệ). Chi lớn nhất là chi phí trên sàn 1.895 tệ; trả nợ BuoyUp 5.452 tệ. Cuối tháng tài khoản WeBank còn 53.758 tệ, thấp nhất 23.210 tệ hôm 01/12.",
+          "notes": [
+            "Báo cáo tính được 18 % doanh thu của cửa hàng (so với doanh thu dự báo trong hồ sơ vay); phần còn lại về tài khoản khác, BuoyUp không thấy.",
+            "Phí sàn ước tính theo biểu phí 5 % của Douyin."
+          ],
+          "coverage": {
+            "share": 0.18,
+            "basis": "forecast",
+            "webank_in": 36000,
+            "tax_revenue": null,
+            "revenue": 200040,
+            "estimate": 200040,
+            "month": "2026-12"
+          }
+        },
+        {
+          "id": "srp_f1681297c5c090ab",
+          "kind": "quarter",
+          "period": "2026-Q4",
+          "title": "Báo cáo quý 4/2026",
+          "hash": "sha256:ddc8f80cfaacb40ad0bd7d1185aba9f9c9440074cd838d886811dbb77bbf5454",
+          "chain_tx": "0xfbd9d1a733a76395d459950b26092da0e344e37a",
+          "summary": "Quý 4/2026 tiền hàng về WeBank 67.400 tệ. Chi lớn nhất là hàng hóa và nguyên liệu 58.000 tệ. Cuối quý tài khoản WeBank còn 53.758 tệ, đủ chi khoảng 2,6 tháng theo mức chi của quý.",
+          "notes": [
+            "Báo cáo tính được 11 % doanh thu của cửa hàng (so với doanh thu dự báo trong hồ sơ vay); phần còn lại về tài khoản khác, BuoyUp không thấy.",
+            "Phí sàn ước tính theo biểu phí 5 % của Douyin."
+          ],
+          "coverage": {
+            "share": 0.1123,
+            "basis": "forecast",
+            "webank_in": 67400,
+            "revenue": 600120,
+            "months_known": 3
+          }
+        },
+        {
+          "id": "srp_6e4ced46451c6673",
+          "kind": "month",
+          "period": "2027-01",
+          "title": "Báo cáo tháng 1/2027",
+          "hash": "sha256:5f94033f28d9c8ed2588e789fc13de0e0bc55ea13d3faef7757a7447a366aed6",
+          "chain_tx": "0x267e4e08cb45f51143acf9f053313113a8413894",
+          "summary": "Tháng 1 tiền hàng về WeBank 27.000 tệ, bằng 14 % doanh thu dự báo trong hồ sơ vay (200.040 tệ). Chi lớn nhất là chi phí trên sàn 1.421 tệ; trả nợ BuoyUp 5.425 tệ. Cuối tháng tài khoản WeBank còn 75.333 tệ, thấp nhất 53.758 tệ hôm 01/01.",
+          "notes": [
+            "Báo cáo tính được 14 % doanh thu của cửa hàng (so với doanh thu dự báo trong hồ sơ vay); phần còn lại về tài khoản khác, BuoyUp không thấy.",
+            "Phí sàn ước tính theo biểu phí 5 % của Douyin."
+          ],
+          "coverage": {
+            "share": 0.135,
+            "basis": "forecast",
+            "webank_in": 27000,
+            "tax_revenue": null,
+            "revenue": 200040,
+            "estimate": 200040,
+            "month": "2027-01"
+          }
+        },
+        {
+          "id": "srp_6a55c4428ff988d7",
+          "kind": "month",
+          "period": "2027-02",
+          "title": "Báo cáo tháng 2/2027",
+          "hash": "sha256:aa34b3375c5cce9ecf9b1a49f39fb68cd4200403cf29d4e2f4e31509d799126e",
+          "chain_tx": "0x76cf6db14930e969889b44eea807d7cf69e7a288",
+          "summary": "Tháng 2 tiền hàng về WeBank 18.000 tệ, bằng 9 % doanh thu dự báo trong hồ sơ vay (200.040 tệ). Chi lớn nhất là chi phí trên sàn 947 tệ; trả nợ BuoyUp 5.382 tệ. Cuối tháng tài khoản WeBank còn 87.951 tệ, thấp nhất 75.333 tệ hôm 01/02.",
+          "notes": [
+            "Báo cáo tính được 9 % doanh thu của cửa hàng (so với doanh thu dự báo trong hồ sơ vay); phần còn lại về tài khoản khác, BuoyUp không thấy.",
+            "Phí sàn ước tính theo biểu phí 5 % của Douyin."
+          ],
+          "coverage": {
+            "share": 0.09,
+            "basis": "forecast",
+            "webank_in": 18000,
+            "tax_revenue": null,
+            "revenue": 200040,
+            "estimate": 200040,
+            "month": "2027-02"
+          }
+        },
+        {
+          "id": "srp_7b44ee9b94e8ecad",
+          "kind": "year",
+          "period": "2026",
+          "title": "Báo cáo năm 2026",
+          "hash": "sha256:202d2cc8538f62b00e306b8871190b98ca2772c16d4a4c1e9a1bd9e66a5b89f8",
+          "chain_tx": "0x09fedb85440bce89a2f18f40418cc67209e34d1d",
+          "summary": "Năm 2026 tờ khai thuế ghi khoảng 1.421.800 tệ doanh thu (9 tháng); tiền hàng về WeBank 67.400 tệ. 3 tháng đầu sau giải ngân, tiền hàng về WeBank 67.400 tệ. Nếu 3 tháng tới tiền hàng về WeBank ≥ 80 %, hạn mức lần sau có thể tới 150.000 tệ.",
+          "notes": [
+            "Báo cáo tính được 3 % doanh thu của cửa hàng (theo tờ khai thuế và doanh thu dự báo trong hồ sơ vay); phần còn lại về tài khoản khác, BuoyUp không thấy.",
+            "Phí sàn ước tính theo biểu phí 5 % của Douyin."
+          ],
+          "coverage": {
+            "share": 0.0333,
+            "basis": "mixed",
+            "webank_in": 67400,
+            "revenue": 2021920,
+            "months_known": 12
+          }
+        }
+      ]
+    },
+    {
+      "step": 6,
+      "title": "Trả hết (prepay, confirm: true) → báo cáo tất toán",
+      "without_confirm": "CONFIRM_REQUIRED",
+      "loan_status": "closed",
+      "closing": {
+        "id": "srp_9d1a55c2b13d2925",
+        "kind": "closing",
+        "period": "loan_affeb64e728e9769",
+        "title": "Báo cáo tất toán khoản vay",
+        "hash": "sha256:f75b06b82ad2496e53bb7a1cdd03bbebd87796fec39510b69af6a604894e0dfd",
+        "chain_tx": "0x8267dafdbf5f0fb986548169e827fbf6be69c02a",
+        "summary": "Bạn đã tất toán khoản vay 60.000 tệ sau 135 ngày, tổng lãi thật 1.960 tệ, không trễ kỳ nào. 3 tháng đầu sau giải ngân, tiền hàng về WeBank 67.400 tệ. Nếu 3 tháng tới tiền hàng về WeBank ≥ 80 %, hạn mức lần sau có thể tới 150.000 tệ.",
+        "notes": [
+          "Báo cáo tính được 9 % doanh thu của cửa hàng (so với doanh thu dự báo trong hồ sơ vay); phần còn lại về tài khoản khác, BuoyUp không thấy.",
+          "Phí sàn ước tính theo biểu phí 5 % của Douyin."
+        ],
+        "coverage": {
+          "share": 0.0936,
+          "basis": "forecast",
+          "webank_in": 112400,
+          "revenue": 1200240,
+          "months_known": 6
+        }
+      },
+      "notices": [
+        {
+          "kind": "prepay",
+          "title": "Đã trả trước",
+          "text": "Trả trước 40.011 không mất phí: lãi 11 cho 1 ngày đã dùng, gốc 40.000. Dư nợ gốc còn 0.",
+          "level": "info",
+          "scope": "loan",
+          "at": "2026-10-17T15:16:34.251360Z"
+        },
+        {
+          "kind": "closed",
+          "title": "Đã tất toán khoản vay",
+          "text": "Bạn đã trả hết khoản vay. BuoyUp đã báo trung tâm thông tin tín dụng. Từ giờ bạn có thể đổi tài khoản nhận tiền hàng; khi cần vốn, bạn vay lại với hồ sơ cập nhật.",
+          "level": "info",
+          "scope": "loan",
+          "at": "2026-10-17T15:16:34.255989Z"
+        },
+        {
+          "kind": "closing",
+          "title": "Báo cáo tất toán",
+          "text": "Bạn đã tất toán khoản vay 60.000 tệ sau 135 ngày, tổng lãi thật 1.960 tệ, không trễ kỳ nào. 3 tháng đầu sau giải ngân, tiền hàng về WeBank 67.400 tệ. Nếu 3 tháng tới tiền hàng về WeBank ≥ 80 %, hạn mức lần sau có thể tới 150.000 tệ.",
+          "level": "info",
+          "scope": "report",
+          "at": "2026-10-17T15:16:34.286011Z"
+        }
+      ]
+    },
+    {
+      "step": 7,
+      "title": "Người bán cá nhân, doanh thu năm nay 85.000 tệ → nhắc đăng ký kinh doanh",
+      "borrower_type": "individual",
+      "application_status": "offered",
+      "reports_made": [
+        "registration"
+      ],
+      "registration": {
+        "id": "srp_d1e5481e434170e2",
+        "kind": "registration",
+        "period": "2026",
+        "title": "Nhắc đăng ký kinh doanh 2026",
+        "hash": "sha256:ca4528427e8474fb9517cbf3ec6536036dd53969b22f5209d65f327b91bc7744",
+        "chain_tx": "0x4b7b103b90385e306d76da68280d43d60c48b34f",
+        "summary": "Doanh thu năm nay của bạn khoảng 85.000 tệ. Theo Điều 8 Quy định giám sát giao dịch trực tuyến (2021), bán hàng qua mạng với doanh thu năm trên 100.000 tệ phải đăng ký kinh doanh. Đăng ký xong, hạn mức BuoyUp cho hộ kinh doanh tới 200.000 tệ thay vì 50.000.",
+        "notes": [
+          "Doanh thu tính theo tờ khai thuế từ đầu năm.",
+          "Doanh thu mọi cửa hàng của bạn (trên một hay nhiều sàn) được cộng chung khi so với ngưỡng.",
+          "Căn cứ đã kiểm nguyên văn trong kho văn bản luật của BuoyUp: Quy định giám sát giao dịch trực tuyến, Điều 8; Luật Thương mại điện tử, Điều 10."
+        ],
+        "coverage": null
+      },
+      "citations": [
+        {
+          "article_id": "NETTRADE-2021#8",
+          "quote": "个人从事网络交易活动，年交易额累计不超过10万元的，依照《中华人民共和国电子商务法》第十条的规定不需要进行登记",
+          "verified": true,
+          "effective": true,
+          "law": "Quy định giám sát giao dịch trực tuyến, Điều 8",
+          "note": ""
+        },
+        {
+          "article_id": "NETTRADE-2021#8",
+          "quote": "同一经营者在同一平台或者不同平台开设多家网店的，各网店交易额合并计算",
+          "verified": true,
+          "effective": true,
+          "law": "Quy định giám sát giao dịch trực tuyến, Điều 8",
+          "note": ""
+        },
+        {
+          "article_id": "ECOM-2018#10",
+          "quote": "电子商务经营者应当依法办理市场主体登记",
+          "verified": true,
+          "effective": true,
+          "law": "Luật Thương mại điện tử, Điều 10",
+          "note": ""
+        }
+      ],
+      "notices": [
+        {
+          "kind": "limit_approved",
+          "title": "Ngân hàng đã duyệt hạn mức",
+          "text": "Ngân hàng đã duyệt hạn mức 25.000 tệ, hiệu lực đến 24/10. Mời bạn chọn số tiền và ngày trả.",
+          "level": "info",
+          "scope": "application",
+          "at": "2026-10-17T15:16:34.386763Z"
+        },
+        {
+          "kind": "decision",
+          "title": "Kết quả xét hồ sơ",
+          "text": "Ngân hàng đã duyệt hạn mức 25.000 tệ · Giá nhập bạn khai (80 tệ) cao hơn giá trên hóa đơn mua vào ba tháng gần nhất (62 tệ) 29%, nên số tiền được tính theo giá hóa đơn.",
+          "level": "info",
+          "scope": "application",
+          "at": "2026-10-17T15:16:34.388060Z"
+        },
+        {
+          "kind": "registration",
+          "title": "Nhắc đăng ký kinh doanh",
+          "text": "Doanh thu năm nay của bạn khoảng 85.000 tệ. Theo Điều 8 Quy định giám sát giao dịch trực tuyến (2021), bán hàng qua mạng với doanh thu năm trên 100.000 tệ phải đăng ký kinh doanh. Đăng ký xong, hạn mức BuoyUp cho hộ kinh doanh tới 200.000 tệ thay vì 50.000.",
+          "level": "warn",
+          "scope": "report",
+          "at": "2026-10-17T15:16:34.399820Z"
+        }
+      ]
+    },
+    {
+      "step": 8,
+      "title": "Sự kiện theo loại và chain_tx của các báo cáo",
+      "events_by_kind": {
+        "approve": 2,
+        "bank_answer": 8,
+        "bureau_report": 1,
+        "conclusion": 4,
+        "consent": 2,
+        "contract_issued": 1,
+        "contract_signed": 1,
+        "disbursed": 1,
+        "escrow_funded": 1,
+        "flags": 2,
+        "gate": 2,
+        "get_offer_sheet": 2,
+        "identity": 2,
+        "inflow": 30,
+        "offer_sheet": 2,
+        "payment_confirmed": 1,
+        "payout_grant": 1,
+        "phase0": 2,
+        "phase1_seal": 2,
+        "propose": 2,
+        "repayment": 5,
+        "select": 1,
+        "seller_alert": 2,
+        "seller_report": 17,
+        "steps_1_2": 2,
+        "syndicate": 2,
+        "tool_call": 22,
+        "transfer": 4
+      },
+      "events_actors": {
+        "approve": {
+          "gate": 2
+        },
+        "bank_answer": {
+          "bank": 8
+        },
+        "bureau_report": {
+          "agent4": 1
+        },
+        "conclusion": {
+          "agent1": 2,
+          "agent3": 2
+        },
+        "consent": {
+          "agent1": 2
+        },
+        "contract_issued": {
+          "orchestrator": 1
+        },
+        "contract_signed": {
+          "seller": 1
+        },
+        "disbursed": {
+          "agent4": 1
+        },
+        "escrow_funded": {
+          "agent4": 1
+        },
+        "flags": {
+          "agent1": 2
+        },
+        "gate": {
+          "gate": 2
+        },
+        "get_offer_sheet": {
+          "agent2": 2
+        },
+        "identity": {
+          "agent1": 2
+        },
+        "inflow": {
+          "agent4": 30
+        },
+        "offer_sheet": {
+          "code": 2
+        },
+        "payment_confirmed": {
+          "seller": 1
+        },
+        "payout_grant": {
+          "agent4a": 1
+        },
+        "phase0": {
+          "agent3": 2
+        },
+        "phase1_seal": {
+          "agent3": 2
+        },
+        "propose": {
+          "agent2": 2
+        },
+        "repayment": {
+          "agent4": 5
+        },
+        "select": {
+          "seller": 1
+        },
+        "seller_alert": {
+          "agent4": 2
+        },
+        "seller_report": {
+          "agent5": 17
+        },
+        "steps_1_2": {
+          "agent1": 2
+        },
+        "syndicate": {
+          "orchestrator": 2
+        },
+        "tool_call": {
+          "agent1": 22
+        },
+        "transfer": {
+          "agent4": 4
+        }
+      },
+      "alert_events": [
+        {
+          "kind": "seller_report",
+          "actor": "agent5",
+          "summary": "Agent 5 lập báo cáo month 2026-10 cho người bán"
+        },
+        {
+          "kind": "seller_alert",
+          "actor": "agent4",
+          "summary": "Agent 4 báo người bán (spend_below_due): Bạn vừa chi 58.000 tệ (Nhập vải lô mới). Số dư còn 3.900 tệ, thấp hơn 5.690 tệ phải trả ngày 28/11. Nhớ để tiền hàng về "
+        },
+        {
+          "kind": "seller_alert",
+          "actor": "agent4",
+          "summary": "Agent 4 báo người bán (shortfall_forecast): Còn 7 ngày đến kỳ 1 (28/11): phải trả 5.690 tệ. Số dư 3.900 tệ; với nhịp tiền về 30 ngày qua, đến ngày trả dự kiến có kh"
+        },
+        {
+          "kind": "seller_report",
+          "actor": "agent5",
+          "summary": "Agent 5 lập báo cáo month 2026-11 cho người bán"
+        },
+        {
+          "kind": "seller_report",
+          "actor": "agent5",
+          "summary": "Agent 5 lập báo cáo month 2026-12 cho người bán"
+        },
+        {
+          "kind": "seller_report",
+          "actor": "agent5",
+          "summary": "Agent 5 lập báo cáo quarter 2026-Q4 cho người bán"
+        },
+        {
+          "kind": "seller_report",
+          "actor": "agent5",
+          "summary": "Agent 5 lập báo cáo year 2026 cho người bán"
+        },
+        {
+          "kind": "seller_report",
+          "actor": "agent5",
+          "summary": "Agent 5 lập báo cáo year 2026 cho người bán"
+        },
+        {
+          "kind": "seller_report",
+          "actor": "agent5",
+          "summary": "Agent 5 lập báo cáo year 2026 cho người bán"
+        },
+        {
+          "kind": "seller_report",
+          "actor": "agent5",
+          "summary": "Agent 5 lập báo cáo year 2026 cho người bán"
+        },
+        {
+          "kind": "seller_report",
+          "actor": "agent5",
+          "summary": "Agent 5 lập báo cáo month 2027-01 cho người bán"
+        },
+        {
+          "kind": "seller_report",
+          "actor": "agent5",
+          "summary": "Agent 5 lập báo cáo year 2026 cho người bán"
+        },
+        {
+          "kind": "seller_report",
+          "actor": "agent5",
+          "summary": "Agent 5 lập báo cáo year 2026 cho người bán"
+        },
+        {
+          "kind": "seller_report",
+          "actor": "agent5",
+          "summary": "Agent 5 lập báo cáo year 2026 cho người bán"
+        },
+        {
+          "kind": "seller_report",
+          "actor": "agent5",
+          "summary": "Agent 5 lập báo cáo month 2027-02 cho người bán"
+        },
+        {
+          "kind": "seller_report",
+          "actor": "agent5",
+          "summary": "Agent 5 lập báo cáo year 2026 cho người bán"
+        },
+        {
+          "kind": "payment_confirmed",
+          "actor": "seller",
+          "summary": "Người bán xác nhận trả trước bằng mã OTP (mô phỏng)"
+        },
+        {
+          "kind": "seller_report",
+          "actor": "agent5",
+          "summary": "Agent 5 lập báo cáo year 2026 cho người bán"
+        },
+        {
+          "kind": "seller_report",
+          "actor": "agent5",
+          "summary": "Agent 5 lập báo cáo closing loan_affeb64e728e9769 cho người bán"
+        },
+        {
+          "kind": "seller_report",
+          "actor": "agent5",
+          "summary": "Agent 5 lập báo cáo registration 2026 cho người bán"
+        }
+      ],
+      "reports_chain": [
+        {
+          "kind": "month",
+          "period": "2026-10",
+          "title": "Báo cáo tháng 10/2026",
+          "hash": "sha256:23db4ed3e4a560ad78e5d2c7d509f2f81a589dbc84ecc62b5b55c0f9c73d5ff4",
+          "chain_tx": "0x45cd56a65d99c6a63608c55865288c240de27fbd"
+        },
+        {
+          "kind": "month",
+          "period": "2026-11",
+          "title": "Báo cáo tháng 11/2026",
+          "hash": "sha256:b4cbb6bfaec19314a76294508b13668f5c49d9b2bba1fb2d9bdced8c49e44aab",
+          "chain_tx": "0x989035f1bb1635ef41fc27029edcc1833ab154cb"
+        },
+        {
+          "kind": "month",
+          "period": "2026-12",
+          "title": "Báo cáo tháng 12/2026",
+          "hash": "sha256:e0ac85968c9ff78703b086ad68683b87828226d11a0cb8d5f584b3fc4e629c05",
+          "chain_tx": "0xb2d6013ce9bdd200979234917aae0cf6fb80e952"
+        },
+        {
+          "kind": "quarter",
+          "period": "2026-Q4",
+          "title": "Báo cáo quý 4/2026",
+          "hash": "sha256:ddc8f80cfaacb40ad0bd7d1185aba9f9c9440074cd838d886811dbb77bbf5454",
+          "chain_tx": "0xfbd9d1a733a76395d459950b26092da0e344e37a"
+        },
+        {
+          "kind": "month",
+          "period": "2027-01",
+          "title": "Báo cáo tháng 1/2027",
+          "hash": "sha256:5f94033f28d9c8ed2588e789fc13de0e0bc55ea13d3faef7757a7447a366aed6",
+          "chain_tx": "0x267e4e08cb45f51143acf9f053313113a8413894"
+        },
+        {
+          "kind": "month",
+          "period": "2027-02",
+          "title": "Báo cáo tháng 2/2027",
+          "hash": "sha256:aa34b3375c5cce9ecf9b1a49f39fb68cd4200403cf29d4e2f4e31509d799126e",
+          "chain_tx": "0x76cf6db14930e969889b44eea807d7cf69e7a288"
+        },
+        {
+          "kind": "year",
+          "period": "2026",
+          "title": "Báo cáo năm 2026",
+          "hash": "sha256:f685c385daa5043a7b78390758e3fbca7567b543107d3f1df3c932ee946f0ebc",
+          "chain_tx": "0x206a33ed98493404861bcd61a6ea2db1c7b5b721"
+        },
+        {
+          "kind": "closing",
+          "period": "loan_affeb64e728e9769",
+          "title": "Báo cáo tất toán khoản vay",
+          "hash": "sha256:f75b06b82ad2496e53bb7a1cdd03bbebd87796fec39510b69af6a604894e0dfd",
+          "chain_tx": "0x8267dafdbf5f0fb986548169e827fbf6be69c02a"
+        },
+        {
+          "kind": "registration",
+          "period": "2026",
+          "title": "Nhắc đăng ký kinh doanh 2026",
+          "hash": "sha256:ca4528427e8474fb9517cbf3ec6536036dd53969b22f5209d65f327b91bc7744",
+          "chain_tx": "0x4b7b103b90385e306d76da68280d43d60c48b34f"
+        }
+      ]
+    }
+  ],
+  "checks": {
+    "repayments_total": 5,
+    "repayments_by_role": {
+      "standing_order": 4,
+      "không vai (yêu cầu của người bán)": 1
+    },
+    "repayments_by_agent5": 0,
+    "capability_calls": {
+      "payout:agent4a": 1,
+      "debit:standing_order": 8,
+      "debit:không vai": 1
+    },
+    "capability_violations": [],
+    "reports_with_chain_tx": 9,
+    "reports_total": 9,
+    "ok": true
+  }
+}

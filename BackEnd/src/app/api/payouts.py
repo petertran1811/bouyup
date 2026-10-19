@@ -121,7 +121,7 @@ def manual_withdrawal(body: ManualIn, user: BuUser = Depends(require_roles(*_STA
                         {"field": "province"})
     if body.demo and body.amount > DEMO_CAP[body.currency]:
         raise api_error(400, "VALIDATION_ERROR",
-                        f"Lệnh demo tối đa {DEMO_CAP[body.currency]:,} {body.currency}.".replace(",", "."),
+                        f"Lệnh chi thủ công tối đa {DEMO_CAP[body.currency]:,} {body.currency}.".replace(",", "."),
                         {"field": "amount", "max": DEMO_CAP[body.currency]})
     bps = [round(s.pct * BP_TOTAL) for s in body.split]
     amounts = split_largest_remainder(body.amount, bps) if sum(bps) == BP_TOTAL else [0] * len(bps)
@@ -144,7 +144,7 @@ def manual_withdrawal(body: ManualIn, user: BuUser = Depends(require_roles(*_STA
     except chain_remote.ChainUnavailable as exc:
         raise chain.unavailable(exc) from exc
     events.log(session, "system", user.role, "manual_withdrawal",
-               f"Lệnh giải ngân thủ công {row.id}" + (" (demo)" if body.demo else ""),
+               f"Lệnh giải ngân thủ công {row.id}",
                {"withdrawal_id": row.id, "by": user.id, "request_id": body.requestId})
     session.commit()
     return staff_view(session, row)

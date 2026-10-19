@@ -40,6 +40,19 @@ os.environ.update(
         # Face tests install a fake engine; never load buffalo_l or touch Reid/data.
         "FACE_WARMUP": "false",
         "FACE_DATA_DIR": os.path.join(_TEST_DIR, "faces"),
+        # Older tests post /identity and /plan without a CCCD scan or the declaration; the review-17/10
+        # tests switch these on themselves.
+        "CCCD_OCR_REQUIRED": "false",
+        "PLAN_DECLARATION_REQUIRED": "false",
+        "UPLOAD_DIR": os.path.join(_TEST_DIR, "uploads"),
+        # The demo stores double as the fixtures of the agent tests (fake models included): they test the
+        # general path, so the demo sample guard is off; tests/test_demo_samples.py switches it on.
+        "DEMO_SAMPLE_GUARD": "false",
+        # Older tests open applications straight from a sample store link; the store connection (proof of
+        # ownership, HANDOVER 16.7) is tested on its own in tests/test_shop_connect.py with this switched on.
+        "SHOP_CONNECT_REQUIRED": "false",
+        # No platform app keys from the developer's environment: every OAuth connector is off in tests.
+        **{f"{p}_APP_{k}": "" for p in ("DOUYIN", "TAOBAO", "JD", "PINDUODUO", "KUAISHOU") for k in ("KEY", "SECRET")},
     }
 )
 
@@ -56,13 +69,24 @@ from app.platform.seed import seed_buoyup  # noqa: E402
 def full_limit_unless_seed(request: pytest.FixtureRequest) -> Iterator[None]:
     """Most tests check the algorithm's computed limit (chị Lan 200.000); the seed-loan fraction is
     tested on its own (``@pytest.mark.seed_loan``). Runs before the database is seeded."""
+    import copy
+
     from app.core.params import DEFAULT_PARAMS
 
-    saved = list(DEFAULT_PARAMS["seed"]["ratio"])
+    saved = copy.deepcopy({k: DEFAULT_PARAMS[k] for k in ("seed", "product", "repay", "revenue")})
     if request.node.get_closest_marker("seed_loan") is None:
         DEFAULT_PARAMS["seed"]["ratio"] = [1.0, 1.0, 1.0]
+    if request.node.get_closest_marker("product_v5") is None:
+        # The loan-circle product the older tests describe: tenor and method picked by the borrower, the
+        # part above 100.000 paid to the supplier, company tenors up to 36 months.
+        DEFAULT_PARAMS["product"]["borrower_picks_tenor"] = True
+        DEFAULT_PARAMS["product"]["methods"] = ["installment", "revenue"]
+        DEFAULT_PARAMS["product"]["tenors"]["company"] = [3, 6, 12, 24, 36]
+        DEFAULT_PARAMS["repay"]["pay_supplier_direct"] = True
+        DEFAULT_PARAMS["revenue"]["bonus_requires_images"] = False
     yield
-    DEFAULT_PARAMS["seed"]["ratio"] = saved
+    for k, v in saved.items():
+        DEFAULT_PARAMS[k] = v
 
 
 @pytest.fixture(autouse=True)

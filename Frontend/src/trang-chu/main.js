@@ -59,8 +59,6 @@
   const statsList = document.getElementById('public-stats');
   const status = document.getElementById('overview-status');
   const retry = document.getElementById('overview-retry');
-  const badge = document.getElementById('simulation-badge');
-  const bankBadge = document.getElementById('bank-simulation-badge');
   const fields = [
     ['sellers', 'Người bán'], ['applications', 'Hồ sơ'],
     ['loans_active', 'Khoản vay đang hoạt động'], ['disbursed_total', 'Tổng giải ngân · CNY'],
@@ -103,11 +101,8 @@
         }
       });
       if (!statsList.children.length) statsList.textContent = 'Hệ thống chưa có số liệu tổng quan.';
-      badge.hidden = overview.simulated !== true;
-      bankBadge.hidden = overview.simulated !== true;
-      status.textContent = overview.simulated ? 'Dữ liệu mô phỏng từ hệ thống · Không phải giao dịch tiền thật.' : 'Đã cập nhật từ hệ thống.';
+      status.textContent = 'Đã cập nhật từ hệ thống.';
     } catch (error) {
-      badge.hidden = bankBadge.hidden = true;
       status.textContent = 'Chưa tải được tổng quan. Bạn vẫn có thể khám phá hoặc tạo tài khoản.';
       bankList.replaceChildren();
       const bankPlaceholder = document.createElement('span');

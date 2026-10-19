@@ -9,6 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /srv
 COPY BackEnd/src/requirements.txt BackEnd/src/requirements.txt
 COPY BackEnd/src/Reid/requirements.txt BackEnd/src/Reid/requirements.txt
+COPY BackEnd/src/CCCD/requirements.txt BackEnd/src/CCCD/requirements.txt
 # insightface (face authentication) compiles a small C extension; the compiler is removed afterwards.
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
     && pip install -r BackEnd/src/requirements.txt \

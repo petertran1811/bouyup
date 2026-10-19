@@ -21,6 +21,7 @@ from app.agents import agent4b_monitor as agent4
 from app.agents.agent4b_monitor import LOAN_LOCK, answer_notice, deliver_notices, OPEN_STATUSES, loan_shares, refresh_auto_switch, simulate_inflow, tick, today
 from app.banks.split import MASTER_CODE
 from app.core.params import active_params
+from app.platform import events
 from app.platform.security import require_roles
 from app.platform.tables import BuAlert, BuApplication, BuBank, BuChainBlock, BuLoan, BuRepayment, BuUser
 from app.platform.config import settings
@@ -43,11 +44,19 @@ class InflowIn(BaseModel):
 
 class TransferIn(BaseModel):
     amount: int = Field(gt=0, le=1_000_000_000_000)
-    kind: Literal["supplier", "personal", "securities", "real_estate", "other"]
+    kind: Literal["supplier", "personal", "securities", "real_estate", "other",
+                  "marketing", "logistics", "staff", "tax", "platform"]
     note: str = Field(default="", max_length=120)
 
 
-class PrepayIn(BaseModel):
+class ConfirmIn(BaseModel):
+    """SELLER_SERVICES_PLAN §3.2: money leaves the account only after the seller confirmed it on screen."""
+    confirm: bool = False
+    method: Literal["face", "otp"] | None = None  # how the seller confirmed (face re-check or a simulated OTP)
+    face_verify_id: str | None = Field(default=None, max_length=64)
+
+
+class PrepayIn(ConfirmIn):
     amount: int | None = Field(default=None, gt=0, le=1_000_000_000_000)  # None: settle everything
 
 
@@ -121,7 +130,7 @@ def loan_view(session: Session, loan: BuLoan, viewer: BuUser) -> dict[str, Any]:
         "clock": day.isoformat(),
         "owed_now": agent4.owed_now(doc) if "arrears" in doc else 0,
         "account": account,
-        "next_due": agent4.next_row(doc) if "schedule" in doc else None,
+        "next_due": agent4.next_due_view(doc, params) if "schedule" in doc else None,
         "minimum": {"allowed": min_ok, "why": min_why or None,
                     "quote": agent4.minimum_quote(doc, params) if min_ok else None},
         "prepay_quote": agent4.prepay_quote(doc, day) if open_ and "interest_to" in doc else None,
@@ -206,9 +215,21 @@ def post_inflow(
     return loan_view(session, loan, user)
 
 
+def _reassess(session: Session, loan: BuLoan, reason: str) -> None:
+    """After money moved on the business account (committed): Agent 4 reassesses that loan at once (e.g.
+    ``low_balance``), in its own transaction, as ``post_inflow`` does. Off in tests (autopilot disabled)."""
+    if not autopilot.enabled():
+        return
+    try:
+        autopilot.assess_loan(loan.id, reason)
+    except Exception:  # noqa: BLE001 - the transfer is recorded; the next round reassesses
+        audit_logger.warning("agent4_transfer_assess_failed", loan_id=loan.id)
+    session.refresh(loan)
+
+
 def _simulation() -> None:
     if settings.app_env not in _SIMULATION_ENVS:
-        raise api_error(404, "NOT_FOUND", "Mô phỏng chỉ có ở môi trường dev/demo.")
+        raise api_error(404, "NOT_FOUND", "Chức năng này không khả dụng ở môi trường hiện tại.")
 
 
 @router.post("/loans/{loan_id}/simulate-transfer")
@@ -221,6 +242,7 @@ def post_transfer(loan_id: str, body: TransferIn, user: BuUser = Depends(require
         session.refresh(loan)
         item = agent4.simulate_transfer(session, loan, body.amount, body.kind, body.note)
         session.commit()
+    _reassess(session, loan, "chi tiền")
     view = loan_view(session, loan, user)
     if user.role == "seller":
         item = {k: v for k, v in item.items() if k not in ("flag", "alert_id", "chain_tx")}
@@ -231,7 +253,12 @@ def post_transfer(loan_id: str, body: TransferIn, user: BuUser = Depends(require
 def post_advance(loan_id: str, body: AdvanceIn, user: BuUser = Depends(require_roles("seller", *_STAFF)),
                  session: Session = Depends(get_session)) -> dict:
     """Demo: move this loan's clock to ``to`` (Agent 4 runs every day in between: due dates,
-    debits, grace, penalty, reminders, 30-day report)."""
+    debits, grace, penalty, reminders, 30-day report).
+
+    With ``PLATFORM_PAYOUT_FEED=true`` (the setting that turns the platforms' settlement feed on; it is not
+    tied to APP_ENV, so tests and a dev server without the feed keep exact balances) each day first gets its
+    sales payout and the store's usual expenses (``autopilot/settlement.py``, booked on that day), then the
+    tick: a due date has that day's money to collect."""
     _simulation()
     pending: list[dict[str, Any]] = []
     with LOAN_LOCK:
@@ -239,27 +266,58 @@ def post_advance(loan_id: str, body: AdvanceIn, user: BuUser = Depends(require_r
         session.refresh(loan)
         start = agent4.clock(loan.doc or {})
         if body.to < start:
-            raise api_error(400, "VALIDATION_ERROR", "Ngày mô phỏng phải sau ngày hiện tại của khoản vay.",
+            raise api_error(400, "VALIDATION_ERROR", "Ngày chạy đến phải sau ngày hiện tại của khoản vay.",
                             {"field": "to", "clock": start.isoformat()})
         if (body.to - start).days > 1200:
             raise api_error(400, "VALIDATION_ERROR", "Mỗi lần tiến tối đa 1200 ngày.", {"field": "to"})
+        from app.agents import agent5_seller_reports as seller_reports
+        from app.autopilot import settlement
+
+        feed = bool(settings.platform_payout_feed)
         day = start
         while day < body.to and loan.status in OPEN_STATUSES:
             day = min(body.to, day + timedelta(days=1))
+            if feed:  # the day's sales money and expenses, before the day's debits
+                settlement.settle(session, through=day, loan_ids=[loan.id])
+                settlement.spend(session, through=day, loan_ids=[loan.id])
             tick(session, day, loan_ids=[loan.id], refresh=False, deferred=pending)
+            # SELLER_SERVICES_PLAN §6.4: Agent 5's reports on the simulated day, so the demo shows the monthly /
+            # quarterly report (and the closing report) at once. Reports only fall due on the 1st of a month or
+            # when the loan closes; the template summary is used here (no model call inside this transaction).
+            if day.day == 1 or day == body.to or loan.status not in OPEN_STATUSES:
+                seller_reports.run_due(session, day, user_ids=[loan.seller_user_id], use_model=False)
         session.commit()
     deliver_notices(pending)
     session.refresh(loan)
     return loan_view(session, loan, user)
 
 
+def _confirmed(session: Session, loan: BuLoan, user: BuUser, body: ConfirmIn | None, what: str) -> None:
+    """Refuse a money action the seller did not confirm (``confirm: true``). A face re-check, when sent,
+    must be this seller's and fresh; the OTP is simulated (as when signing the consent)."""
+    if body is None or body.confirm is not True:
+        raise api_error(400, "CONFIRM_REQUIRED", "Cần xác nhận trước khi trích tiền từ tài khoản: gửi confirm: true.",
+                        {"field": "confirm"})
+    method = body.method or ("face" if body.face_verify_id else "otp")
+    if body.face_verify_id:
+        from app.api import face as face_api
+
+        if face_api.consume_verification(body.face_verify_id, user) is None:
+            raise api_error(400, "VALIDATION_ERROR", "Cần quét lại khuôn mặt để xác nhận giao dịch.",
+                            {"field": "face_verify_id"})
+    events.log(session, loan.application_id, "seller", "payment_confirmed",
+               f"Người bán xác nhận {what} bằng {'khuôn mặt' if method == 'face' else 'mã OTP'}",
+               {"loan_id": loan.id, "method": method, "face_checked": bool(body.face_verify_id)})
+
+
 @router.post("/loans/{loan_id}/minimum")
-def post_minimum(loan_id: str, user: BuUser = Depends(require_roles("seller")),
+def post_minimum(loan_id: str, body: ConfirmIn | None = None, user: BuUser = Depends(require_roles("seller")),
                  session: Session = Depends(get_session)) -> dict:
-    """Stage 8: pay only the minimum at the next due date (instalment method)."""
+    """Stage 8: pay only the minimum at the next due date (instalment method). Needs ``confirm: true``."""
     with LOAN_LOCK:
         loan = _visible_loan(session, loan_id, user)
         session.refresh(loan)
+        _confirmed(session, loan, user, body, "trả tối thiểu kỳ tới")
         agent4.choose_minimum(session, loan)
         session.commit()
     return loan_view(session, loan, user)
@@ -268,10 +326,12 @@ def post_minimum(loan_id: str, user: BuUser = Depends(require_roles("seller")),
 @router.post("/loans/{loan_id}/prepay")
 def post_prepay(loan_id: str, body: PrepayIn | None = None, user: BuUser = Depends(require_roles("seller")),
                 session: Session = Depends(get_session)) -> dict:
-    """Stage 8: free prepayment from the business account (interest only for the days used)."""
+    """Stage 8: free prepayment from the business account (interest only for the days used).
+    Needs ``confirm: true``."""
     with LOAN_LOCK:
         loan = _visible_loan(session, loan_id, user)
         session.refresh(loan)
+        _confirmed(session, loan, user, body, "trả trước")
         result = agent4.prepay(session, loan, body.amount if body else None)
         session.commit()
     return {**loan_view(session, loan, user), "prepay": result}
@@ -290,7 +350,7 @@ def put_receiving_account(loan_id: str, body: AccountIn, user: BuUser = Depends(
 
 @router.get("/autopilot/status")
 def autopilot_status(_: BuUser = Depends(require_roles(*_STAFF))) -> dict:
-    """When Agent 4 and Agent 5 last ran on their own, what they found, when they run next."""
+    """When Agent 4 and Agent 5 (post-audit, seller reports) last ran on their own, what they found, when next."""
     return autopilot.status()
 
 
@@ -321,11 +381,16 @@ def post_tick(
     with LOAN_LOCK:
         alerts = tick(session, as_of, deferred=pending)
         escalated = verify.escalate_overdue(session, active_params(session), as_of)
+        # Admin "Ngày mô phỏng · Chạy ngay": Agent 5's seller reports fall due on the simulated day too, so the
+        # monthly / quarterly report can be shown from the staff console (template summary, no model call here).
+        from app.agents import agent5_seller_reports as seller_reports
+
+        reports = len(seller_reports.run_due(session, as_of, use_model=False))
         checked = session.scalar(select(func.count()).select_from(BuLoan).where(BuLoan.status.in_(OPEN_STATUSES)))
         session.commit()
     deliver_notices(pending)  # model drafts after commit, never inside the transaction
     return {"alerts": [alert_view(a) for a in alerts], "checked": int(checked or 0), "escalated": escalated,
-            "simulated": True}
+            "reports": reports, "simulated": True}
 
 
 @router.get("/alerts")

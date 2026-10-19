@@ -1,0 +1,36 @@
+/* Staff hub phrases (admin.html, admin-hub.js): Vietnamese source -> [English, Simplified Chinese].
+   Load after i18n-dict.js and before i18n.js. {x} marks a runtime value. */
+window.BU = window.BU || {};
+Object.assign(window.BU.i18nDict = window.BU.i18nDict || {}, {
+"Trang chính":["Home", "主页"],
+"Đường dẫn":["Breadcrumb", "导航路径"],
+"Chào cán bộ tín dụng.":["Hello, credit officer.", "您好，信贷专员。"],
+"Chào quản trị viên.":["Hello, administrator.", "您好，管理员。"],
+"Hồ sơ, khoản vay và hậu kiểm ở một nơi. Chọn một chức năng bên dưới để làm việc.":["Applications, loans and post-loan review in one place. Pick a function below to get to work.", "申请、贷款与贷后检查集中在一处。请在下方选择一项功能开始工作。"],
+"Toàn quyền liên minh: người dùng, chuỗi và nhật ký quản trị. Chọn một chức năng bên dưới để làm việc.":["Full alliance control: users, the chain and the admin log. Pick a function below to get to work.", "联盟全部权限：用户、区块链与管理日志。请在下方选择一项功能开始工作。"],
+"Giám sát khoản vay":["Loan monitoring", "贷款监控"],
+"Tra cứu luật":["Legal lookup", "法规检索"],
+"Hồ sơ đang chờ cán bộ quyết định":["Applications waiting for an officer's decision", "等待信贷专员决定的申请"],
+"Trả lời có lý do trong 5 ngày làm việc":["Reasoned answers within 5 working days", "5 个工作日内给出有理由的答复"],
+"Tra cứu mọi hồ sơ theo người bán":["Look up any application by seller", "按卖家查找任意申请"],
+"Dư nợ theo ngân hàng, hạng rủi ro và sự kiện":["Outstanding balance by bank, risk grade and event", "按银行、风险等级和事件划分的未偿余额"],
+"Agent 4 theo dõi dòng tiền và cảnh báo sớm":["Agent 4 tracks cash flow and early warnings", "Agent 4 跟踪现金流与早期预警"],
+"Chính sách cho vay và khóa của từng ngân hàng":["Each bank's lending policy and keys", "各银行的放贷政策与密钥"],
+"Điều luật Việt Nam, Trung Quốc kèm hiệu lực":["Vietnamese and Chinese law articles with their validity", "越南与中国法律条文及其效力"],
+"Khối, đồng thuận và lệnh rút tiền niêm phong":["Blocks, consensus and sealed withdrawal orders", "区块、共识与已封存的提款指令"],
+"Tạo và theo dõi lệnh chi chia theo ngân hàng":["Create and track payment orders split across banks", "创建并跟踪按银行拆分的付款指令"],
+"Agent 5 rà soát, đề xuất và phiên bản tham số":["Agent 5 reviews, proposals and parameter versions", "Agent 5 审查、变更提议与参数版本"],
+"Tạo, kích hoạt hoặc vô hiệu hóa tài khoản":["Create, activate or deactivate accounts", "创建、启用或停用账户"],
+"Mọi thao tác của cán bộ và quản trị viên":["Every action by officers and administrators", "信贷专员与管理员的全部操作"],
+"Chỉ quản trị viên":["Administrators only", "仅限管理员"],
+"{x} hồ sơ chờ":["{x} waiting", "{x} 份待处理"],
+"{x} chưa trả lời":["{x} unanswered", "{x} 条未答复"],
+"{x} hồ sơ":["{x} applications", "{x} 份申请"],
+"{x} khoản vay":["{x} loans", "{x} 笔贷款"],
+"{x} ngân hàng":["{x} banks", "{x} 家银行"],
+"{x} lệnh chi":["{x} payment orders", "{x} 条付款指令"],
+"{x} tài khoản":["{x} accounts", "{x} 个账户"],
+"{x} sự kiện gần nhất":["{x} latest events", "最近 {x} 条事件"],
+"kho Việt Nam":["Vietnam corpus", "越南法规库"],
+"kho Trung Quốc":["China corpus", "中国法规库"]
+});

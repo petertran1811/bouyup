@@ -37,7 +37,7 @@ from app.blockchain import chain
 from app.blockchain.chain_remote import ChainUnavailable
 from app.blockchain.withdrawals import create_withdrawal, reference_code
 from app.banks.split import split_largest_remainder, vn_number
-from app.core import algorithm
+from app.core import algorithm, cashflow
 from app.core.params import active_params
 from app.data_sources import consent as consent_mod
 from app.data_sources import sources
@@ -54,7 +54,10 @@ _GROUP_TO_CATEGORY = {"quần áo": "thời trang", "điện tử": "điện t�
                       "thực phẩm rời": "tạp hóa"}
 TRANSFER_KINDS = {"supplier": "Trả nhà cung cấp", "personal": "Chuyển tài khoản cá nhân",
                   "securities": "Chuyển tài khoản chứng khoán", "real_estate": "Đặt cọc / mua bất động sản",
-                  "other": "Chi khác cho kinh doanh"}
+                  "other": "Chi khác cho kinh doanh",
+                  # SELLER_SERVICES_PLAN §3.3: the expense groups the seller (or WeBank) can name directly.
+                  "marketing": "Tiếp thị, quảng cáo", "logistics": "Vận chuyển, kho bãi", "staff": "Lương, nhân sự",
+                  "tax": "Thuế, lệ phí", "platform": "Phí sàn thương mại điện tử"}
 MISUSE_KINDS = ("securities", "real_estate")
 
 # Every read-modify-write of a loan's JSON doc (monitoring, inflows, seller actions) runs under
@@ -187,7 +190,8 @@ def _create_loan(session: Session, app_row: BuApplication, doc: dict[str, Any], 
                                 repaid=0, contract_id=leg["contract_id"]))
     push_notice(loan_doc, _notice("info", f"Đã giải ngân {_n(contract['amount'])} {loan.currency}. Kỳ trả đầu ngày "
                                           f"{_vn_date(contract['first_due_date'])}, khoảng {_n(rows[0]['payment_est'])}. "
-                                          "Chị để tiền hàng về tài khoản kinh doanh WeBank để hệ thống tự trích đúng hạn."))
+                                          "Bạn để tiền hàng về tài khoản kinh doanh WeBank để hệ thống tự trích đúng hạn.",
+                                  "disbursed"))
     session.flush()
     return loan
 
@@ -376,7 +380,7 @@ def _process_due(session: Session, loan: BuLoan, doc: dict[str, Any], params: di
         row["status"] = "overdue"
         a["since"] = a.get("since") or d.isoformat()
         push_notice(doc, _notice("warn", f"Kỳ {row['k']} ngày {_vn_date(d)}: tài khoản chỉ đủ trích {_n(paid)}, còn thiếu "
-                                         f"{_n(owed_now(doc))}. Chị nộp thêm trong {params['repay']['grace_days']} ngày "
+                                         f"{_n(owed_now(doc))}. Bạn nộp thêm trong {params['repay']['grace_days']} ngày "
                                          "ân hạn để không bị tính lãi phạt.", "overdue"))
     else:
         row["status"] = "minimum" if row.get("choice") == "minimum" else "paid"
@@ -391,6 +395,7 @@ def _maybe_close(session: Session, loan: BuLoan, doc: dict[str, Any], as_of: dat
     from app.autopilot import loop as autopilot
 
     autopilot.mark_agent5_due("khoản vay tất toán")  # a real outcome for the post-audit
+    autopilot.mark_reports_due(loan.seller_user_id, "closing")  # Agent 5's closing report to the seller (§6.2)
     loan.status = "closed"
     doc["closed_at"] = utcnow().isoformat() + "Z"
     doc["closed_on"] = as_of.isoformat()
@@ -404,8 +409,8 @@ def _maybe_close(session: Session, loan: BuLoan, doc: dict[str, Any], as_of: dat
         alert.acked = True
     _report_bureau(session, loan, doc, "closed", as_of)
     doc["receiving_account"] = {**(doc.get("receiving_account") or {}), "locked": False}
-    push_notice(doc, _notice("info", "Chị đã trả hết khoản vay. BuoyUp đã báo trung tâm thông tin tín dụng. Từ giờ chị "
-                                     "có thể đổi tài khoản nhận tiền hàng; khi cần vốn, chị vay lại với hồ sơ cập nhật.",
+    push_notice(doc, _notice("info", "Bạn đã trả hết khoản vay. BuoyUp đã báo trung tâm thông tin tín dụng. Từ giờ bạn "
+                                     "có thể đổi tài khoản nhận tiền hàng; khi cần vốn, bạn vay lại với hồ sơ cập nhật.",
                              "closed"))
     app_row = session.get(BuApplication, loan.application_id)
     if app_row is not None:
@@ -442,9 +447,20 @@ def _majority(session: Session, loan: BuLoan, params: dict[str, Any]) -> dict[st
 
 # --- Stage 6: the business account ---------------------------------------------------
 
-def simulate_inflow(session: Session, loan: BuLoan, amount: int, payout_id: str | None = None) -> BuLoan:
+# How many money movements a loan doc keeps (a year of daily settlements and expenses, 18/10/2026): the
+# statistics and the seller reports replay the account from them, so they must cover the loan's life.
+KEEP_INFLOWS = 400
+KEEP_TRANSFERS = 400
+KEEP_IDS = 400
+
+
+def simulate_inflow(session: Session, loan: BuLoan, amount: int, payout_id: str | None = None,
+                    source: str = "", on: date | None = None) -> BuLoan:
     """A platform payout reaches the WeBank business account. Money arriving while something is due
-    is debited at once. A payout id already processed is skipped (never counted twice)."""
+    is debited at once. A payout id already processed is skipped (never counted twice).
+
+    ``on`` is the business day the money belongs to (the platform's settlement day; the demo feed settles
+    day by day), default the loan's clock. What is owed is collected on ``max(on, clock)``."""
     if loan.status not in OPEN_STATUSES:
         raise api_error(400, "INVALID_STATE", "Khoản vay đã tất toán.")
     if amount <= 0:
@@ -456,13 +472,17 @@ def simulate_inflow(session: Session, loan: BuLoan, amount: int, payout_id: str 
             events.log(session, loan.application_id, "agent4", "payout_duplicate",
                        f"Payout {payout_id} đã xử lý: bỏ qua", {"loan_id": loan.id})
             return loan
-        doc["payout_ids"] = seen[-200:] + [payout_id]
+        doc["payout_ids"] = seen[-(KEEP_IDS - 1):] + [payout_id]
     day = clock(doc)
+    booked = on or day
+    day = max(day, booked)
     account = doc["account"]
     account["balance"] = int(account["balance"]) + amount
     account["inflow_total"] = int(account.get("inflow_total", 0)) + amount
     account["period_inflow"] = int(account.get("period_inflow", 0)) + amount
-    account["inflows"] = (account.get("inflows") or [])[-49:] + [{"on": day.isoformat(), "amount": amount}]
+    account["inflows"] = (account.get("inflows") or [])[-(KEEP_INFLOWS - 1):] + [{
+        "id": payout_id or "in_" + secrets.token_hex(6), "on": booked.isoformat(), "amount": amount,
+        "source": source, "at": utcnow().isoformat() + "Z", "balance_after": int(account["balance"])}]
     doc["inflow_total"] = account["inflow_total"]
     events.log(session, loan.application_id, "agent4", "inflow",
                f"Tiền hàng về tài khoản kinh doanh WeBank {_n(amount)}; số dư {_n(account['balance'])}",
@@ -479,19 +499,30 @@ def simulate_inflow(session: Session, loan: BuLoan, amount: int, payout_id: str 
     return loan
 
 
-def simulate_transfer(session: Session, loan: BuLoan, amount: int, kind: str, note: str = "") -> dict[str, Any]:
+def simulate_transfer(session: Session, loan: BuLoan, amount: int, kind: str, note: str = "", *,
+                      memo: str = "", payee: dict[str, Any] | None = None, transfer_id: str | None = None,
+                      source: str = "seller", on: date | None = None) -> dict[str, Any]:
     """Money leaves the business account. Securities and real estate are a misuse of a business
-    loan (red); a transfer to a personal account above 30 % of the loan is flagged (yellow)."""
+    loan (red); a transfer to a personal account above 30 % of the loan is flagged (yellow).
+    Every transfer gets its expense group (``cashflow.classify``). A ``transfer_id`` already
+    recorded is skipped (WeBank re-sending the same notification); the earlier item is returned
+    with ``duplicate: True``."""
     if loan.status not in OPEN_STATUSES:
         raise api_error(400, "INVALID_STATE", "Khoản vay đã tất toán.")
     if kind not in TRANSFER_KINDS:
         raise api_error(400, "VALIDATION_ERROR", "Loại giao dịch không hợp lệ.", {"field": "kind"})
     doc = dict(loan.doc or {})
     account = doc["account"]
+    seen = list(doc.get("transfer_ids") or [])
+    if transfer_id and transfer_id in seen:
+        events.log(session, loan.application_id, "agent4", "transfer_duplicate",
+                   f"Giao dịch ra {transfer_id} đã ghi: bỏ qua", {"loan_id": loan.id})
+        earlier = next((t for t in account.get("transfers") or [] if t.get("id") == transfer_id), None)
+        return {**(earlier or {"id": transfer_id}), "duplicate": True}
     if amount <= 0 or amount > int(account["balance"]):
         raise api_error(400, "VALIDATION_ERROR", "Số tiền phải lớn hơn 0 và không vượt số dư.", {"field": "amount"})
     params = active_params(session)
-    day = clock(doc)
+    day = on or clock(doc)  # the business day of the transfer (the demo spending feed books it day by day)
     account["balance"] = int(account["balance"]) - amount
     flag = None
     if kind in MISUSE_KINDS:
@@ -499,9 +530,17 @@ def simulate_transfer(session: Session, loan: BuLoan, amount: int, kind: str, no
     elif kind == "personal" and amount > float(params["repay"]["large_personal_transfer"]) * int(doc["amount"]):
         flag = {"key": "large_personal", "level": "yellow",
                 "text": "Chuyển lớn sang tài khoản cá nhân (trên 30% khoản vay)"}
-    item = {"on": day.isoformat(), "amount": amount, "kind": kind, "label": TRANSFER_KINDS[kind],
-            "note": note.strip()[:120], "flag": flag}
-    account["transfers"] = (account.get("transfers") or [])[-49:] + [item]
+    item = {"id": transfer_id or "out_" + secrets.token_hex(6), "on": day.isoformat(), "amount": amount, "kind": kind,
+            "label": TRANSFER_KINDS[kind], "note": note.strip()[:120], "flag": flag, "source": source,
+            "at": utcnow().isoformat() + "Z", "balance_after": int(account["balance"])}
+    if memo.strip():
+        item["memo"] = memo.strip()[:120]
+    if payee:
+        item["payee"] = {"kind": str(payee.get("kind") or "")[:20], "name": str(payee.get("name") or "")[:80]}
+    item["group"] = cashflow.classify(item)
+    if transfer_id:
+        doc["transfer_ids"] = seen[-(KEEP_IDS - 1):] + [transfer_id]
+    account["transfers"] = (account.get("transfers") or [])[-(KEEP_TRANSFERS - 1):] + [item]
     events.log(session, loan.application_id, "agent4", "transfer_flag" if flag else "transfer",
                f"{TRANSFER_KINDS[kind]} {_n(amount)}" + (f" → {flag['text']}" if flag else ""),
                {"loan_id": loan.id, "kind": kind, "hidden_from_seller": bool(flag)})
@@ -516,10 +555,25 @@ def simulate_transfer(session: Session, loan: BuLoan, amount: int, kind: str, no
             entry = chain.record(session, loan.application_id, "misuse_flag", {"loan_id": loan.id, **item})
             item["chain_tx"] = entry.tx
         item["alert_id"] = alert.id
+    with capabilities.acting("agent4b"):  # SELLER_SERVICES_PLAN §5.3: read and tell at once, no money moves
+        _spend_below_due(session, loan, doc, params, item)
     loan.updated_at = utcnow()
     save_json(loan, "doc", doc)
     session.flush()
     return item
+
+
+def record_outflow(session: Session, loan: BuLoan, amount: int, transfer_id: str,
+                   payee: dict[str, Any] | None = None, memo: str = "", source: str = "webank",
+                   on: date | None = None) -> dict[str, Any]:
+    """WeBank tells BuoyUp that money left the business account (``POST /v4/webank/outflows``, or the
+    demo spending feed). Only the simulated balance BuoyUp mirrors goes down; nothing is paid by this
+    function. Idempotent on ``transfer_id``. The expense group comes from the memo and the payee."""
+    item = simulate_transfer(session, loan, amount, "other", memo=memo, payee=payee, transfer_id=transfer_id,
+                             source=source, on=on)
+    acc = (loan.doc or {}).get("account") or {}
+    return {"recorded": not item.get("duplicate"), "balance": int(acc.get("balance") or 0), "loan_id": loan.id,
+            "transfer": {k: v for k, v in item.items() if k not in ("flag", "alert_id", "chain_tx")}}
 
 
 def change_receiving_account(session: Session, loan: BuLoan, bank: str, number: str) -> dict[str, Any]:
@@ -537,6 +591,28 @@ def change_receiving_account(session: Session, loan: BuLoan, bank: str, number: 
 
 # --- Stage 8: minimum payment, prepayment -----------------------------------------------
 
+def due_amount(doc: dict[str, Any], params: dict[str, Any], row: dict[str, Any] | None = None) -> tuple[int, bool]:
+    """What the seller will pay for the next period: the full instalment estimate, or the minimum quote when
+    she chose to pay only the minimum for it. Returns (amount, is_minimum)."""
+    row = row or next_row(doc)
+    if row is None:
+        return 0, False
+    if row.get("choice") == "minimum" and row is next_row(doc):
+        quote = minimum_quote(doc, params)
+        if quote:
+            return int(quote["payment"]), True
+    return int(row["payment_est"]), False
+
+
+def next_due_view(doc: dict[str, Any], params: dict[str, Any]) -> dict[str, Any] | None:
+    """The next schedule row for the seller's screens; ``minimum_payment`` is set when she chose the minimum."""
+    row = next_row(doc)
+    if row is None:
+        return None
+    amount, is_min = due_amount(doc, params, row)
+    return {**row, "minimum_payment": amount if is_min else None}
+
+
 def minimum_allowed(doc: dict[str, Any], params: dict[str, Any]) -> tuple[bool, str]:
     rp = params["repay"]
     row = next_row(doc)
@@ -552,7 +628,7 @@ def minimum_allowed(doc: dict[str, Any], params: dict[str, Any]) -> tuple[bool, 
     if len(before) == int(rp["min_max_consecutive"]) and all(r.get("choice") == "minimum" for r in before):
         return False, f"Không được trả tối thiểu quá {rp['min_max_consecutive']} kỳ liên tiếp."
     if owed_now(doc) > 0:
-        return False, "Chị cần trả hết khoản quá hạn trước."
+        return False, "Bạn cần trả hết khoản quá hạn trước."
     return True, ""
 
 
@@ -579,7 +655,7 @@ def choose_minimum(session: Session, loan: BuLoan) -> dict[str, Any]:
     quote = minimum_quote(doc, params)
     row = next_row(doc)
     row["choice"] = "minimum"
-    push_notice(doc, _notice("info", f"Kỳ {row['k']} chị chọn trả tối thiểu {_n(quote['payment'])} (lãi + 30% gốc kỳ). "
+    push_notice(doc, _notice("info", f"Kỳ {row['k']} bạn chọn trả tối thiểu {_n(quote['payment'])} (lãi + 30% gốc kỳ). "
                                      f"Phần gốc {_n(quote['deferred'])} được chia đều cho các kỳ sau; lãi vẫn tính trên "
                                      "dư nợ gốc còn lại.", "minimum"))
     events.log(session, loan.application_id, "seller", "minimum_payment",
@@ -696,10 +772,12 @@ def _reminders(doc: dict[str, Any], params: dict[str, Any], as_of: date) -> list
     if left not in [int(x) for x in params["repay"]["reminder_days"]]:
         return []
     balance = int(doc["account"]["balance"])
-    text = (f"Còn {left} ngày đến kỳ {row['k']} ({_vn_date(row['due_date'])}): khoảng {_n(row['payment_est'])}. "
-            f"Số dư tài khoản kinh doanh {_n(balance)}.")
-    if balance < int(row["payment_est"]):
-        text += " Số dư chưa đủ, chị nộp thêm trước ngày trả."
+    payment, is_min = due_amount(doc, params, row)
+    text = (f"Còn {left} ngày đến kỳ {row['k']} ({_vn_date(row['due_date'])}): khoảng {_n(payment)}"
+            f"{' (trả tối thiểu)' if is_min else ''}. Số dư tài khoản kinh doanh {_n(balance)}.")
+    if balance < payment and not _was_sent(doc, f"shortfall_forecast:{row['k']}:{left}"):
+        # the shortfall forecast of the same day already said it, with figures (SELLER_SERVICES_PLAN §5.1)
+        text += " Số dư chưa đủ, bạn nộp thêm trước ngày trả."
     return [text]
 
 
@@ -731,7 +809,7 @@ def service(session: Session, loan: BuLoan, as_of: date, params: dict[str, Any])
         _report_bureau(session, loan, doc, "overdue_30", as_of)
         doc["majority"] = _majority(session, loan, params)
         push_notice(doc, _notice("danger", f"Khoản vay quá hạn {days} ngày và đã được báo trung tâm thông tin tín dụng. "
-                                           "Chị liên hệ WeBank để thống nhất cách trả.", "bureau"))
+                                           "Bạn liên hệ WeBank để thống nhất cách trả.", "bureau"))
     loan.status = "overdue" if owed_now(doc) > 0 else "active"
     _maybe_close(session, loan, doc, as_of)
     doc["clock"] = max(clock(doc), as_of).isoformat()
@@ -860,7 +938,7 @@ def answer_notice(session: Session, loan: BuLoan, notice_id: str, choice: str, n
     if target is None or not target.get("question"):
         raise api_error(404, "NOT_FOUND", "Không tìm thấy câu hỏi này.")
     if target.get("answer"):
-        raise api_error(409, "CONFLICT", "Chị đã trả lời câu hỏi này.")
+        raise api_error(409, "CONFLICT", "Bạn đã trả lời câu hỏi này.")
     label = next((c["label"] for c in CAUSE_CHOICES if c["key"] == choice), None)
     if label is None:
         raise api_error(400, "VALIDATION_ERROR", "Lựa chọn không hợp lệ.", {"field": "choice"})
@@ -943,6 +1021,248 @@ def _rescore_fate(app_doc: dict[str, Any], data: dict[str, Any] | None) -> int |
     return int(value) if value is not None else None
 
 
+# --- Seller alerts (SELLER_SERVICES_PLAN §5, §6.3): read and tell, never move money ------------------
+#
+# Everything below only reads the loan doc / repayments / the scenario data and pushes notices. Nothing here
+# calls _collect, _pay_banks, prepay or change_receiving_account; it runs as ``agent4b`` (no debit). Each alert
+# is sent once: its key goes into ``doc["sent_alerts"]`` ("{kind}:{k}[:{days}]" or "{kind}:{YYYY-MM}").
+
+MAX_SENT_ALERTS = 200
+MAX_STORE_SNAPSHOTS = 24
+
+
+def _was_sent(doc: dict[str, Any], key: str) -> bool:
+    return key in (doc.get("sent_alerts") or [])
+
+
+def _mark_sent(doc: dict[str, Any], key: str) -> None:
+    doc["sent_alerts"] = [*(doc.get("sent_alerts") or []), key][-MAX_SENT_ALERTS:]
+
+
+def _about(x: float) -> str:
+    """'khoảng' figures: rounded to the hundred (never 0 for a real shortfall)."""
+    return _n(max(100, int(round(x / 100.0)) * 100)) if x > 0 else "0"
+
+
+def _dm(value: Any) -> str:
+    d = parse_date(value)
+    return d.strftime("%d/%m") if d else str(value)
+
+
+def _month_label(month: str) -> str:
+    return f"tháng {int(month[5:7])}/{month[:4]}"
+
+
+def _prev_month(day: date) -> str:
+    return (day.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+
+
+def _alert(session: Session, loan: BuLoan, doc: dict[str, Any], key: str, kind: str, text: str,
+           level: str = "warn", action: dict[str, Any] | None = None) -> dict[str, Any]:
+    from app.agents import notify
+
+    notice = notify.make_notice(kind, text, level, action or {"view": "loan", "id": loan.id})
+    push_notice(doc, notice)
+    _mark_sent(doc, key)
+    events.log(session, loan.application_id, "agent4", "seller_alert", f"Agent 4 báo người bán ({kind}): {text[:120]}",
+               {"loan_id": loan.id, "kind": kind, "key": key, "notice_id": notice["id"]})
+    return notice
+
+
+def _history_share(app_doc: dict[str, Any] | None) -> float | None:
+    """The WeBank share of tax revenue Agent 1 measured on earlier loans (None when unknown)."""
+    hist = (((app_doc or {}).get("verification") or {}).get("derived") or {}).get("history") or {}
+    share = hist.get("webank_share_of_tax")
+    return float(share) if isinstance(share, (int, float)) and share > 0 else None
+
+
+def _forecast_shortfall(doc: dict[str, Any], params: dict[str, Any], as_of: date,
+                        share: float | None = None) -> dict[str, Any] | None:
+    """Việc 2: ``forecast_days`` before a due date, the balance projected to that day from the money in and
+    the business spending of the last ``forecast_lookback_days``. Returns the alert (key, text, figures) when
+    it falls short of the payment and was not sent yet; ``None`` otherwise. Read-only."""
+    rp = params["repay"]
+    row = next_row(doc)
+    if row is None:
+        return None
+    left = (parse_date(row["due_date"]) - as_of).days
+    if left not in [int(x) for x in rp.get("forecast_days") or []]:
+        return None
+    key = f"shortfall_forecast:{row['k']}:{left}"
+    if _was_sent(doc, key):
+        return None
+    account = doc.get("account") or {}
+    start = parse_date(doc.get("start_date")) or as_of
+    days = max(0, min(int(rp.get("forecast_lookback_days") or 30), (as_of - start).days + 1))
+    since = as_of - timedelta(days=days)
+
+    def recent(item: dict[str, Any]) -> bool:
+        d = parse_date(item.get("on"))
+        return d is not None and since < d <= as_of
+
+    inflow = sum(int(i.get("amount") or 0) for i in account.get("inflows") or [] if recent(i))
+    spent = sum(int(t.get("amount") or 0) for t in account.get("transfers") or []
+                if recent(t) and cashflow.classify(t) is not None)
+    if days >= 7:
+        daily_in, basis = inflow / days, "history"
+    else:  # too little history on this loan: the plan's monthly revenue × the share known to reach WeBank
+        daily_in, basis = int(doc.get("forecast_monthly") or 0) / 30.0 * float(share or 0.0), "forecast"
+    expected_out = spent / max(days, 1)
+    balance = int(account.get("balance") or 0)
+    payment, is_min = due_amount(doc, params, row)
+    projected = balance + (daily_in - expected_out) * left
+    if projected >= payment:
+        return None
+    shortfall = payment - max(0.0, projected)
+    ok_min, _ = minimum_allowed(doc, params)
+    quote = minimum_quote(doc, params) if ok_min else None
+    pace = (f"với nhịp tiền về {days} ngày qua" if basis == "history"
+            else "với tiền hàng dự kiến theo hồ sơ vay" if daily_in > 0 else "chưa tính được tiền hàng sắp về")
+    text = (f"Còn {left} ngày đến kỳ {row['k']} ({_dm(row['due_date'])}): phải trả {_n(payment)} tệ"
+            f"{' (trả tối thiểu)' if is_min else ''}. "
+            f"Số dư {_n(balance)} tệ; {pace}, đến ngày trả dự kiến có khoảng {_about(max(0.0, projected))} tệ, "
+            f"thiếu khoảng {_about(shortfall)} tệ. Bạn có thể nộp thêm vào tài khoản WeBank")
+    text += f" hoặc chọn trả tối thiểu {_n(quote['payment'])} tệ cho kỳ này." if quote else "."
+    return {"key": key, "k": row["k"], "days_left": left, "text": text, "payment": payment, "balance": balance,
+            "daily_in": round(daily_in), "expected_out": round(expected_out), "projected": round(projected),
+            "shortfall": round(shortfall), "basis": basis, "minimum": quote, "minimum_chosen": is_min}
+
+
+def _repaid_on(r: Any) -> str:
+    """The (simulated) day a repayment was collected: the as_of in its split detail, else its timestamp."""
+    detail = next((x for x in (getattr(r, "split", None) or []) if isinstance(x, dict) and "kind" in x), {})
+    if detail.get("as_of"):
+        return str(detail["as_of"])[:10]
+    at = getattr(r, "at", None)
+    return at.date().isoformat() if isinstance(at, datetime) else str(at or "")[:10]
+
+
+def _tax_month(app_doc: dict[str, Any] | None, month: str) -> int | None:
+    revenue = ((((app_doc or {}).get("internal") or {}).get("data") or {}).get("revenue") or {})
+    for item in revenue.get("monthly_12m") or []:
+        if str(item.get("month") or "")[:7] == month:
+            return int(item.get("amount") or 0) or None
+    return None
+
+
+def _debt_service_check(doc: dict[str, Any], app_doc: dict[str, Any] | None, params: dict[str, Any], as_of: date,
+                        repayments: list[Any]) -> dict[str, Any] | None:
+    """Việc 3: on the first round of a month, last month's repayments against the store's estimated revenue
+    (``max(WeBank in, tax-filed revenue of that month or the plan's forecast)``; :func:`cashflow.coverage`).
+    Stores ``doc["dsr"]``; returns the alert when the ratio is above ``early_warning.dsr_max`` (once a month)."""
+    month = _prev_month(as_of)
+    if _was_sent(doc, f"dsr_checked:{month}"):
+        return None
+    start = parse_date(doc.get("start_date"))
+    if start is None or start.strftime("%Y-%m") > month:
+        return None
+    _mark_sent(doc, f"dsr_checked:{month}")
+    swept = sum(int(r.swept or 0) for r in repayments if _repaid_on(r)[:7] == month)
+    unpaid_rows = sum(max(0, int(r.get("amount_due") or 0) - int(r.get("paid") or 0)) for r in doc.get("schedule") or []
+                      if str(r.get("due_date") or "")[:7] == month and r.get("status") == "overdue")
+    payments = swept + min(owed_now(doc), unpaid_rows)
+    if payments <= 0:
+        return None
+    account = doc.get("account") or {}
+    webank_in = sum(int(i.get("amount") or 0) for i in account.get("inflows") or [] if str(i.get("on") or "")[:7] == month)
+    cov = cashflow.coverage(webank_in, _tax_month(app_doc, month), doc.get("forecast_monthly"))
+    base = int(cov.get("estimate") or 0)
+    if base <= 0:
+        return None
+    ratio = payments / base
+    limit = float(params["early_warning"].get("dsr_max", 0.20))
+    doc["dsr"] = {"month": month, "payments": payments, "revenue_base": base, "ratio": round(ratio, 4),
+                  "max": limit, "high": ratio > limit, "coverage": cov, "as_of": as_of.isoformat()}
+    if ratio <= limit or _was_sent(doc, f"dsr_high:{month}"):
+        return None
+    source = {"tax": "theo tờ khai thuế", "forecast": "theo dự báo trong hồ sơ vay"}.get(cov["basis"])
+    if cov["share"] is not None:
+        seen = (f"{source}; tiền hàng về WeBank mới tính được {round(cov['share'] * 100)} % doanh thu này")
+    else:
+        seen = "chỉ tính được tiền hàng về WeBank"
+    text = (f"{_month_label(month).capitalize()}: tiền trả nợ {_n(payments)} tệ bằng {round(ratio * 100)} % doanh thu "
+            f"ước tính ({_n(base)} tệ, {seen}). Trên {round(limit * 100)} % là mức BuoyUp coi là nặng. "
+            "Để tiền hàng về WeBank đầy đủ sẽ cho con số chính xác hơn.")
+    return {"key": f"dsr_high:{month}", "month": month, "text": text, "ratio": round(ratio, 4), "payments": payments,
+            "revenue_base": base, "coverage": cov}
+
+
+def _dsr_signal(doc: dict[str, Any], as_of: date) -> dict[str, Any] | None:
+    """While last month's check is the latest one and was high: a weight-0 signal staff see in the
+    early warning (it never changes the colour)."""
+    dsr = doc.get("dsr") or {}
+    if not dsr.get("high") or dsr.get("month") != _prev_month(as_of):
+        return None
+    return {"key": "dsr_high", "weight": 0.0,
+            "text": f"Tiền trả nợ {_month_label(dsr['month'])} bằng {round(float(dsr['ratio']) * 100)} % doanh thu "
+                    f"ước tính (trên {round(float(dsr['max']) * 100)} %)"}
+
+
+def _spend_below_due(session: Session, loan: BuLoan, doc: dict[str, Any], params: dict[str, Any],
+                     item: dict[str, Any]) -> dict[str, Any] | None:
+    """Việc 4: right after a transfer out (in the same request): a large spend that leaves the balance below
+    the next payment is told once per period. No question asked: this is not a yellow alert."""
+    row = next_row(doc)
+    if row is None:
+        return None
+    payment, is_min = due_amount(doc, params, row)
+    balance = int(doc["account"]["balance"])
+    amount = int(item.get("amount") or 0)
+    key = f"spend_below_due:{row['k']}"
+    if balance >= payment or amount < float(params["repay"].get("large_spend_share", 0.30)) * payment \
+            or _was_sent(doc, key):
+        return None
+    label = item.get("label")
+    if item.get("kind") == "other":  # a WeBank outflow: its memo, else its expense group
+        label = item.get("memo") or cashflow.GROUP_LABELS.get(str(item.get("group") or ""), label)
+    text = (f"Bạn vừa chi {_n(amount)} tệ ({label}). Số dư còn {_n(balance)} tệ, thấp hơn {_n(payment)} tệ phải "
+            f"trả{' (trả tối thiểu)' if is_min else ''} ngày {_dm(row['due_date'])}. Nhớ để tiền hàng về WeBank trước ngày đó.")
+    return _alert(session, loan, doc, key, "spend_below_due", text)
+
+
+def _store_snapshot(doc: dict[str, Any], app_doc: dict[str, Any] | None, data: dict[str, Any] | None,
+                    as_of: date) -> dict[str, Any] | None:
+    """§6.3: once a month (the first round of a month after the loan's start month) the public store page is
+    read again and kept in ``doc["store_snapshots"]`` (last 24) for the quarterly report. Read-only."""
+    month = as_of.strftime("%Y-%m")
+    start = parse_date(doc.get("start_date"))
+    snaps = list(doc.get("store_snapshots") or [])
+    if not data or start is None or month <= start.strftime("%Y-%m") or any(s.get("month") == month for s in snaps):
+        return None
+    url = (((app_doc or {}).get("stores") or [{}])[0] or {}).get("url")
+    try:
+        page = sources.lookup_public_store(data, url)
+    except (KeyError, TypeError):
+        return None
+    store = data.get("store") or {}
+    snap = {"month": month, "on": as_of.isoformat(), "rating": page.get("rating"),
+            "followers": page.get("followers", store.get("followers")),
+            "returns_rate": page.get("returns_rate", store.get("returns_rate")), "simulated": True}
+    doc["store_snapshots"] = (snaps + [snap])[-MAX_STORE_SNAPSHOTS:]
+    return snap
+
+
+def _seller_alerts(session: Session, loan: BuLoan, doc: dict[str, Any], app_doc: dict[str, Any] | None,
+                   data: dict[str, Any] | None, params: dict[str, Any], day: date, result: dict[str, Any]) -> None:
+    """Việc 2, 3 and the store snapshot inside one monitoring round (Agent 4b, read-only)."""
+    forecast = _forecast_shortfall(doc, params, day, _history_share(app_doc))
+    if forecast is not None:
+        action = {"view": "loan", "id": loan.id}
+        if forecast["minimum"]:
+            action["secondary"] = {"label": "Xem trả tối thiểu", "view": "loan", "id": loan.id, "open": "minimum"}
+        _alert(session, loan, doc, forecast["key"], "shortfall_forecast", forecast["text"], action=action)
+    dsr = None
+    if not _was_sent(doc, f"dsr_checked:{_prev_month(day)}"):  # once a month: no repayment query otherwise
+        repayments = list(session.scalars(select(BuRepayment).where(BuRepayment.loan_id == loan.id)))
+        dsr = _debt_service_check(doc, app_doc, params, day, repayments)
+    if dsr is not None:
+        _alert(session, loan, doc, dsr["key"], "dsr_high", dsr["text"])
+    signal = _dsr_signal(doc, day)
+    if signal is not None:
+        result["signals"].append(signal)
+    _store_snapshot(doc, app_doc, data, day)
+
+
 def tick(session: Session, as_of: date | None = None, loan_ids: list[str] | None = None,
          refresh: bool = True, deferred: list[dict[str, Any]] | None = None) -> list[BuAlert]:
     """Each day for every open loan (or only ``loan_ids``): due dates and debits, penalty, 30-day
@@ -986,6 +1306,7 @@ def _monitor_one(session: Session, loan: BuLoan, day: date, params: dict[str, An
         result["signals"].append(uof_signal)
         if result["level"] == "green":
             result["level"] = "yellow"
+    _seller_alerts(session, loan, doc, app_doc, data, params, day, result)
     doc["early_warning"] = {**{k: result[k] for k in ("score", "level", "signals")},
                             "at": utcnow().isoformat() + "Z", "as_of": day.isoformat()}
     doc["fate"] = {**(doc.get("fate") or {}), "current": result["fate"], "at": day.isoformat(),

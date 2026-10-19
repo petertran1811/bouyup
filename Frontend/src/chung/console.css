@@ -1,16 +1,8 @@
 /* ==========================================================================
    SellerGraph console — shared shell for login / seller chat / admin board.
    Same design language as the landing page: black ground, white pills,
-   #2a2829 surfaces, Inter for UI, dot-matrix for display accents.
+   #2a2829 surfaces, Be Vietnam Pro for UI and display (no pixel face: it breaks Vietnamese diacritics).
    ========================================================================== */
-
-@font-face {
-  font-family: "Geist Pixel Circle";
-  src: url("fonts/GeistPixel-Circle.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
 
 :root {
   --bg: #08080a;
@@ -28,7 +20,7 @@
   --bad: #f87171;
   --info: #da80b5;
   --font-sans: "Inter", "Segoe UI", system-ui, sans-serif;
-  --font-display: "BubbledotICG-FinePos", "Geist Pixel Circle", monospace;
+  --font-display: "Be Vietnam Pro", "Noto Sans SC", sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace;
   --radius: 14px;
 }

@@ -57,6 +57,17 @@ def other_open_loan(session: Session, app_row: BuApplication) -> str | None:
     return "application" if other else None
 
 
+def one_loan_error(message: str) -> Exception:
+    """POL-07 at selection / signing. In a demo environment the error names the demo reset of sample loans."""
+    from app.data_sources import sources
+
+    if sources.is_demo_env():
+        return api_error(400, "ONE_LOAN_AT_A_TIME", message + " Bấm “Làm mới khoản vay mẫu” để tất toán "
+                                                              "các khoản vay mở từ gian hàng mẫu.",
+                         {"demo_reset": "/v4/demo/reset-my-loans"})
+    return api_error(400, "ONE_LOAN_AT_A_TIME", message)
+
+
 def _consent_ok(doc: dict[str, Any]) -> None:
     from app.data_sources import consent as consent_mod
 
@@ -75,12 +86,15 @@ def validate_choice(params: dict[str, Any], doc: dict[str, Any], amount: int, te
         raise api_error(400, "VALIDATION_ERROR", f"Số tiền phải trong khoảng {algorithm.fmt_num(low)}–"
                                                  f"{algorithm.fmt_num(limit)} (hạn mức đã duyệt).",
                         {"field": "amount", "min": low, "max": limit})
+    if not params["product"].get("borrower_picks_tenor", True) and tenor_m != max(offer["tenors"]):
+        raise api_error(400, "VALIDATION_ERROR", "Kỳ hạn do hệ thống xác định theo loại người vay.",
+                        {"field": "tenor_m", "allowed": [max(offer["tenors"])]})
     if tenor_m not in offer["tenors"]:
         raise api_error(400, "VALIDATION_ERROR", "Kỳ hạn không có trong khung của loại người vay này.",
                         {"field": "tenor_m", "allowed": offer["tenors"]})
-    if method not in algorithm.METHODS:
+    if method not in algorithm.METHODS or method not in params["product"].get("methods", algorithm.METHODS):
         raise api_error(400, "VALIDATION_ERROR", "Hình thức trả không hợp lệ.",
-                        {"field": "method", "allowed": list(algorithm.METHODS)})
+                        {"field": "method", "allowed": list(params["product"].get("methods", algorithm.METHODS))})
     if not 1 <= due_day <= int(params["product"]["due_day_max"]):
         raise api_error(400, "VALIDATION_ERROR", f"Ngày trả trong tháng từ 1 đến {params['product']['due_day_max']}.",
                         {"field": "due_day"})
@@ -92,8 +106,8 @@ def select(session: Session, app_row: BuApplication, doc: dict[str, Any], params
     validate_choice(params, doc, amount, tenor_m, method, due_day)
     _consent_ok(doc)
     if other_open_loan(session, app_row):
-        raise api_error(400, "ONE_LOAN_AT_A_TIME", "Mỗi người vay chỉ có một khoản vay tại một thời điểm; chị cần "
-                                                   "tất toán khoản đang có trước.")
+        raise one_loan_error("Mỗi người vay chỉ có một khoản vay tại một thời điểm; bạn cần tất toán khoản đang có "
+                             "trước.")
     quote = advise.quote(params, doc, amount, tenor_m, method, due_day)
     doc["selection"] = {**quote, "at": utcnow().isoformat() + "Z"}
     doc["contract"] = None  # a new choice needs a new disclosure (and a new reading time)
@@ -121,7 +135,7 @@ def issue(session: Session, app_row: BuApplication, doc: dict[str, Any], params:
     reading clock starts here)."""
     sel = doc.get("selection")
     if not sel:
-        raise api_error(400, "INVALID_STATE", "Chị cần chọn số tiền, kỳ hạn, hình thức và ngày trả trước.")
+        raise api_error(400, "INVALID_STATE", "Chị cần chọn số tiền và ngày trả trước.")
     current = doc.get("contract")
     if current and current.get("selection_at") == sel["at"]:
         return current
@@ -198,7 +212,7 @@ def sign(session: Session, app_row: BuApplication, doc: dict[str, Any], params: 
     if method not in ("face", "otp"):
         raise api_error(400, "VALIDATION_ERROR", "Ký bằng khuôn mặt hoặc mã OTP.", {"field": "method"})
     if other_open_loan(session, app_row):
-        raise api_error(400, "ONE_LOAN_AT_A_TIME", "Mỗi người vay chỉ có một khoản vay tại một thời điểm.")
+        raise one_loan_error("Mỗi người vay chỉ có một khoản vay tại một thời điểm.")
     _consent_ok(doc)
     legs = syndicate.reserve_at_signing(session, doc["syndicate"]["split"], int(contract["amount"]))
     contract.update(payee=payee, webank_account=account, legs=legs, sign_method=method,

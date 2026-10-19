@@ -7,6 +7,10 @@
 * Agent 5 (hậu kiểm): every ``BUOYUP_AGENT5_INTERVAL_SECONDS``, and soon after a real
   outcome (a loan paid off, a red alert); it skips a run when no loan changed since the
   last report. Its proposals still wait for a human.
+* Agent 5 (báo cáo cho người bán, SELLER_SERVICES_PLAN §6.4): every ``BUOYUP_REPORTS_INTERVAL_SECONDS`` and
+  right after :func:`mark_reports_due` (a loan closed), each seller's due monthly / quarterly / yearly /
+  closing reports and the registration reminder, one short transaction per seller. Idempotent: one row per
+  (seller, kind, period).
 
 Each loan is assessed in its own short transaction, so the SQLite write lock is never held
 across the whole portfolio or across model calls for other loans. Off when ``APP_ENV=test``
@@ -36,7 +40,10 @@ _state: dict[str, Any] = {
     "agent4": {"last_run_at": None, "last_reason": None, "loans": 0, "alerts": 0, "error": None, "next_run_at": None},
     "agent5": {"last_run_at": None, "last_reason": None, "report_id": None, "proposals": 0, "skipped": None,
                "error": None, "next_run_at": None, "due_reason": None},
+    "reports": {"last_run_at": None, "last_reason": None, "sellers": 0, "made": 0, "error": None,
+                "next_run_at": None, "due": []},
 }
+_reports_due: dict[str, str] = {}  # seller user id -> reason (e.g. "closing")
 _agent5_due: dict[str, Any] = {"at": None, "reason": None}
 _due_lock = threading.Lock()
 LOCK_FILE = Path(".buoyup-autopilot.lock")  # one loop per host even with several workers
@@ -56,6 +63,41 @@ def mark_agent5_due(reason: str) -> None:
         if _agent5_due["at"] is None:
             _agent5_due.update(at=time.time(), reason=reason)
             _state["agent5"]["due_reason"] = reason
+
+
+def mark_reports_due(user_id: str, reason: str) -> None:
+    """Called by Agent 4b when a loan closes: the loop makes this seller's reports (closing) soon."""
+    with _due_lock:
+        _reports_due[str(user_id)] = reason
+        _state["reports"]["due"] = sorted(_reports_due)[:20]
+
+
+def run_reports(reason: str = "schedule", user_ids: list[str] | None = None,
+                as_of: Any = None) -> dict[str, Any]:
+    """Agent 5's seller reports: every report due on ``as_of`` (default today) for each seller (or only
+    ``user_ids``), each seller in its own short transaction; the model (if any) only rewrites summaries."""
+    from app.agents import agent5_seller_reports as reports
+    from app.agents.agent4b_monitor import today
+
+    day = as_of or today()
+    made, errors = 0, []
+    with session_scope() as session:
+        ids = list(user_ids) if user_ids is not None else reports.sellers(session)
+    for uid in ids:
+        try:
+            # Reports only read the loan docs (no LOAN_LOCK); each report is committed on its own, so the
+            # optional model rewrite of the next one never runs while a write is pending.
+            with session_scope() as session:
+                made += len(reports.run_for(session, uid, day, commit_each=True))
+        except Exception as exc:  # noqa: BLE001 - one seller must not stop the round
+            errors.append(f"{uid}: {type(exc).__name__}")
+    with _due_lock:
+        for uid in ids:
+            _reports_due.pop(uid, None)
+        _state["reports"]["due"] = sorted(_reports_due)[:20]
+    _state["reports"].update(last_run_at=_now(), last_reason=reason, sellers=len(ids), made=made,
+                             error="; ".join(errors[:3]) or None)
+    return dict(_state["reports"])
 
 
 def _assess(loan_ids: list[str], budget: list[int]) -> tuple[int, list[str]]:
@@ -81,11 +123,25 @@ def run_agent4(reason: str = "schedule", loan_ids: list[str] | None = None) -> d
     """A monitoring round over every open loan; then switches and (scheduled) the chain outbox."""
     from app.blockchain import chain
     from app.platform import events
-    from app.agents.agent4b_monitor import NOTICE_MODEL_BUDGET, OPEN_STATUSES, refresh_auto_switch
+    from app.agents.agent4b_monitor import LOAN_LOCK, NOTICE_MODEL_BUDGET, OPEN_STATUSES, refresh_auto_switch
     from app.core.params import active_params
     from app.platform.tables import BuLoan
 
     with _lock:
+        if loan_ids is None and settings.platform_payout_feed:
+            # Demo: the platforms' settlement runs credit the WeBank accounts first (app/autopilot/settlement.py).
+            from app.autopilot import settlement
+
+            try:
+                with LOAN_LOCK, session_scope() as session:
+                    settlement.settle(session)
+            except Exception:  # noqa: BLE001 - a failed feed must not stop monitoring
+                pass
+            try:  # ... and pays some of the store's usual expenses (WeBank outflow notifications, demo)
+                with LOAN_LOCK, session_scope() as session:
+                    settlement.spend(session)
+            except Exception:  # noqa: BLE001 - a failed feed must not stop monitoring
+                pass
         if loan_ids is None:
             with session_scope() as session:
                 loan_ids = list(session.scalars(select(BuLoan.id).where(BuLoan.status.in_(OPEN_STATUSES))))
@@ -149,7 +205,8 @@ def run_agent5(reason: str = "schedule") -> dict[str, Any]:
 def status() -> dict[str, Any]:
     return {"enabled": enabled(),
             "agent4": {"interval_seconds": settings.buoyup_agent4_interval_seconds, **_state["agent4"]},
-            "agent5": {"interval_seconds": settings.buoyup_agent5_interval_seconds, **_state["agent5"]}}
+            "agent5": {"interval_seconds": settings.buoyup_agent5_interval_seconds, **_state["agent5"]},
+            "reports": {"interval_seconds": settings.buoyup_reports_interval_seconds, **_state["reports"]}}
 
 
 async def loop() -> None:
@@ -159,16 +216,20 @@ async def loop() -> None:
         fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
         handle.close()
-        _state["agent4"]["error"] = _state["agent5"]["error"] = "Vòng tự chạy đang chạy ở tiến trình khác"
+        _state["agent4"]["error"] = _state["agent5"]["error"] = _state["reports"]["error"] = \
+            "Vòng tự chạy đang chạy ở tiến trình khác"
         return
     a4_every = max(30, int(settings.buoyup_agent4_interval_seconds))
     a5_every = max(300, int(settings.buoyup_agent5_interval_seconds))
     next4 = time.time() + 20  # first round shortly after startup
     next5 = time.time() + 120
+    rep_every = max(60, int(settings.buoyup_reports_interval_seconds))
+    next_rep = time.time() + 60
     while True:
         now = time.time()
         _state["agent4"]["next_run_at"] = datetime.fromtimestamp(next4, timezone.utc).isoformat()
         _state["agent5"]["next_run_at"] = datetime.fromtimestamp(next5, timezone.utc).isoformat()
+        _state["reports"]["next_run_at"] = datetime.fromtimestamp(next_rep, timezone.utc).isoformat()
         if now >= next4:
             next4 = now + a4_every
             try:
@@ -184,4 +245,21 @@ async def loop() -> None:
                 _state["agent5"]["error"] = f"{type(exc).__name__}: {exc}"[:300]
                 with _due_lock:
                     _agent5_due.update(at=None, reason=None)
+        with _due_lock:
+            due_sellers = dict(_reports_due)
+        if now >= next_rep or due_sellers:
+            scheduled = now >= next_rep
+            if scheduled:
+                next_rep = now + rep_every
+            try:
+                if scheduled:
+                    await asyncio.to_thread(run_reports, "schedule")
+                else:
+                    await asyncio.to_thread(run_reports, ", ".join(sorted(set(due_sellers.values()))),
+                                            list(due_sellers))
+            except Exception as exc:  # noqa: BLE001
+                _state["reports"]["error"] = f"{type(exc).__name__}: {exc}"[:300]
+                with _due_lock:
+                    for uid in due_sellers:
+                        _reports_due.pop(uid, None)
         await asyncio.sleep(5)

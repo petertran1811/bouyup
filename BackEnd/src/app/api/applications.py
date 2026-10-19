@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import secrets
+import threading
 import unicodedata
 from datetime import timedelta
 from typing import Any, Literal
@@ -21,7 +22,10 @@ from app.platform.errors import api_error
 from app.data_sources import consent as consent_mod
 from app.data_sources import sources
 from app.api import face as face_api
+from app.api.auth import _recent, _reserve
 from app.api import views
+from app.blockchain import chain
+from app.platform import events
 from app.agents import agent2_advise as advise
 from app.agents import agent3_control as control
 from app.agents import agent1_verify as verify
@@ -43,16 +47,30 @@ SCOPE_KEYS = consent_mod.CONSENT_BOXES
 
 class CreateIn(BaseModel):
     tier: Literal[1, 2] = 2
-    borrower_type: Literal["individual_business", "company"] = "individual_business"
+    borrower_type: Literal["individual", "individual_business", "company"] = "individual_business"
+    # HANDOVER 16.7: the store the seller connected (POST /v4/shops/connect/...). store_urls / reg_no name a
+    # sample store (dev/demo/test) and still need that store's connection unless SHOP_CONNECT_REQUIRED=false.
+    shop_connection_id: str | None = Field(default=None, max_length=40)
     store_urls: list[str] = Field(default_factory=list, max_length=5)
     reg_no: str | None = Field(default=None, max_length=40)
 
 
 class IdentityIn(BaseModel):
     cccd: bool
-    face: bool
-    # A passed /v4/face/verify re-check; required when the account registered a face at sign-up.
+    face: bool = False
+    # A passed /v4/face/verify re-check; required when the account registered a face at sign-up,
+    # unless the seller verified with an SMS OTP instead (no camera, no face model, failed scan).
     face_verify_id: str | None = Field(default=None, max_length=64)
+    # TODO(SMS): checked in the browser today; with an SMS provider this becomes a server proof
+    # from POST /v4/otp/verify (API_CONTRACT_V4.md §1b).
+    otp_verified: bool = False
+    otp_phone: str = Field(default="", max_length=40)  # masked, e.g. "•••• 678"
+
+
+class SignerCheck(BaseModel):
+    """How the seller proved it is them right before signing (optional; recorded in the events)."""
+    face_verify_id: str | None = Field(default=None, max_length=64)
+    otp_verified: bool = False
 
 
 class SignatureIn(BaseModel):
@@ -61,7 +79,7 @@ class SignatureIn(BaseModel):
     sig: str = Field(pattern=r"^[0-9a-fA-F]{128}$")
 
 
-class ConsentIn(BaseModel):
+class ConsentIn(SignerCheck):
     """The three separate boxes (none pre-ticked), each one ticked, and how the borrower signs."""
     scopes: list[str] = Field(min_length=1, max_length=10)
     method: Literal["face", "otp"] = "face"
@@ -81,17 +99,22 @@ class PlanIn(BaseModel):
     event: str = Field(min_length=1, max_length=40)
     item: str = Field(min_length=1, max_length=120)
     group: Literal[sources.GOODS_GROUPS]  # type: ignore[valid-type]
+    # The "khác" (other goods) description; also read for prohibited or licensed goods.
+    group_other: str = Field(default="", max_length=120)
+    # Review 17/10/2026: the plan no longer asks for a brand or a supplier (kept optional for older clients).
     brand: str = Field(default="", max_length=80)
     auth: str = Field(default="", max_length=60)
     flavor: str | None = Field(default=None, max_length=40)
     self_fill: bool = False
     qty: int = Field(gt=0, le=10_000_000)
     price: float = Field(gt=0, le=1_000_000)
-    supplier: str = Field(min_length=1, max_length=40)
+    supplier: str = Field(default="", max_length=40)
     inventory: int = Field(ge=0, le=1_000_000_000)
     own_capital: int = Field(ge=0, le=1_000_000_000)
     other_loans: int = Field(default=0, ge=0, le=1_000_000_000)
     statements: list[StatementIn] | None = Field(default=None, max_length=6)
+    # "Tôi cam đoan …": the borrower declares the plan, the figures and the screenshots are true.
+    declaration: bool = False
 
 
 class AnswerIn(BaseModel):
@@ -118,7 +141,8 @@ class MessageIn(BaseModel):
 class ChoiceIn(BaseModel):
     """Stage 3: the borrower's choice within the approved limit."""
     amount: int = Field(gt=0, le=100_000_000)
-    tenor_m: int = Field(gt=0, le=60)
+    # None: the system's tenor (the longest of the borrower type; the borrower does not pick it).
+    tenor_m: int | None = Field(default=None, gt=0, le=60)
     method: Literal["installment", "revenue"] = "installment"
     due_day: int = Field(default=10, ge=1, le=28)
 
@@ -130,7 +154,7 @@ class QuoteIn(BaseModel):
     due_day: int = Field(default=10, ge=1, le=28)
 
 
-class SignIn(BaseModel):
+class SignIn(SignerCheck):
     read_ack: bool
     webank_account: str = Field(min_length=6, max_length=20)
     use_of_funds_commitment: bool
@@ -151,6 +175,8 @@ def load(session: Session, app_id: str, user: BuUser) -> BuApplication:
         raise api_error(404, "NOT_FOUND", "Không tìm thấy hồ sơ.")
     if user.role == "seller" and app_row.seller_user_id != user.id:
         raise api_error(403, "FORBIDDEN", "Bạn không có quyền xem hồ sơ này.")
+    if user.role == "seller" and app_row.status == "withdrawn":
+        raise api_error(404, "NOT_FOUND", "Hồ sơ đã được xóa.")
     return app_row
 
 
@@ -186,24 +212,44 @@ def _done(session: Session, app_row: BuApplication, user: BuUser) -> dict[str, A
 
 @router.post("", status_code=201)
 def create(body: CreateIn, user: BuUser = Depends(_sellers), session: Session = Depends(get_session)) -> dict:
+    from app.api import shops
+
     urls = [u.strip() for u in body.store_urls if u.strip()]
-    if not urls and not (body.reg_no or "").strip():
-        raise api_error(400, "VALIDATION_ERROR", "Dán ít nhất một link cửa hàng hoặc nhập số đăng ký.",
+    reg_no = (body.reg_no or "").strip().upper()
+    connection = None
+    if body.shop_connection_id:
+        connection = shops.usable_connection(session, user, body.shop_connection_id)
+        scenario, data = shops.data_for(connection)
+        urls = [connection.url] if connection.url else []
+        reg_no = ""
+    elif not urls and not reg_no:
+        raise api_error(400, "VALIDATION_ERROR", "Kết nối cửa hàng, dán link cửa hàng hoặc nhập số đăng ký.",
                         {"field": "store_urls", "fallback": "reg_no"})
-    if urls:
-        scenario, data = sources.resolve_store(urls[0], user.display_name)
-        for extra in urls[1:]:
-            sources.resolve_store(extra, user.display_name)
     else:
-        scenario, data = sources.resolve_reg_no(body.reg_no or "", user.display_name)
+        # A sample store named by its link or registration number. Unknown stores: SHOP_NOT_CONNECTED, no
+        # dossier is made up for them (the copy of chị Lan's case for any link is gone).
+        scenario, data = sources.resolve_store(urls[0]) if urls else sources.resolve_reg_no(reg_no)
+        if settings.shop_connect_required:
+            connection = shops.connection_for_sample(session, user, scenario)
+            if connection is None:
+                raise api_error(400, "SHOP_NOT_CONNECTED", "Cần xác nhận bạn là chủ cửa hàng này trước khi tạo hồ sơ: "
+                                                           "kết nối cửa hàng bằng mã gửi tới số điện thoại đăng ký "
+                                                           "của cửa hàng.",
+                                {"field": "store_urls", "connect": True, "url": (urls or [""])[0][:300],
+                                 "reg_no": reg_no})
+    for extra in urls[1:]:
+        key = sources.resolve_store(extra)[0]
+        if settings.shop_connect_required and shops.connection_for_sample(session, user, key) is None:
+            raise sources.not_connected(url=extra)
     now = utcnow()
     app_row = BuApplication(id="app_" + secrets.token_hex(8), code=_new_code(session),
                             seller_user_id=user.id, status="draft", tier=body.tier, scenario=scenario, doc={},
                             created_at=now, updated_at=now)
     session.add(app_row)
     session.flush()
-    doc = verify.new_doc(data, user.display_name, body.borrower_type)
-    verify.read_store(session, app_row, doc, urls, (body.reg_no or "").strip().upper() or None)
+    doc = verify.new_doc(data, user.display_name, body.borrower_type,
+                         connection=shops.summary(connection) if connection else None)
+    verify.read_store(session, app_row, doc, urls, reg_no or None)
     return _done(session, app_row, user)
 
 
@@ -214,7 +260,7 @@ def list_applications(status: str | None = Query(default=None, max_length=20),
     """``seller`` (staff): part of the seller's name or email, or a seller id."""
     q = select(BuApplication).order_by(BuApplication.updated_at.desc())
     if user.role == "seller":
-        q = q.where(BuApplication.seller_user_id == user.id)
+        q = q.where(BuApplication.seller_user_id == user.id, BuApplication.status != "withdrawn")
     elif seller and seller.strip():
         text = unicodedata.normalize("NFC", seller.strip()).casefold()
         like = "%" + text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
@@ -234,23 +280,91 @@ def get_application(app_id: str, user: BuUser = Depends(_readers), session: Sess
     return out(session, load(session, app_id, user), user)
 
 
+# Review 17/10/2026: the seller may remove an application from "Hồ sơ của bạn". It is withdrawn and hidden, never
+# erased: the chain entries already written stay (they cannot be removed) and the record is kept for audit.
+NOT_DELETABLE = ("verifying", "in_control", "signed", "disbursed", "repaying", "closed")
+
+
+def deletable(app_row: BuApplication) -> bool:
+    return not app_row.loan_id and app_row.status not in NOT_DELETABLE and app_row.status != "withdrawn"
+
+
+@router.delete("/{app_id}")
+def delete_application(app_id: str, user: BuUser = Depends(_sellers), session: Session = Depends(get_session)) -> dict:
+    app_row, doc = _own(session, app_id, user)
+    if not deletable(app_row):
+        raise api_error(400, "INVALID_STATE", "Hồ sơ đã có khoản vay hoặc đang ký, giải ngân nên không xóa được.",
+                        {"status": app_row.status})
+    before = app_row.status
+    doc["withdrawn"] = {"at": views.now_iso(), "status_before": before}
+    entry = chain.record(session, app_row.id, "application_withdrawn", {"application": app_row.code, "status_before": before})
+    doc["withdrawn"]["chain_tx"] = entry.tx
+    events.log(session, app_row.id, "seller", "withdrawn", f"Người vay xóa hồ sơ (trạng thái trước: {before})",
+               hash_=entry.fingerprint)
+    views.store(app_row, doc, "withdrawn")
+    session.commit()
+    return {"id": app_row.id, "status": "withdrawn", "deleted": True}
+
+
 @router.post("/{app_id}/identity")
 def identity(app_id: str, body: IdentityIn, user: BuUser = Depends(_sellers),
              session: Session = Depends(get_session)) -> dict:
     app_row, doc = _own(session, app_id, user)
     _require(app_row, "draft")
-    if not (body.cccd and body.face):
-        raise api_error(400, "VALIDATION_ERROR", "Cần quét cả CCCD và khuôn mặt.", {"field": "cccd"})
-    face_check = None
-    if face_api.verification_required(user):
+    if not (body.cccd and (body.face or body.otp_verified)):
+        raise api_error(400, "VALIDATION_ERROR", "Cần quét CCCD và xác thực khuôn mặt hoặc mã OTP.", {"field": "cccd"})
+    scans = doc.get("cccd_scans") or {}
+    if settings.cccd_ocr_required and "front" not in scans:
+        raise api_error(400, "VALIDATION_ERROR", "Cần chụp mặt trước CCCD để hệ thống đọc thông tin.", {"field": "cccd"})
+    face_check = otp_check = None
+    use_otp = body.otp_verified and not body.face_verify_id
+    if use_otp:
+        key = "identity-otp:" + user.id
+        _reserve(session, key)
+        if _recent(session, key, failures_only=False) > _MAX_IDENTITY_OTP:
+            raise api_error(429, "RATE_LIMITED", "Xác thực bằng mã OTP quá nhiều lần. Vui lòng chờ 15 phút.")
+        otp_check = {"method": "sms_otp", "phone_masked": _masked(body.otp_phone or user.phone),
+                     "checked_in": "browser", "face_registered": face_api.verification_required(user)}
+    elif face_api.verification_required(user):
         proof = face_api.consume_verification(body.face_verify_id or "", user)
         if proof is None:
-            raise api_error(400, "VALIDATION_ERROR", "Cần quét lại khuôn mặt để xác minh danh tính.",
-                            {"field": "face_verify_id"})
+            raise api_error(400, "VALIDATION_ERROR", "Cần quét lại khuôn mặt hoặc xác thực bằng mã OTP để xác minh "
+                                                     "danh tính.", {"field": "face_verify_id"})
         face_check = {"method": "arcface_buffalo_l_1to1_liveness", "score": round(proof.score, 3),
                       "challenge": proof.challenge}
-    verify.identify(session, app_row, doc, face_check=face_check)
+    verify.identify(session, app_row, doc, face_check=face_check, otp_check=otp_check)
+    if otp_check is not None:
+        events.log(session, app_row.id, "seller", "identity_otp",
+                   "Người vay xác thực danh tính bằng mã OTP thay cho khuôn mặt", otp_check)
     return _done(session, app_row, user)
+
+
+_MAX_IDENTITY_OTP = 10  # identity steps verified by OTP per account per 15 minutes
+
+
+def _masked(phone: str) -> str:
+    """Only the last three digits are ever kept: "•••• 678"."""
+    digits = "".join(ch for ch in str(phone or "") if ch.isdigit())
+    return "•••• " + digits[-3:] if len(digits) >= 3 else ""
+
+
+def _signer_check(session: Session, app_row: BuApplication, user: BuUser, body: SignerCheck, method: str,
+                  what: str) -> None:
+    """A face re-check sent with a signature must be valid (single use); an OTP is noted as checked in the browser."""
+    if not (body.face_verify_id or body.otp_verified):
+        return
+    payload: dict[str, Any] = {"what": what, "method": method}
+    if body.face_verify_id:
+        proof = face_api.consume_verification(body.face_verify_id, user)
+        if proof is None:
+            raise api_error(400, "VALIDATION_ERROR", "Phiên xác minh khuôn mặt đã hết hạn. Vui lòng xác thực lại.",
+                            {"field": "face_verify_id"})
+        payload.update(face_checked=True, score=round(proof.score, 3))
+    if body.otp_verified:
+        payload.update(otp_verified=True, checked_in="browser", phone_masked=_masked(user.phone))
+    label = "khuôn mặt" if body.face_verify_id else "mã OTP"
+    events.log(session, app_row.id, "seller", "signer_verified", f"Người vay xác thực bằng {label} trước khi ký {what}",
+               payload)
 
 
 _RENEWABLE = ("consented", "needs_answer", "verified", "offered", "selected", "escalated")
@@ -298,6 +412,7 @@ def consent(app_id: str, body: ConsentIn, user: BuUser = Depends(_sellers),
     app_row, doc = _own(session, app_id, user)
     _require_consentable(app_row, doc)
     scopes = _consent_scopes(body)
+    _signer_check(session, app_row, user, body, body.method, "ủy quyền")
     if body.signature is not None:
         document = doc["internal"].get("consent_draft")
         if document is None or document["scopes"] != scopes:
@@ -335,20 +450,40 @@ def put_plan(app_id: str, body: PlanIn, user: BuUser = Depends(_sellers),
         raise api_error(400, "INVALID_STATE", "Biểu mẫu kế hoạch chỉ dùng cho Tầng 2.")
     plan = body.model_dump()
     statements = plan.pop("statements", None)
+    declared = plan.pop("declaration", False)
+    if settings.plan_declaration_required and not declared:
+        raise api_error(400, "VALIDATION_ERROR", "Bạn cần tích ô cam đoan thông tin kê khai là đúng sự thật.",
+                        {"field": "declaration"})
     if float(plan["price"]).is_integer():
         plan["price"] = int(plan["price"])
     verify.set_plan(app_row, doc, plan, statements)
+    if declared:
+        verify.record_declaration(session, app_row, doc, statements, plan)
     return _done(session, app_row, user)
+
+
+_VERIFYING: set[str] = set()
+_VERIFYING_LOCK = threading.Lock()
 
 
 @router.post("/{app_id}/verify")
 def run_verify(app_id: str, user: BuUser = Depends(_sellers), session: Session = Depends(get_session)) -> dict:
-    app_row, doc = _own(session, app_id, user)
-    _require(app_row, "consented")
-    if app_row.tier == 2 and not (doc.get("plan") or {}).get("submitted"):
-        raise api_error(400, "INVALID_STATE", "Cần gửi biểu mẫu kế hoạch trước khi xác minh.")
-    verify.run(session, app_row, doc, active_params(session))
-    return _done(session, app_row, user)
+    # 18/10/2026: one verification per application at a time. A second click while the first is still
+    # running (slow model server) used to hit the SQLite write lock and answer 500.
+    with _VERIFYING_LOCK:
+        if app_id in _VERIFYING:
+            raise api_error(409, "VERIFY_IN_PROGRESS", "Hồ sơ đang được xác minh, vui lòng đợi thêm một chút.")
+        _VERIFYING.add(app_id)
+    try:
+        app_row, doc = _own(session, app_id, user)
+        _require(app_row, "consented")
+        if app_row.tier == 2 and not (doc.get("plan") or {}).get("submitted"):
+            raise api_error(400, "INVALID_STATE", "Cần gửi biểu mẫu kế hoạch trước khi xác minh.")
+        verify.run(session, app_row, doc, active_params(session))
+        return _done(session, app_row, user)
+    finally:
+        with _VERIFYING_LOCK:
+            _VERIFYING.discard(app_id)
 
 
 @router.post("/{app_id}/answers")
@@ -369,7 +504,8 @@ def _offered(app_row: BuApplication, doc: dict[str, Any]) -> dict[str, Any]:
 @router.get("/{app_id}/offer")
 def get_offer(app_id: str, user: BuUser = Depends(_readers), session: Session = Depends(get_session)) -> dict:
     app_row = load(session, app_id, user)
-    return _offered(app_row, app_row.doc)
+    offer = _offered(app_row, app_row.doc)
+    return offer if user.role in ("officer", "admin") else advise.seller_offer(offer)
 
 
 @router.post("/{app_id}/what-if")
@@ -411,7 +547,7 @@ def post_message(app_id: str, body: MessageIn, user: BuUser = Depends(_sellers),
     recent = session.scalar(select(func.count()).select_from(BuRateEvent).where(
         BuRateEvent.key == key, BuRateEvent.at >= utcnow() - timedelta(minutes=1))) or 0
     if recent >= int(params["chat"]["max_per_minute"]):
-        raise api_error(429, "RATE_LIMITED", "Chị gửi tin nhắn quá nhanh. Vui lòng thử lại sau một phút.")
+        raise api_error(429, "RATE_LIMITED", "Bạn gửi tin nhắn quá nhanh. Vui lòng thử lại sau một phút.")
     session.add(BuRateEvent(key=key, ok=True, at=utcnow()))
     items = advise.chat(session, app_row, doc, params, body.text.strip())
     session.commit()
@@ -422,7 +558,7 @@ def _not_expired(session: Session, app_row: BuApplication, doc: dict[str, Any]) 
     if contract_mod.expired(doc):
         views.store(app_row, doc, "expired")
         session.commit()
-        raise api_error(400, "LIMIT_EXPIRED", "Hạn mức đã hết hiệu lực 7 ngày; chị nộp hồ sơ mới để được duyệt lại.")
+        raise api_error(400, "LIMIT_EXPIRED", "Hạn mức đã hết hiệu lực 7 ngày; bạn nộp hồ sơ mới để được duyệt lại.")
 
 
 @router.post("/{app_id}/select")
@@ -432,7 +568,8 @@ def select_terms(app_id: str, body: ChoiceIn, user: BuUser = Depends(_sellers),
     app_row, doc = _own(session, app_id, user)
     _require(app_row, "offered", "selected")
     _not_expired(session, app_row, doc)
-    contract_mod.select(session, app_row, doc, active_params(session), amount=body.amount, tenor_m=body.tenor_m,
+    contract_mod.select(session, app_row, doc, active_params(session), amount=body.amount,
+                        tenor_m=body.tenor_m or max(doc["offer"]["tenors"]),
                         method=body.method, due_day=body.due_day)
     views.store(app_row, doc, "selected")
     return _done(session, app_row, user)
@@ -449,7 +586,7 @@ def get_contract(app_id: str, user: BuUser = Depends(_readers), session: Session
         return app_row.doc["contract"]
     doc = copy.deepcopy(app_row.doc)
     if app_row.status not in ("selected", "signed", "disbursed", "repaying", "closed"):
-        raise api_error(400, "INVALID_STATE", "Chị cần chọn khoản vay trước.", {"status": app_row.status})
+        raise api_error(400, "INVALID_STATE", "Bạn cần chọn khoản vay trước.", {"status": app_row.status})
     if app_row.status == "selected":
         _not_expired(session, app_row, doc)
         contract = contract_mod.issue(session, app_row, doc, active_params(session))
@@ -466,6 +603,7 @@ def sign_contract(app_id: str, body: SignIn, user: BuUser = Depends(_sellers),
     app_row, doc = _own(session, app_id, user)
     _require(app_row, "selected")
     _not_expired(session, app_row, doc)
+    _signer_check(session, app_row, user, body, body.method, "hợp đồng")
     contract_mod.sign(session, app_row, doc, active_params(session), body.model_dump())
     return _done(session, app_row, user)
 

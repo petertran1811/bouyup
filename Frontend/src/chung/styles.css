@@ -2,15 +2,9 @@
    Intelligence Designed To Evolve — single-viewport, full-bleed video landing
    ========================================================================== */
 
-/* Fallback display face. Primary is BubbledotICG-FinePos, loaded from the
-   OnlineWebFonts CDN in index.html. */
-@font-face {
-  font-family: "Geist Pixel Circle";
-  src: url("fonts/GeistPixel-Circle.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
+/* Display face: Be Vietnam Pro (local, full Vietnamese) with Playfair Display
+   (Google Fonts, vietnamese subset) for the italic accent line. Chinese glyphs
+   fall back to Noto Sans SC, which i18n.js loads from Google Fonts on demand. */
 
 :root {
   --bg: #000000;
@@ -24,7 +18,8 @@
   --trust-border: rgba(255, 255, 255, 0.4);
   --trust-text: #c4c2c3;
   --font-sans: "Inter", "Segoe UI", system-ui, sans-serif;
-  --font-display: "BubbledotICG-FinePos", "Geist Pixel Circle", monospace;
+  --font-display: "Be Vietnam Pro", "Noto Sans SC", sans-serif;
+  --font-accent: "Playfair Display", "Noto Sans SC", Georgia, serif;
 }
 
 *,
@@ -755,7 +750,7 @@ body.menu-open {
 }
 
 /* BuoyUp marketing extension. The original full-viewport video and hero remain. */
-body.marketing {height:auto; min-height:100vh; overflow-x:hidden; overflow-y:auto; font-family:"Be Vietnam Pro",sans-serif;--font-sans:"Be Vietnam Pro",sans-serif}
+body.marketing {height:auto; min-height:100vh; overflow-x:hidden; overflow-y:auto; font-family:"Be Vietnam Pro","Noto Sans SC",sans-serif;--font-sans:"Be Vietnam Pro","Noto Sans SC",sans-serif}
 .marketing .bg {height:100vh;height:100dvh;bottom:auto}
 .marketing .page {min-height:650px;color:#fff}
 .marketing .header {max-width:1120px;gap:20px}
@@ -852,3 +847,18 @@ body.marketing {height:auto; min-height:100vh; overflow-x:hidden; overflow-y:aut
 @media(max-width:720px){.marketing .header-register {margin-left:auto;min-height:44px;padding:0 16px}.marketing .hero-foot>span {display:none}.marketing .hero-foot {justify-content:center}.marketing .headline {font-size:clamp(28px,6.6vw,48px)}.marketing .story-section {padding:68px 22px}.marketing .section-intro {margin-bottom:32px}.marketing .agent-timeline {grid-template-columns:1fr;gap:16px;padding-left:20px;border-left:1px solid var(--m-border);margin-left:6px}.marketing .agent-card,.marketing .agent-card:nth-child(4),.marketing .agent-card:nth-child(5){grid-column:auto}.marketing .agent-card:before {content:"";position:absolute;width:9px;height:9px;border-radius:50%;background:var(--m-primary);top:36px;left:-26px;box-shadow:0 0 0 5px var(--m-bg)}.marketing .network-grid,.marketing .security-grid,.marketing .faq-section {grid-template-columns:1fr;gap:32px}.marketing .live-stats {grid-template-columns:repeat(2,1fr);gap:22px}.marketing .live-heading {align-items:flex-start}.marketing .live-heading .simulation-badge {margin-top:4px}.marketing .site-footer {align-items:flex-start;flex-wrap:wrap;padding:34px 24px}.marketing .site-footer nav {order:3;gap:20px;width:100%}.marketing .privacy-art {right:25px}.marketing .money-flow {padding-inline:0}.marketing .flow-banks {gap:8px}.marketing .bank-node {padding:10px 12px}.marketing .subhead {font-size:15px}.marketing .trust-pill {font-size:10px}.marketing .trust-spark {width:34px;height:34px}.marketing .page {min-height:600px}.marketing .final-cta {padding:74px 22px}}
 @media(prefers-reduced-motion:reduce){.marketing .flow-line:after,.marketing .data-skeleton{animation:none}.marketing [data-tilt]{transform:none!important}}
 @media(max-width:720px){.marketing.is-authenticated .sign-in{display:inline-flex;margin-left:auto;white-space:nowrap;padding-inline:14px;font-size:12px}}
+
+/* Hero headline: Vietnamese-safe faces, wraps instead of clipping long EN/ZH copy. */
+.marketing .headline {font-family:var(--font-display);font-weight:600;font-size:clamp(34px,6vw,78px);line-height:1.12;letter-spacing:-0.035em;white-space:normal;overflow:visible;text-wrap:balance;max-width:min(1040px,100%)}
+.marketing .headline-line {padding-bottom:.04em}
+.marketing .headline em {font-family:var(--font-accent);font-style:italic;font-weight:500;letter-spacing:-0.01em;background:linear-gradient(120deg,#ffe3f0 0%,#f4c2d6 45%,#f6c9ae 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.marketing .subhead {text-wrap:pretty}
+html:lang(en) .marketing .headline {font-size:clamp(32px,5.3vw,70px);max-width:min(1200px,100%)}
+html:lang(zh) .marketing .headline {letter-spacing:0;line-height:1.22}
+html:lang(zh) .marketing .headline em {font-style:normal;font-family:"Noto Sans SC",var(--font-display);font-weight:600}
+@media(max-width:720px){.marketing .headline {font-size:clamp(30px,8.6vw,46px);letter-spacing:-0.025em;line-height:1.14}}
+@media(max-width:420px){.marketing .headline {letter-spacing:-0.02em;line-height:1.16}}
+
+/* 18/10/2026: the language menu drops down out of the header; the header must sit above the hero
+   (both were z-index 1, so the later hero covered the menu and swallowed clicks on EN / 中文). */
+.header { z-index: 30; }

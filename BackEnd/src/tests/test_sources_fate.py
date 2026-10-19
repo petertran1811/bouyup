@@ -75,10 +75,14 @@ def test_application_can_carry_a_second_store(bu_client, as_seller):
     """Stores on other platforms are read at step 1 (no bank inflows to reconcile any more)."""
     r = bu_client.post("/v4/applications", headers=as_seller, json={
         "tier": 2, "borrower_type": "individual_business",
-        "store_urls": [sources.demo_url("lan"), "https://shop123.taobao.com/?id=1"]})
+        "store_urls": [sources.demo_url("lan"), sources.demo_url("tmall")]})
     assert r.status_code == 201
     app = r.json()
-    assert [s["platform"] for s in app["stores"]] == ["douyin", "taobao"]
+    assert [s["platform"] for s in app["stores"]] == ["douyin", "tmall"]
+    # 18/10/2026: a store nobody connected is refused, never read as a copy of chị Lan's (HANDOVER 16.7).
+    r = bu_client.post("/v4/applications", headers=as_seller, json={
+        "store_urls": [sources.demo_url("lan"), "https://shop123.taobao.com/?id=1"]})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "SHOP_NOT_CONNECTED"
     assert [t["tool"] for t in app["verification"]["tool_calls"]].count("lookup_public_store") == 2
 
 

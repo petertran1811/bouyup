@@ -14,7 +14,7 @@ from typing import Any
 
 import copy
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -403,3 +403,66 @@ class BuBankApproval(Base):
     chain_tx: Mapped[str] = mapped_column(String(80), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class BuSellerReport(Base):
+    """Agent 5's reports to the seller (SELLER_SERVICES_PLAN §6.1): one row per (seller, kind, period);
+    re-running the same period overwrites ``data``. ``read_at`` feeds the notification centre."""
+
+    __tablename__ = "bu_seller_reports"
+    __table_args__ = (UniqueConstraint("seller_user_id", "kind", "period", name="uq_seller_report_period"),)
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)  # "srp_" + hex
+    seller_user_id: Mapped[str] = mapped_column(String(40), index=True)
+    kind: Mapped[str] = mapped_column(String(16))  # month|quarter|year|closing|registration
+    period: Mapped[str] = mapped_column(String(40))  # "2026-10" | "2026-Q4" | "2026" | loan id
+    data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    hash: Mapped[str] = mapped_column(String(80), default="")
+    chain_tx: Mapped[str | None] = mapped_column(String(80), nullable=True)
+
+
+class BuShopConnection(Base):
+    """A store the seller proved is theirs (HANDOVER 16.7): through the platform's OAuth (``verified_via =
+    "oauth"``) or a code sent to the store's registered phone (``"otp_registered_phone"``). An application is
+    made from one of these; ``profile`` is the shop profile read at connection time (phone masked). Tokens are
+    never kept here (``token_ref`` stays null until a secret store holds them)."""
+
+    __tablename__ = "bu_shop_connections"
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)  # "shc_" + hex
+    user_id: Mapped[str] = mapped_column(String(40), index=True)
+    platform: Mapped[str] = mapped_column(String(16))
+    shop_id: Mapped[str] = mapped_column(String(64), index=True)
+    url: Mapped[str] = mapped_column(String(500), default="")
+    shop_name: Mapped[str] = mapped_column(String(200), default="")
+    subject_reg_no: Mapped[str] = mapped_column(String(40), default="")
+    owner_name: Mapped[str] = mapped_column(String(120), default="")
+    verified_via: Mapped[str] = mapped_column(String(24))  # otp_registered_phone | oauth
+    verified_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    token_ref: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    scenario: Mapped[str | None] = mapped_column(String(24), nullable=True)  # demo sample store, else None
+    profile: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
+
+class BuShopConnectRequest(Base):
+    """One attempt to connect a store: an OTP challenge (``kind = "otp"``: sha256 of the code, 5 minutes, at most
+    5 wrong codes) or an OAuth round trip (``kind = "oauth"``: sha256 of the ``state``, 10 minutes, single use)."""
+
+    __tablename__ = "bu_shop_connect_requests"
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)  # "scr_" + hex
+    user_id: Mapped[str] = mapped_column(String(40), index=True)
+    kind: Mapped[str] = mapped_column(String(8))
+    platform: Mapped[str] = mapped_column(String(16))
+    shop_id: Mapped[str] = mapped_column(String(64), default="")
+    scenario: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    secret_hash: Mapped[str] = mapped_column(String(64), index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(12), default="pending")  # pending|verified|locked|expired|failed
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)

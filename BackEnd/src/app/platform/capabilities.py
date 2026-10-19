@@ -9,6 +9,7 @@ with low privilege. The split is enforced at the functions that move money, not 
   debit the WeBank business account on due dates and when money arrives (simulated here).
 - ``agent4b`` (monitoring) is read-only for money: any payout or debit attempted while it acts raises
   :class:`CapabilityDenied`. It may read, score, alert and notify.
+- ``agent5`` (the seller reports) is read-only for money in the same way: it reads, writes reports, notifies.
 
 Requests made by a person (the seller's prepayment, an officer's decision) run with no agent role and
 keep the checks of their own routes.
@@ -22,7 +23,8 @@ from contextvars import ContextVar
 
 _ROLE: ContextVar[str | None] = ContextVar("buoyup_agent_role", default=None)
 
-ROLES = ("agent4a", "agent4b", "standing_order")
+ROLES = ("agent4a", "agent4b", "standing_order", "agent5")
+READ_ONLY_ROLES = ("agent4b", "agent5")  # never debit (agent5: the seller reports, SELLER_SERVICES_PLAN §2)
 
 
 class CapabilityDenied(PermissionError):
@@ -49,5 +51,6 @@ def require(capability: str) -> None:
     role = current()
     if capability == "payout" and role != "agent4a":
         raise CapabilityDenied(f"giải ngân chỉ do Agent 4a thực hiện (vai trò hiện tại: {role or 'không'})")
-    if capability == "debit" and role == "agent4b":
-        raise CapabilityDenied("Agent 4b chỉ đọc và cảnh báo; trích nợ do lệnh định kỳ của core banking")
+    if capability == "debit" and role in READ_ONLY_ROLES:
+        who = "Agent 4b chỉ đọc và cảnh báo" if role == "agent4b" else "Agent 5 chỉ đọc và viết báo cáo"
+        raise CapabilityDenied(f"{who}; trích nợ do lệnh định kỳ của core banking")

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -15,14 +16,14 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app import __version__
 from app.api import router as buoyup_router
 from app.platform.errors import error_body
-from app.platform import audit, ledger_key as ledger
+from app.platform import audit, i18n, ledger_key as ledger
 from app.platform.config import settings
 from app.platform.db.init_db import init_db
 from app.platform.llm.gemini import get_provider
@@ -122,6 +123,7 @@ async def request_context(request: Request, call_next):  # type: ignore[no-untyp
     """Tag every request with an id so its log lines can be correlated."""
     request_id = request.headers.get("x-request-id") or audit.new_request_id()
     audit.set_request_id(request_id)
+    i18n.set_lang(request.headers.get("x-bu-lang"))
     response = await call_next(request)
     response.headers["x-request-id"] = request_id
 
@@ -176,6 +178,10 @@ async def validation_exception_handler(
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Never leak an internal stack trace to a client (plan section 32)."""
+    if "database is locked" in str(exc):  # another long write is running: ask the client to retry shortly
+        audit.logger.warning("db_busy", path=request.url.path)
+        return JSONResponse(status_code=503, content=error_body(
+            "BUSY", "Hệ thống đang xử lý một thao tác khác của hồ sơ này. Vui lòng đợi vài giây rồi thử lại."))
     audit.logger.error(
         "unhandled_exception",
         path=request.url.path,
@@ -209,8 +215,25 @@ class _RevalidatedStatic(StaticFiles):
     """UI files carry ETags but no Cache-Control, so browsers guessed a freshness and kept old CSS/JS
     after an update. no-cache keeps the cached copy but revalidates it (a cheap 304) on every load."""
 
-    def file_response(self, *args, **kwargs):
-        response = super().file_response(*args, **kwargs)
+    # Cloudflare in front of buoyup.app replaces that header with its own Browser Cache TTL (4 h) on
+    # CSS/JS, but leaves HTML uncached. So every local CSS/JS link in a page gets ?v=<file mtime>:
+    # a changed file gets a new URL and the browser fetches it at once.
+    _ASSET = re.compile(r'(\b(?:src|href)=")([^":?#]+\.(?:js|css))(")')
+
+    def file_response(self, full_path, stat_result, scope, status_code=200):
+        if str(full_path).endswith(".html") and status_code == 200:
+            base = Path(full_path).parent
+
+            def versioned(m: re.Match) -> str:
+                try:
+                    v = int((base / m.group(2)).stat().st_mtime)
+                except OSError:
+                    return m.group(0)
+                return f"{m.group(1)}{m.group(2)}?v={v}{m.group(3)}"
+
+            html = self._ASSET.sub(versioned, Path(full_path).read_text(encoding="utf-8"))
+            return HTMLResponse(html, status_code=status_code, headers={"Cache-Control": "no-cache"})
+        response = super().file_response(full_path, stat_result, scope, status_code)
         response.headers["Cache-Control"] = "no-cache"
         return response
 

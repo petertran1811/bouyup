@@ -39,6 +39,8 @@ from app.platform.config import settings
 ANCHOR_KINDS: dict[str, str] = {
     "consent": "application",
     "consent_revoked": "application",
+    "declaration": "application",
+    "application_withdrawn": "application",
     "verification": "agent_io",
     "offer": "algorithm_output",
     "proposal": "credit_memo",

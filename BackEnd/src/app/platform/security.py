@@ -90,8 +90,19 @@ def issue_session(session: Session, user: BuUser) -> tuple[str, BuSession]:
     return token, row
 
 
+def face_enrolled(user: BuUser) -> bool:
+    """Whether this account has a registered face (the payment box then offers "Khuôn mặt" first)."""
+    try:
+        from app.api.face import store
+
+        return bool(store.has(user.id))
+    except Exception:  # noqa: BLE001 - no face module / store: the seller confirms with OTP
+        return False
+
+
 def user_public(user: BuUser) -> dict:
     return {
+        "face_enrolled": face_enrolled(user),
         "id": user.id,
         "email": user.email,
         "display_name": user.display_name,
@@ -134,6 +145,21 @@ def current_user(
     if user is None or not user.active:
         raise api_error(401, "AUTH_REQUIRED", "Tài khoản không còn hoạt động.")
     return user
+
+
+def current_user_optional(
+    authorization: str | None = Header(default=None),
+    session: Session = Depends(get_session),
+) -> BuUser | None:
+    """The signed-in user, or None (for endpoints that also accept a signed webhook)."""
+    token = _bearer(authorization)
+    if token is None:
+        return None
+    row = session.get(BuSession, token_digest(token))
+    if row is None or row.revoked_at is not None or row.expires_at <= utcnow():
+        return None
+    user = session.get(BuUser, row.user_id)
+    return user if user is not None and user.active else None
 
 
 def require_roles(*roles: str) -> Callable[..., BuUser]:

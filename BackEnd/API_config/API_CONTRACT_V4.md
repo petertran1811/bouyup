@@ -15,7 +15,7 @@ Frontend lưu ở `localStorage["bu_token"]`, người dùng ở `localStorage["
 ```
 | HTTP | code |
 |---|---|
-| 400 | `VALIDATION_ERROR`, `INVALID_STATE` (hành động không hợp lệ ở trạng thái hiện tại), `INVALID_OPTION` |
+| 400 | `VALIDATION_ERROR`, `INVALID_STATE` (hành động không hợp lệ ở trạng thái hiện tại), `INVALID_OPTION`, `CONFIRM_REQUIRED` (trả tiền chưa có `confirm: true`) |
 | 401 | `AUTH_REQUIRED`, `INVALID_CREDENTIALS`, `SESSION_EXPIRED` |
 | 403 | `FORBIDDEN` |
 | 404 | `NOT_FOUND` |
@@ -26,7 +26,10 @@ Frontend lưu ở `localStorage["bu_token"]`, người dùng ở `localStorage["
 **Vai.** `seller` · `officer` · `bank` · `admin`. Bảng quyền ở cuối mỗi mục.
 
 **Nhãn mô phỏng.** Mọi phản hồi có nguồn dữ liệu giả lập kèm `"simulated": true` ở mức gốc hoặc từng
-lời gọi công cụ. Frontend phải hiện huy hiệu "Mô phỏng" ở đó.
+lời gọi công cụ (trường này vẫn trả, không đổi tên). Theo quyết định chủ dự án ngày 18/10/2026, giao diện
+**không** hiện huy hiệu/banner/chữ "Mô phỏng", "demo" hay "thử" ở bất kỳ trang nào (cả VI/EN/ZH); trường
+`simulated` chỉ dùng cho logic (vd. phân biệt lệnh trên chuỗi thật `simulated: false` để hiện liên kết explorer;
+chuỗi cục bộ hiện nhãn "Chuỗi cục bộ"). Câu chữ backend trả cho người dùng cũng không chứa các chữ đó.
 
 ## 1. Auth — `/v4/auth`
 
@@ -46,6 +49,11 @@ mới để đăng nhập bằng khuôn mặt. Phiên hết hạn/chưa xong: 40
 khuôn mặt đã thuộc tài khoản khác: 409 `FACE_ALREADY_REGISTERED`. Mỗi phiên quét chỉ dùng cho một lần đăng ký.
 Khi mô hình đã nạp (`required_at_signup` ở §1a), thiếu `face_enroll_id` → 400 (`field: face_enroll_id`); máy chủ chưa có
 mô hình thì đăng ký không cần khuôn mặt.
+Thay cho khuôn mặt (18/10/2026, §1b): `"otp_verified": true` + `"phone"` là số di động Việt Nam (`0…`/`+84…`) hoặc Trung
+Quốc (`1…`/`+86…`) → 201 kể cả khi `required_at_signup`. Thiếu/sai số → 400 `VALIDATION_ERROR` (`field: phone`); quá 3 lần
+đăng ký bằng OTP / số điện thoại / 15 phút → 429 `RATE_LIMITED` (cộng giới hạn 10 lần đăng ký / ip). Có `face_enroll_id`
+thì khuôn mặt được dùng, `otp_verified` bị bỏ qua. Đăng ký bằng OTP ghi sự kiện `register_otp` (`application_id` = id người
+dùng, `payload.phone_masked` = `"•••• 678"`, `checked_in: "browser"`) và dòng log `register_otp`; `USER.face_enrolled` = `false`.
 
 ### POST /v4/auth/login
 Vào `{"email": "…", "password": "…"}` → 200 `{"token", "expires_at", "user": USER}`.
@@ -108,6 +116,34 @@ Như `/v4/face/login/{id}/frame` nhưng so 1:1 với khuôn mặt của chính t
 "score"}`; `verify_id` dùng được một lần trong 10 phút ở `POST /v4/applications/{id}/identity`. Thất bại: **403**
 `FACE_NOT_RECOGNIZED` / `FACE_LIVENESS_FAILED` / `FACE_TIMEOUT` (phiên đăng nhập vẫn giữ).
 
+## 1b. Mã OTP qua SMS — thay khuôn mặt khi không quét được  (18/10/2026)
+
+Ở mọi chỗ dùng khuôn mặt (đăng ký, bước Danh tính, ký ủy quyền, ký hợp đồng, xác nhận trả tiền), nếu không quét được
+(không có camera, từ chối quyền camera, trang không phải HTTPS/localhost, máy chủ chưa có mô hình `FACE_UNAVAILABLE`,
+`FACE_NOT_RECOGNIZED` / `FACE_LIVENESS_FAILED` / `FACE_TIMEOUT`, tài khoản chưa có khuôn mặt `FACE_NOT_ENROLLED`, hoặc
+người dùng bấm "Dùng mã OTP thay thế") thì giao diện mở hộp "Xác thực bằng mã OTP" (`Frontend/src/xac-thuc-khuon-mat/otp-sms.js`,
+`BU.otp.verify()`): mã 6 số, hết hạn sau 5 phút, gửi lại sau 60 giây, sai 5 lần thì khóa đến khi gửi lại mã.
+Lựa chọn "Khuôn mặt" chỉ hiện khi `USER.face_enrolled === true`. Đăng nhập **không** có OTP thay mật khẩu: khuôn mặt
+không được thì về form email + mật khẩu.
+
+**Hiện tại: chưa có SMS thật.** Mã được sinh và kiểm ở trình duyệt (`crypto.getRandomValues`), hiển thị trong hộp như
+một tin nhắn đến; máy chủ chỉ nhận cờ `otp_verified: true` và ghi lại phương thức:
+
+| Chỗ | Trường gửi thêm | Máy chủ ghi |
+|---|---|---|
+| `POST /v4/auth/register` | `"otp_verified": true, "phone"` | sự kiện `register_otp` (§1) |
+| `POST /v4/applications/{id}/identity` | `{"cccd": true, "face": false, "otp_verified": true, "otp_phone": "•••• 678"}` | `identity.method = "otp"`, `identity.otp_check`, sự kiện `identity_otp` (§3) |
+| `POST …/consent`, `POST …/sign` | `"method": "otp", "otp_verified": true` (hoặc `"method": "face", "face_verify_id"`) | `consent.sign_method` / `contract.sign_method`, sự kiện `signer_verified` |
+| `POST /v4/loans/{id}/minimum`, `/prepay` | `"method": "otp"` (như cũ) | sự kiện `payment_confirmed` |
+
+> **TODO (khi có nhà cung cấp SMS — chưa làm):** chuyển sinh/kiểm mã về máy chủ.
+> (chưa có route; ghi đường dẫn trước phương thức để `tests/test_contract_routes.py` chưa đòi) `/v4/otp/send` (POST) `{"phone"?, "purpose": "register|identity|consent|sign|payment", "application_id"?}` →
+> `{"otp_id", "expires_in": 300, "resend_in": 60, "phone_masked"}` (mã lưu dạng băm, giới hạn gửi theo số/ip/tài khoản);
+> `/v4/otp/verify` (POST) `{"otp_id", "code"}` → `{"otp_proof"}` dùng một lần, gắn với `purpose` + người dùng, hạn 10 phút
+> (sai 5 lần → khóa phiên). Sau đó các endpoint trên nhận `"otp_proof"` thay cho `"otp_verified": true` và **từ chối**
+> cờ `otp_verified` trần; bỏ dòng tin nhắn hiển thị mã trong `otp-sms.js`. Chỗ cần sửa đánh dấu `TODO(SMS)` trong
+> `app/api/auth.py`, `app/api/applications.py`, `otp-sms.js`, `workspace-v4.js`.
+
 ## 2. Công khai — `/v4/public`
 
 ### GET /v4/public/overview
@@ -120,11 +156,83 @@ Như `/v4/face/login/{id}/frame` nhưng so 1:1 với khuôn mặt của chính t
 ```
 
 ### GET /v4/public/demo-stores  (chỉ dev/demo)
-Danh sách link cửa hàng mẫu cho 9 kịch bản:
+Danh sách 14 gian hàng mẫu (`sources.SCENARIOS`); mục đầu là `tmall` (cửa hàng hư cấu trên Tmall,
+`https://zhouyaqinjujia.tmall.com/shop/view_shop.htm?shop_id=990072615`, `check.banks` gồm
+`[["WEBANK","CMB","ICBC"],["WEBANK","CMB","CCB"],["WEBANK","ICBC","CCB"]]`, xem HANDOVER 16.5). Từ 18/10/2026 mỗi mục có thêm tư cách vay đúng của cửa hàng
+(`borrower_type`, `borrower_type_label`; giao diện nên chọn sẵn tư cách này khi người dùng bấm một gian hàng mẫu)
+và `check`: dạng máy đọc được của `expect` (`scripts/check_demo_samples.py` dùng để kiểm):
 ```json
-{"stores": [{"scenario": "lan", "label": "Chị Lan, hồ sơ chuẩn", "url": "https://haohuo.jinritemai.com/views/shop/index?id=58812",
-             "expect": "Duyệt 139.900"}]}
+{"stores": [{"scenario": "lan", "label": "Chị Lan, hộ kinh doanh, hồ sơ chuẩn",
+             "url": "https://haohuo.jinritemai.com/views/shop/index?id=58812",
+             "expect": "Duyệt · khoản vay mồi 100.000 (50% của 200.000) · WeBank dẫn đầu cùng CCB; BOC cùng cho vay (40/30/30) nếu trả lời trong 30 giây, không thì WeBank 30 / CCB 70",
+             "borrower_type": "individual_business", "borrower_type_label": "Hộ kinh doanh",
+             "check": {"status": "offered", "computed": 200000, "factor": 1.0,
+                       "banks": [["WEBANK", "CCB", "BOC"], ["WEBANK", "CCB"]]}}],
+ "simulated": true,
+ "seed_note": "Khoản vay mồi: khoản đầu được 50% hạn mức tính được; lên 75% rồi 100% khi …"}
 ```
+`check`: `status` (trạng thái cuối; `"not_connected"` với `"stage": "connect"` cho "other": dừng ở bước kết nối
+cửa hàng vì mã gửi tới số đăng ký của chủ khác, không có hồ sơ — §2b); `why` (lý do chuyển cán bộ, cán bộ thấy ở `escalation.why`); `decision`/`by`;
+`rules` (quy tắc pha 0 trượt); `flag` (cờ xác minh); `eligible_from`; với hồ sơ duyệt: hạn mức =
+`computed` × hệ số mồi của lịch sử người vay (`offer.blocks.B8.seed.ratio`) × `factor`, `banks` là các cách chia hợp
+lệ (ngân hàng dẫn đầu trước; BOC trả lời kịp 30 giây ở một số hồ sơ nên liệt kê cả hai), `solo` là hạn mức khi
+không đối tác nào nhận và WeBank cho vay một mình. Kết quả mẫu là tất định với tư cách đúng: hồ sơ từ gian hàng mẫu
+ở môi trường demo chạy "sample guard" (mô hình chỉ thêm cảnh báo, xem HANDOVER 16.4).
+
+### GET /v4/demo/reset-my-loans · POST /v4/demo/reset-my-loans  (chỉ dev/demo/test, seller) — "Làm mới khoản vay mẫu"
+Luật POL-07 (mỗi người một khoản vay) không đổi. Endpoint này tất toán các khoản vay **mở từ gian hàng mẫu** của
+chính người bán bằng trả trước miễn phí như nút "Trả hết" (trả ngân hàng, báo tín dụng, đóng khoản vay); số dư
+WeBank mô phỏng thiếu thì nạp mô phỏng phần thiếu trước (`account.demo_topups`, không tính là tiền hàng). Hồ sơ mẫu
+đang ở `selected` (chưa ký) được rút. Mỗi khoản ghi sự kiện `demo_reset` và bản ghi chuỗi `demo_reset`; không xóa gì.
+Khoản vay từ cửa hàng thật của người bán không bị động tới (`kept`). Môi trường khác → 404.
+- `GET` (xem trước, để hiện nút khi `needed`):
+  `{"needed": true, "loans": [{"loan_id", "application", "scenario", "status", "outstanding", "payoff", "balance", "sample"}],
+  "applications": [{"application_id", "application", "scenario", "status"}], "blocking_real_loans": [...], "simulated": true}`
+- `POST` `{}` → `{"settled": [{"loan_id", "application", "scenario", "paid", "interest", "principal", "topup", "status": "closed", "chain_tx"}],
+  "withdrawn": [{"application_id", "application", "status_before"}], "kept": [{"loan_id", "status", "why"}], "open_loans_left": 0, "simulated": true}`
+- Ở demo, lỗi `ONE_LOAN_AT_A_TIME` (`/select`, `/sign`) có `details.demo_reset = "/v4/demo/reset-my-loans"`, và lý do
+  từ chối POL-07 (`decision.reason.fix`) thêm câu nhắc nút "Làm mới khoản vay mẫu".
+
+## 2b. Kết nối cửa hàng — `/v4/shops`  (18/10/2026, HANDOVER 16.7)
+
+Hồ sơ vay chỉ tạo từ **cửa hàng người bán đã chứng minh là của mình**. Link dán vào không chứng minh gì (ai cũng dán
+được link của người khác), nên có hai cách chứng minh:
+- **OAuth của sàn** (`verified_via = "oauth"`): người bán đăng nhập trên trang của chính sàn và cấp quyền đọc cửa hàng.
+  Mỗi sàn một connector (`app/data_sources/shop_connect.py`), chỉ bật khi có `<SÀN>_APP_KEY` + `<SÀN>_APP_SECRET`
+  (Taobao/Tmall dùng chung `TAOBAO_*`). Douyin và Kuaishou còn TODO link cấp quyền nên vẫn tắt dù có khóa.
+  BuoyUp không bao giờ hỏi mật khẩu tài khoản sàn, không giữ token (`token_ref = null`).
+- **Mã gửi tới số điện thoại đăng ký của cửa hàng** (`verified_via = "otp_registered_phone"`): hiện chỉ cho 14 gian
+  hàng mẫu (dev/demo/test). Mã 6 số sinh và kiểm **ở máy chủ** (lưu sha256, hạn 5 phút, sai 5 lần thì khóa).
+  Chưa có nhà cung cấp SMS: ở dev/demo/test mã trả về trong `dev_code` để giao diện hiện như tin nhắn đến, **trừ**
+  gian hàng mà số đăng ký không phải của người bán ("other", •••• 451): không có `dev_code`, không kết nối được.
+
+| Method | Path | Vào | Ra | Ghi chú |
+|---|---|---|---|---|
+| GET | `/v4/shops/platforms` | | `{"platforms": [{"platform", "name", "oauth": bool}], "registered_phone_code": bool}` | công khai; `oauth` = có thể hiện nút "Kết nối qua …" |
+| POST | `/v4/shops/connect/lookup` | `{"url"}` hoặc `{"reg_no"}` | `{"platform", "platform_name", "shop": {"shop_name", "platform", "subject_masked", "reg_no_masked"}, "phone_masked", "verified_via"}` | seller; xem trước, chưa gửi mã |
+| POST | `/v4/shops/connect/start` | `{"url"}` hoặc `{"reg_no"}` | như trên + `{"connect_id", "expires_in": 300, "max_attempts": 5, "dev_code"?}` | seller; mỗi cửa hàng một mã còn sống (mã cũ hết hiệu lực); quá 5 lần cho một cửa hàng hoặc 60 lần tất cả/15 phút → 429 |
+| POST | `/v4/shops/connect/{connect_id}/verify` | `{"code": "123456"}` | `{"connection": CONNECTION, "shop": SHOP_PROFILE}` | sai → 400 `OTP_INVALID` `details.attempts_left`; hết hạn/đã dùng/mã mới hơn → 400 `OTP_EXPIRED`; sai lần 5 trở đi → 429 `OTP_LOCKED` |
+| GET | `/v4/shops/connect/oauth/{platform}/start` | `?format=json` | 302 tới trang cấp quyền của sàn, hoặc `{"authorize_url", "platform", "expires_in": 600}` | seller; chưa có khóa → 503 `SHOP_PLATFORM_NOT_CONNECTED` "Sàn này chưa được kết nối với BuoyUp." |
+| GET | `/v4/shops/connect/oauth/{platform}/callback` | `?code&state` (sàn gọi, không có token BuoyUp) | 302 `/app/giaodien/workspace.html?shop_connection=shc_…` hoặc `?shop_connect_error=STATE_INVALID|DENIED|PLATFORM_ERROR` | `state` dùng một lần, hạn 10 phút |
+| GET | `/v4/shops/connections` | | `{"items": [CONNECTION]}` | còn hiệu lực |
+| GET | `/v4/shops/connections/{id}` | | CONNECTION | của chính mình |
+| DELETE | `/v4/shops/connections/{id}` | | `{"id", "revoked": true}` | |
+
+`CONNECTION`: `{"id": "shc_…", "platform", "platform_name", "shop_id", "shop_name", "url", "subject_name", "subject_reg_no",
+"owner_name", "verified_via", "verified_at", "expires_at" (SHOP_CONNECTION_TTL_DAYS, mặc định 30), "phone_masked", "sample"}`.
+`SHOP_PROFILE`: `{"platform", "shop_id", "shop_name", "url", "subject_name", "reg_no", "subject_type", "owner_name",
+"owner_id_tail", "registered_phone_masked", "rating", "category", "licenses", "settlement_account": {"bank", "tail", "holder"},
+"opened"}`. Số điện thoại đầy đủ không bao giờ ra khỏi máy chủ.
+
+**Agent 1 dùng kết nối:** bước 1 ghi lời gọi `connect_shop` (`platform`, `shop_id` → `verified_via`, `verified_at`,
+`connection_id`); `verification.evidence` (và `evidence_level` trong biên bản trên chuỗi) ghi mức kiểm chứng từng nguồn
+`store` / `registry` / `identity` / `revenue` ∈ `platform_oauth` · `registered_phone_otp` · `registry_lookup` ·
+`self_declared` · `sample_data`. Bước 3 **tính** `entity_match` = (a) đã chứng minh sở hữu (`oauth` hoặc
+`otp_registered_phone`; `self_declared` chỉ khi `SHOP_CONNECT_REQUIRED=false`) **và** (b) CCCD đọc được không trái
+với chủ cửa hàng: tên chữ Hán và 4 số cuối (chỉ từ CCCD có số kiểm hợp lệ); không so được → `not_comparable`, dựa vào
+(a). Không khớp → `LAW_ID_MISMATCH`. `account_owner_match`: tài khoản quyết toán của cửa hàng đứng tên chủ thể/chủ
+cửa hàng (sai → cờ `RISK_ID_REVIEW` mở). Cửa hàng kết nối qua OAuth (không phải mẫu) chưa có nguồn thuế/tín dụng:
+`/verify` chuyển cán bộ với `DATA_SOURCE_GAP`, không bịa số.
 
 ## 3. Hồ sơ vay (người bán) — `/v4/applications`
 
@@ -152,6 +260,14 @@ là phương án đó (`decision.option_id = "step70"`), người vay không ph�
 `next_action.key` ∈ `identity` · `consent` · `plan` · `verify` · `answer` · `wait_banks` · `select` · `sign` · `wait_payout` ·
 `wait_officer` · `reapply` · `view_loan` · `none`.
 
+APPLICATION có thêm (18/10/2026): `demo_sample` (true: hồ sơ mở từ gian hàng mẫu ở môi trường demo; dùng cho nút
+"Làm mới khoản vay mẫu"), `borrower_type_hint` (`null`, hoặc khi cửa hàng đăng ký hộ kinh doanh mà người vay chọn Cá
+nhân: `{"registered": "individual_business", "chosen": "individual", "text": "Cửa hàng này đăng ký hộ kinh doanh; …
+hãy nộp lại và chọn Hộ kinh doanh."}`, cũng gửi vào thông báo kind `borrower_type`). Chọn tư cách không khớp đăng ký
+→ `rejected`, cờ `POL_BORROWER_TYPE`, `verification.reason` nói rõ cửa hàng đăng ký gì và chọn tư cách nào
+(ví dụ "Cửa hàng này chưa đăng ký kinh doanh; bạn đã chọn vay với tư cách Hộ kinh doanh." / "Nộp lại hồ sơ và chọn tư
+cách Cá nhân."). Cửa hàng không có đăng ký kinh doanh mà chọn Hộ kinh doanh/Doanh nghiệp nay là `POL_BORROWER_TYPE`
+(trước là `POL_ENTITY_INACTIVE`; mã này giờ chỉ cho chủ thể bị thu hồi/giải thể).
 APPLICATION có thêm: `borrower_type`, `statements`, `syndicate` (người bán: `{status, limit, split, reduced, approved_at,
 expires_at, hash}`; cán bộ: thêm `rounds` với câu trả lời và thời gian từng ngân hàng), `selection` (thẻ chi phí + lịch),
 `contract` (bảng chi phí, điều khoản, lịch, ngân hàng, `legs` sau khi ký). `offer` có `limit`, `suggested`, `need`,
@@ -160,8 +276,8 @@ expires_at, hash}`; cán bộ: thêm `rounds` với câu trả lời và thời 
 ### Người bán thấy gì (bản rút gọn, bắt buộc)
 Khi người gọi là seller, APPLICATION bỏ: `control.phase0`, `control.phase1`, `control.phase2.resolved`,
 `control.legal`, mọi giá trị ngưỡng, `verification.flags[].code` thuộc nhóm AML (`AML-*`, `RISK_PASS_THROUGH`)
-và `llm_notes`. Người bán chỉ thấy `decision.reason` / `verification.reason` (REASON hoặc `null`) và
-`control.gate.decision`. Cán bộ/admin thấy đủ.
+và `llm_notes`. Người bán chỉ thấy `decision.reason` / `verification.reason` (REASON hoặc `null`),
+`decision.explanation` (EXPLANATION, bỏ `ref` của từng câu) và `control.gate.decision`. Cán bộ/admin thấy đủ.
 
 ### APPLICATION (dạng trả về đầy đủ)
 ```json
@@ -170,7 +286,11 @@ và `llm_notes`. Người bán chỉ thấy `decision.reason` / `verification.re
   "created_at": "…", "updated_at": "…", "seller": {"id": "usr_…", "display_name": "Lâm Lan"},
   "stores": [{"url": "…", "platform": "douyin", "entity": "Hộ kinh doanh Lâm Lan", "reg_no": "92440106MA9…",
               "rating": 4.6, "category": "Thời trang nữ", "registry": {"status": "active", "registered": "2023-05-18"}}],
-  "identity": {"cccd": true, "face": true, "result": {"face_match": true, "entity_match": true, "account_owner_match": true}},
+  "identity": {"cccd": true, "face": true, "result": {"face_match": true, "entity_match": true, "account_owner_match": true,
+               "ownership": {"verified_via": "otp_registered_phone", "proven": true, "connection_id": "shc_…", "verified_at": "…"},
+               "name_check": "not_comparable", "id_tail_check": "match", "mismatch": []}},
+  "shop_connection": {"id": "shc_…", "platform": "douyin", "shop_id": "58812", "shop_name": "Lan Lan · Thời trang nữ", "url": "…",
+                      "verified_via": "otp_registered_phone|oauth", "verified_at": "…", "phone_masked": "•••• 812", "sample": true},
   "consent": CONSENT,
   "plan": PLAN | null,
   "verification": VERIFICATION | null,
@@ -259,17 +379,33 @@ tắt do nợ xấu. `CONTROL.phase0` có thêm `"event": {"event": "11.11", "lo
 `"llm_verdict"`, `"llm_tool_calls": [{"id": "TC-L1", "tool": "search_articles", "input": {…}}]`; băn khoăn do mô hình nêu có
 `"source": "llm"` (trích dẫn sai/chưa hiệu lực → băn khoăn bị bỏ, ghi sự kiện `citation_rejected`).
 
-`DECISION` = `{"kind": "approve|smaller_offer|escalate|reject", "option_id": "full", "amount": 139900, "by": "gate|officer", "reason": REASON | null, "at": "…"}`
+`DECISION` = `{"kind": "approve|smaller_offer|escalate|reject", "option_id": "full", "amount": 139900, "by": "gate|officer", "reason": REASON | null, "explanation": EXPLANATION, "at": "…"}`
+
+`EXPLANATION` (Agent 3 giải thích quyết định cho người bán, SELLER_SERVICES_PLAN §4; có ở mọi `kind`, kể cả `approve`) =
+`{"headline": "Ngân hàng đã duyệt hạn mức 140.000 tệ, thấp hơn mức đề xuất", "because": [{"text": "Giá nhập bạn khai (120 tệ) cao hơn giá trên hóa đơn mua vào ba tháng gần nhất (62 tệ) 94%, nên số tiền được tính theo giá hóa đơn.", "ref": "control.phase1.concerns.RISK-04"}, {"text": "China Merchants Bank chỉ nhận cửa hàng từ 4,7 điểm; cửa hàng bạn 4,6.", "ref": "syndicate.rounds[0].CMB"}], "improve": [{"text": "Tải hóa đơn mua vào hoặc báo giá của xưởng cho lô hàng này.", "action": {"view": "apply", "data_type": "invoice"}}], "hidden": false, "source": "template|llm"}`.
+- Chỉ dựng từ dữ liệu đã có trong hồ sơ: `control.phase1.concerns` (chỉ quy tắc trong danh sách trắng `SELLER_SAFE_RULES`;
+  `CHAL-01` chỉ nói "Mô hình kiểm soát độc lập …", không xác suất, không đặc trưng), `verification.flags`
+  (`explained_unverified`/`hard`, bỏ nhóm AML), câu trả lời từng ngân hàng ở vòng cuối `syndicate.rounds[-1]`
+  (`decline`/`timeout`), lý do đã ghi `decision.reason`, `offer.reason_codes`. Tối đa `explain.max_because` câu (4) và
+  `explain.max_improve` gợi ý (3).
+- `improve[].action`: `{"view": "apply", "data_type": "invoice|inventory"}` (bổ sung chứng từ), `{"view": "chat"}`,
+  `{"view": "loan"}` hoặc `null` (không có nút).
+- Hồ sơ có lý do giữ kín (AML, lệnh ẩn trong ghi chú): `hidden: true`, `because: []`, `improve` chỉ "Cán bộ tín dụng sẽ liên hệ bạn."
+- `source: "llm"` khi mô hình được cấu hình viết lại từng câu với đúng các con số cũ (1 lần thử, timeout ngắn);
+  lỗi hay lệch số → giữ `"template"`.
+- Cùng lúc ghi thông báo `kind: "decision"` (`headline · because[0]`) vào `/v4/me/notices` và một tin `from: "system"`
+  vào luồng chat; câu hỏi "vì sao/tại sao …" (kể cả có chữ "cán bộ") được trả lời từ EXPLANATION, không bị coi là
+  yêu cầu gặp cán bộ trừ khi có lời xin gặp ("gặp", "cho tôi nói chuyện", …).
 
 ### Endpoint
 | Method | Path | Vào | Ra | Ghi chú |
 |---|---|---|---|---|
-| POST | `/v4/applications` | `{"tier": 2, "borrower_type": "individual_business|company", "store_urls": ["…"]}` | 201 APPLICATION | Link không đọc được → 400 `details.fallback = "reg_no"` |
+| POST | `/v4/applications` | `{"tier": 2, "borrower_type": "individual|individual_business|company", "shop_connection_id": "shc_…"}` (hoặc, chỉ dev/demo/test, `"store_urls": [link gian hàng mẫu]` / `"reg_no"` của gian hàng mẫu) | 201 APPLICATION | §2b. Kết nối của người khác → 403 `SHOP_NOT_CONNECTED`; hết hạn/thu hồi → 400 `SHOP_NOT_CONNECTED` `details.expired`; gian hàng mẫu chưa kết nối → 400 `SHOP_NOT_CONNECTED` `details.connect = true` (trừ khi `SHOP_CONNECT_REQUIRED=false`); link không thuộc gian hàng mẫu / cửa hàng đã kết nối → 400 `SHOP_NOT_CONNECTED` "Chưa kết nối được cửa hàng này. Hãy kết nối cửa hàng qua sàn, hoặc chọn một gian hàng mẫu." (không còn sao chép hồ sơ chị Lan); link không thuộc sàn hỗ trợ → 400 `VALIDATION_ERROR` `details.fallback = "reg_no"` |
 | GET | `/v4/applications` | `?status=` `&seller=` | `{"items": [APPLICATION_SUMMARY]}` | |
 | GET | `/v4/applications/{id}` | | APPLICATION | seller chỉ của mình (403) |
-| POST | `/v4/applications/{id}/identity` | `{"cccd": true, "face": true, "face_verify_id"?}` | APPLICATION | Tài khoản đã đăng ký khuôn mặt (và máy chủ có mô hình): bắt buộc `face_verify_id` từ `/v4/face/verify`, thiếu/hết hạn → 400 `field: face_verify_id` |
+| POST | `/v4/applications/{id}/identity` | `{"cccd": true, "face": true, "face_verify_id"?}` hoặc `{"cccd": true, "face": false, "otp_verified": true, "otp_phone": "•••• 678"}` (§1b) | APPLICATION | Tài khoản đã đăng ký khuôn mặt (và máy chủ có mô hình): bắt buộc `face_verify_id` từ `/v4/face/verify` **hoặc** `otp_verified`, thiếu cả hai/hết hạn → 400 `field: face_verify_id`; không có `face` lẫn `otp_verified` → 400 `field: cccd`. OTP: `identity.method = "otp"`, `identity.face = false`, `identity.otp_check = {"method": "sms_otp", "phone_masked", "checked_in": "browser", "face_registered"}`, Agent 1 bước 3 vẫn kiểm CCCD như cũ, sự kiện `identity_otp`; quá 10 lần/tài khoản/15 phút → 429 |
 | POST | `/v4/applications/{id}/consent/draft` | `{"scopes": ["credit_inquiry","share_partners","data_processing"], "method": "face|otp"}` | `{"document", "message", "alg": "ed25519", "boxes"}` | bản để ký |
-| POST | `/v4/applications/{id}/consent` | như trên + `"signature"` (tùy chọn ở dev/demo) | APPLICATION | thiếu ô → 400 `details.missing`; `consent.sign_method` |
+| POST | `/v4/applications/{id}/consent` | như trên + `"signature"` (tùy chọn ở dev/demo) + `"face_verify_id"?` / `"otp_verified"?` (§1b) | APPLICATION | thiếu ô → 400 `details.missing`; `consent.sign_method`; `face_verify_id` sai/hết hạn → 400 `field: face_verify_id`; có một trong hai → sự kiện `signer_verified` |
 | POST | `/v4/applications/{id}/consent/revoke` | `{}` | APPLICATION | |
 | PUT | `/v4/applications/{id}/plan` | PLAN + `"statements": [{"month": "2026-09", "revenue": 188800, "cost": 0}]` (tùy chọn, ≤ 6) | APPLICATION | ảnh doanh thu lệch thuế ≤ 15%: được dùng (+5% hệ số thận trọng); > 30%: cờ RISK_STATEMENT_MISMATCH, chuyển cán bộ |
 | POST | `/v4/applications/{id}/verify` | `{}` | APPLICATION | |
@@ -281,7 +417,7 @@ tắt do nợ xấu. `CONTROL.phase0` có thêm `"event": {"event": "11.11", "lo
 | POST | `/v4/applications/{id}/messages` | `{"text": "…"}` | `{"items": [MESSAGE]}` | Agent 2 |
 | POST | `/v4/applications/{id}/select` | `{"amount", "tenor_m", "method", "due_day"}` | APPLICATION (`selected`) | trong hạn mức, kỳ hạn theo loại người vay, ngày 1–28; hạn mức hết hạn → 400 `LIMIT_EXPIRED` (+ `expired`); đang có khoản vay → 400 `ONE_LOAN_AT_A_TIME` |
 | GET | `/v4/applications/{id}/contract` | | CONTRACT | người bán mở → bắt đầu đồng hồ đọc `read_seconds` (20) |
-| POST | `/v4/applications/{id}/sign` | `{"read_ack": true, "webank_account": "6222…", "use_of_funds_commitment": true, "supplier_account": "…" (khi > 100.000), "guarantee": true (doanh nghiệp), "method": "face|otp"}` | APPLICATION (`disbursed`, `loan_id`) | đọc chưa đủ → 400 `READ_TIME` |
+| POST | `/v4/applications/{id}/sign` | `{"read_ack": true, "webank_account": "6222…", "use_of_funds_commitment": true, "supplier_account": "…" (khi > 100.000), "guarantee": true (doanh nghiệp), "method": "face|otp", "face_verify_id"?, "otp_verified"?}` | APPLICATION (`disbursed`, `loan_id`) | đọc chưa đủ → 400 `READ_TIME`; `contract.sign_method`; `face_verify_id` sai → 400; sự kiện `signer_verified` (§1b) |
 | POST | `/v4/applications/{id}/manual-channel` | `{}` | APPLICATION → `escalated` | khi `offered`/`selected` |
 | POST | `/v4/applications/{id}/request-human` | `{"reason": "…"}` | APPLICATION | |
 | GET | `/v4/applications/{id}/flow` | | FLOW (B1, B3–B9, B10, B12 vòng duyệt ngân hàng, `selection`, `contract`, B11 lịch trả) | officer/admin |
@@ -328,12 +464,12 @@ tín dụng và ghi nhóm ngân hàng nắm ≥ 2/3 dư nợ. Trả tối thiể
 | GET | `/v4/loans` | seller (của mình), officer, admin | `{"items": [LOAN]}` |
 | GET | `/v4/loans/{id}` | như trên | LOAN |
 | POST | `/v4/loans/{id}/simulate-inflow` | seller, officer, admin (dev/demo) | `{"amount", "payout_id"?}`: tiền hàng về tài khoản kinh doanh; đang quá hạn thì trích ngay |
-| POST | `/v4/loans/{id}/simulate-transfer` | như trên | `{"amount", "kind": "supplier|personal|securities|real_estate|other", "note"}`; chứng khoán/bất động sản → cảnh báo đỏ; chuyển cá nhân > 30% khoản vay → vàng |
+| POST | `/v4/loans/{id}/simulate-transfer` | như trên | `{"amount", "kind": "supplier|personal|securities|real_estate|other|marketing|logistics|staff|tax|platform", "note"}` → LOAN + `transfer` (có `id`, `group`: nhóm chi phí theo `cashflow.classify`); chứng khoán/bất động sản → cảnh báo đỏ; chuyển cá nhân > 30% khoản vay → vàng |
 | POST | `/v4/loans/{id}/simulate-advance` | như trên | `{"to": "YYYY-MM-DD"}`: Agent 4 chạy từng ngày tới ngày đó |
-| POST | `/v4/loans/{id}/minimum` | seller | kỳ tới chỉ trả tối thiểu (lãi + 30% gốc kỳ) |
-| POST | `/v4/loans/{id}/prepay` | seller | `{"amount"?}` (bỏ trống = trả hết) từ số dư tài khoản kinh doanh |
+| POST | `/v4/loans/{id}/minimum` | seller | `{"confirm": true, "method": "face|otp"?, "face_verify_id"?}`: kỳ tới chỉ trả tối thiểu (lãi + 30% gốc kỳ). Thiếu `confirm: true` → 400 `CONFIRM_REQUIRED` |
+| POST | `/v4/loans/{id}/prepay` | seller | `{"confirm": true, "amount"?, "method": "face|otp"?, "face_verify_id"?}` (bỏ trống `amount` = trả hết) từ số dư tài khoản kinh doanh. Thiếu `confirm: true` → 400 `CONFIRM_REQUIRED`; `face_verify_id` (từ `/v4/face/verify`) sai/hết hạn → 400 `VALIDATION_ERROR` `field: face_verify_id`; OTP là mô phỏng. Mỗi lần xác nhận ghi sự kiện `payment_confirmed` |
 | PUT | `/v4/loans/{id}/receiving-account` | seller | `{"bank", "number"}`; chỉ sau khi tất toán |
-| GET | `/v4/autopilot/status` | officer, admin | `{"enabled", "agent4": {"interval_seconds", "last_run_at", "last_reason", "loans", "alerts", "error", "next_run_at"}, "agent5": {"interval_seconds", "last_run_at", "last_reason", "report_id", "proposals", "skipped", "error", "next_run_at", "due_reason"}}`. Agent 4 tự giám sát mọi khoản vay mở mỗi `BUOYUP_AGENT4_INTERVAL_SECONDS` (mặc định 300) và ngay sau mỗi lần tiền về; Agent 5 tự hậu kiểm mỗi `BUOYUP_AGENT5_INTERVAL_SECONDS` (mặc định 21600) và sớm hơn sau khi có khoản tất toán hoặc cảnh báo đỏ; tắt bằng `BUOYUP_AUTOPILOT=false`, luôn tắt khi `APP_ENV=test` |
+| GET | `/v4/autopilot/status` | officer, admin | `{"enabled", "agent4": {"interval_seconds", "last_run_at", "last_reason", "loans", "alerts", "error", "next_run_at"}, "agent5": {"interval_seconds", "last_run_at", "last_reason", "report_id", "proposals", "skipped", "error", "next_run_at", "due_reason"}, "reports": {"interval_seconds", "last_run_at", "last_reason", "sellers", "made", "error", "next_run_at", "due": [user_id]}}`. Báo cáo người bán (Agent 5, §5a) chạy mỗi `BUOYUP_REPORTS_INTERVAL_SECONDS` (mặc định 3600) và ngay sau khi một khoản vay tất toán (`mark_reports_due(user_id, "closing")`). Agent 4 tự giám sát mọi khoản vay mở mỗi `BUOYUP_AGENT4_INTERVAL_SECONDS` (mặc định 300) và ngay sau mỗi lần tiền về; Agent 5 tự hậu kiểm mỗi `BUOYUP_AGENT5_INTERVAL_SECONDS` (mặc định 21600) và sớm hơn sau khi có khoản tất toán hoặc cảnh báo đỏ; tắt bằng `BUOYUP_AUTOPILOT=false`, luôn tắt khi `APP_ENV=test` |
 | POST | `/v4/loans/{id}/notices/{notice_id}/answer` | seller (của mình) | `{"choice": "seasonal", "note": ""}` → LOAN; trả lời câu hỏi nguyên nhân của Agent 4 (cảnh báo vàng). `choice` ∈ `seasonal`, `other_account`, `paused`, `invoice_pending`, `other`; trả lời lần hai → 409 |
 | POST | `/v4/monitoring/tick` | officer, admin | vào `{"as_of": "YYYY-MM-DD"}` (tùy chọn). Chạy B11, FATE chấm lại (chỉ khi ủy quyền còn hiệu lực; không thì `loan.fate.skipped = "consent"`), kiểm tra dùng vốn (WCLOAN-2024#10: quá `use_of_funds.days` = 15 ngày chưa có hóa đơn mua hàng khớp → `use_of_funds.status = "missing"` + cảnh báo vàng tín hiệu `use_of_funds`), cập nhật công tắc duyệt tự động, và chuyển hồ sơ `needs_answer` quá `flags.open_days` (3) ngày sang `escalated`. Ra `{"alerts": [ALERT], "checked": 1, "escalated": ["app_…"], "simulated": true}` |
 | GET | `/v4/alerts` | officer, admin | `ALERT` = `{"id","loan_id","level":"yellow|red","signals":[…],"text","at","acked":false}` |
@@ -353,6 +489,53 @@ khoản và tỷ lệ nợ xấu (quá hạn ≥ 90 ngày, cảnh báo đỏ ho�
 (`manual: true`) không bị ghi đè.
 
 `APPLICATION_SUMMARY` = `{"id","code","status","tier","seller_name","store_entity","amount_requested","amount_offered","grade","updated_at","flags_open"}`
+
+## 5a. CCCD, ảnh doanh thu, ngân hàng của tôi  (17/10/2026)
+
+| Phương thức | Đường dẫn | Ai | Vào → Ra |
+|---|---|---|---|
+| POST | `/v4/applications/{id}/cccd` | seller, hồ sơ `draft` | `{"image": "<base64 hoặc data:URL JPEG/PNG ≤ 8 MB>", "side": "auto|front|back"}` → `{"side", "fields", "warnings", "review_required": true, "scans"}`. OCR căn cước Trung Quốc (BackEnd/src/CCCD: RapidOCR + mô hình PaddleOCR tiếng Trung; bộ đọc trường và kiểm GB 11643 của Backend_CCCD). Ảnh không được lưu; chỉ lưu trường đọc được và sha256. `/identity` cần mặt trước đã quét (`CCCD_OCR_REQUIRED`). Agent 1 kiểm: số và checksum, đủ 18 tuổi (dưới 18 → từ chối `LAW_ID_MINOR`), còn hạn (mặt sau), tên khớp chủ cửa hàng khi tên đăng ký là chữ Hán; có vấn đề → cờ mở `RISK_ID_REVIEW` (cán bộ). |
+| POST | `/v4/applications/{id}/statement-images` | seller, hồ sơ `consented` | `{"image", "month"?}` → 201 `{"id", "month", "ocr_read", "count"}`; tối đa 6 ảnh. Lưu cho cán bộ; các con số OCR đọc được dùng để đối chiếu số doanh thu đã nhập (không khớp → không cộng hệ số ảnh doanh thu). |
+| DELETE | `/v4/applications/{id}/statement-images/{image_id}` | seller, `consented` | → APPLICATION |
+| GET | `/v4/applications/{id}/statement-images/{image_id}` | chủ hồ sơ; officer, admin | → ảnh JPEG/PNG |
+| DELETE | `/v4/applications/{id}` | seller (chủ hồ sơ) | → `{"id", "status": "withdrawn", "deleted": true}`. Xóa hồ sơ khỏi “Hồ sơ của bạn”: rút và ẩn, không xóa dữ liệu (bản ghi chuỗi `application_withdrawn`; cán bộ vẫn xem được). Không xóa được khi đã có khoản vay hoặc đang `verifying`, `in_control`, `signed`, `disbursed`, `repaying`, `closed` (400). Danh sách của người bán có thêm `deletable`. |
+| GET | `/v4/public/features` | công khai | → `{"cccd_ocr": bool}`: công tắc giao diện người bán đọc khi mở (`CCCD_OCR_REQUIRED`; tắt thì bước định danh dùng ô CCCD mô phỏng như trước). |
+| GET | `/v4/me/bank` | seller | → `{"account": {"bank", "number_masked", "balance", "currency", "inflow_total", "card"} | null, "loans": […], "movements": […], "open_limit", "totals", "simulated"}`. `totals.coverage` = `{"share", "basis": "tax|forecast", "month"}` hoặc `null` (việc 9: tiền hàng về WeBank của tháng / doanh thu thuế tháng đó, thiếu thì dự báo của khoản vay); trang chủ in "≈ 45 % doanh thu của bạn" dưới "Tiền hàng về tháng này". |
+| GET | `/v4/me/stats` | seller | → `{"currency", "revenue_12m": [{month, amount}], "revenue_change", "webank_by_month": [{month, in, repay, out, loan}], "balance": [{at, kind, amount, balance}], "month_bridge": {month, opening, in, repay, out, closing} | null, "goods": [{item, share, qty, revenue_est}], "schedule": [{k, due_date, principal, interest, status}], "loan_id"}`: số liệu cho trang Thống kê. |
+| POST | `/v4/webank/inflows` | WeBank: chữ ký `X-WeBank-Signature` (HMAC-SHA256 thân request, `WEBANK_WEBHOOK_SECRET`) hoặc tài khoản ngân hàng WEBANK | `{"account_number", "amount", "payout_id", "source"?}` → `{"credited", "balance", "loan_id", "status"}`. Tiền hàng về tài khoản WeBank của khoản vay đang mở; khoản đang đến hạn bị trích ngay; `payout_id` chống ghi trùng. Demo: `PLATFORM_PAYOUT_FEED=true` cho autopilot đóng vai sàn quyết toán mỗi `PLATFORM_PAYOUT_MINUTES` phút. `movements` của `/v4/me/bank` có `id` ổn định để ứng dụng hiện thông báo tiền về. |
+| POST | `/v4/webank/outflows` | như `/v4/webank/inflows` (chữ ký WeBank hoặc tài khoản WEBANK) | `{"account_number", "amount", "transfer_id", "payee": {"kind", "name"}?, "memo"?}` → `{"recorded", "balance", "loan_id", "status", "transfer": {"id", "on", "amount", "kind": "other", "memo", "payee", "group", "balance_after"}}`. Tiền đã ra khỏi tài khoản kinh doanh (BuoyUp chỉ trừ số dư mô phỏng, không chuyển tiền); `group` ∈ `goods|platform|marketing|logistics|staff|tax|other` hoặc `null` (không phải chi phí kinh doanh) theo luật từ khóa trên `memo`/`payee`; `transfer_id` chống ghi trùng (`recorded: false`). Vượt số dư → 400. Demo: cùng cờ `PLATFORM_PAYOUT_FEED`, autopilot nạp 0–2 khoản chi mỗi lượt từ `bank_statement.outflows` của hồ sơ mẫu, tổng chi trong tháng ≤ 70 % tiền về. `movements` loại `out` của `/v4/me/bank` có thêm `group`, `group_label`. |
+| GET | `/v4/me/notices` | seller | → `{"items": [NOTICE], "unread": n}`: trung tâm thông báo, gộp `loan.doc.notices` của mọi khoản vay (`scope: "loan"`), `application.doc.seller_notices` (`scope: "application"`: `decision`, `limit_approved`, `data_request`) và báo cáo `bu_seller_reports` (`scope: "report"`), mới nhất trước, tối đa 100; `unread` đếm trên toàn bộ. |
+| POST | `/v4/me/notices/read` | seller | `{"ids": ["nt_…", "srp_…"]}` hoặc `{"all": true}` → `{"unread": n}`: ghi `read_at` vào chính mục (doc khoản vay / hồ sơ) hoặc cột `read_at` của báo cáo. |
+
+| GET | `/v4/me/reports` | seller | → `{"items": [REPORT_BRIEF], "unread": n}`: báo cáo của Agent 5 cho người bán, mới nhất trước. |
+| GET | `/v4/me/reports/{id}` | seller (chủ báo cáo) | → `SELLER_REPORT`; mở lần đầu ghi `read_at` (thông báo `scope: "report"` cũng thành đã đọc). Báo cáo của người khác → 404. |
+| GET | `/v4/officer/sellers/{user_id}/reports` | officer, admin | → `{"seller_user_id", "items": [SELLER_REPORT]}`; người dùng không có → 404. |
+
+`REPORT_BRIEF` = `{"id": "srp_…", "kind": "month|quarter|year|closing|registration", "period": "2026-10|2026-Q4|2026|<loan_id>|2026", "title": "Báo cáo tháng 10/2026", "at", "read_at", "level": "info|warn", "summary", "coverage_share", "chain_tx"}`.
+`SELLER_REPORT` = `REPORT_BRIEF` + `{"seller_user_id", "hash", "data"}`. `data` (mọi số do code tính, `simulated: true`):
+
+- `month`: `{"kind", "period", "currency", "coverage": {"share", "basis": "tax|forecast|none", "webank_in", "tax_revenue", "revenue", "estimate", "month"}, "sales": {"webank_in", "tax_revenue", "estimate", "basis", "vs_prev"}, "expenses": {"groups": [{"key": "goods|platform|marketing|logistics|staff|tax", "label", "amount", "share"}], "total", "unclassified", "non_business", "platform_fee", "platform_fee_rate", "platform_fee_estimated": true}, "cash": {"opening", "in", "loan_in", "repay", "out", "closing", "lowest", "lowest_on"}, "loan": {"outstanding", "paid_this_month", "next_due": {"date", "amount", "k"} | null, "status"}, "flags": [str], "notes": [str], "summary", "summary_source": "template|llm", "level": "info"}`. `notes[0]` luôn là câu độ phủ ("Báo cáo tính được 18 % doanh thu của cửa hàng (theo tờ khai thuế); …"), `notes[1]` phí sàn ước tính. `vs_prev` chỉ khi cả hai tháng có tờ khai thuế. Khoản vay tính theo cuối tháng (gốc đã trả theo `BuRepayment`).
+- `quarter`: các khối trên cộng 3 tháng + `"months"`, `"by_month": [{month, in, loan_in, repay, out, estimate, closing}]`, `"trend": {"revenue": {"months": [{month, amount}], "direction": "▲|▼|=", "change"} | {"months", "unavailable"}}` (chỉ từ tháng có tờ khai thuế, cần ≥ 2), `"runway_months": số | "∞"` (= số dư cuối quý / chi bình quân tháng), `"store": {"rating": {from, to, change}, "returns": {…} | {"unavailable"}, "snapshots"}` khi có ≥ 2 `store_snapshots`, nếu không `{"unavailable": "Chưa đủ dữ liệu đánh giá và hoàn hàng từ sàn"}`.
+- `year` (1/1 năm sau) và `closing` (khi `_maybe_close` tất toán; `period` = loan id; tối đa 12 tháng đời khoản vay): khối cộng dồn như quý + `"before_after": {"disbursed", "before": {months, revenue, webank_in}, "after": {…}, "revenue_change", "note"?}` (3 tháng trước giải ngân / 3 tháng từ tháng giải ngân), `"loan_summary": {"loan_id", "amount", "rate", "status", "start_date", "closed_on", "days", "total_interest", "total_penalty", "total_paid", "max_interest", "late_instalments", "max_overdue_days"}` (lãi thật = Σ phần lãi các lần trích), `"loans": [...]`, `"next_time": {"text", "limit", "ratio_now", "ratio_next", "computed", "source": "offer.blocks.B8"}` (hạn mức tính được × bậc `seed.ratio` kế tiếp, trong trần loại người vay; không tính mới).
+- `registration` (việc 8, `level: "warn"`, một lần mỗi năm, chỉ `borrower_type == "individual"`): `{"ytd", "ytd_basis": "tax|webank_coverage|webank", "threshold", "warn_share", "warn_at", "over", "rule": "LAW-REG-01", "citations": [{"article_id", "quote", "verified", "effective", "law", "note"}], "type_cap", "notes", "legal_note"}`. Gửi khi doanh thu từ đầu năm (Σ `monthly_12m` của năm; thiếu thuế thì tiền về WeBank / độ phủ) ≥ `legal.individual_registration_threshold` (100.000, `TIEN_LE`) × `legal.individual_registration_warn_share` (0,8, `DAT_TAY`). Trích dẫn qua `legal.citations("LAW-REG-01")` (kiểm nguyên văn `verify_citation`): NETTRADE-2021#8 "个人从事网络交易活动，年交易额累计不超过10万元的…不需要进行登记", ECOM-2018#10.
+
+Mỗi báo cáo: `chain.record(session, seller_user_id, "seller_report", data)` → `hash`, `chain_tx`; sự kiện `seller_report` (actor `agent5`). Một dòng cho mỗi `(seller, kind, period)` (`bu_seller_reports`, unique): chạy lại cùng số liệu thì không ghi gì; số liệu đổi (webhook về muộn) thì ghi đè `data` và hash mới. `summary` là 3 câu mẫu; nếu có mô hình, được viết lại một lần qua bộ lọc số của Agent 2 (bắt cả "50,000" lẫn "50.000"), sai thì giữ mẫu (`summary_source`). Module chạy với vai `agent5` (`capabilities`: không `debit`, không `payout`). Demo: `simulate-advance` lập báo cáo theo ngày mô phỏng (ngày 1 mỗi tháng, ngày cuối, khi tất toán).
+
+`NOTICE` = `{"id", "scope": "loan|application|report", "loan_id"?, "application_id"?, "report_id"?, "kind", "level": "info|warn|danger", "title", "text", "at", "read_at", "action": {"view": "loan|report|apply|chat", "id"?} | null, "question"?, "answer"?}`. `title` do code đặt theo `kind` (`notify.NOTICE_TITLES`); mức `yellow/red` cũ của Agent 4 hiện thành `warn/danger`. Mọi câu mới xưng "bạn" (`notify.SELLER_ADDRESS`).
+
+Cảnh báo người bán của Agent 4b (SELLER_SERVICES_PLAN §5, 17/10/2026). Chỉ đọc và gửi `NOTICE` (chạy với vai `agent4b`, không trích tiền); mỗi loại gửi một lần, khóa ghi ở `loan.doc.sent_alerts`:
+
+| `kind` | Khi nào | Ví dụ `text` |
+|---|---|---|
+| `shortfall_forecast` (`warn`, "Có thể thiếu tiền kỳ tới") | Vòng giám sát khi còn đúng `repay.forecast_days` ([7, 3]) ngày đến kỳ: số dư dự kiến ngày trả = số dư + (tiền về/ngày − chi kinh doanh/ngày, trung bình `repay.forecast_lookback_days` = 30 ngày gần nhất của khoản vay; ít hơn 7 ngày dữ liệu → `forecast_monthly`/30 × độ phủ WeBank Agent 1 đã đo) × số ngày còn lại < khoản phải trả. Khóa `shortfall_forecast:{k}:{số ngày còn lại}`. `action` = `{"view": "loan", "id", "secondary"?: {"label": "Xem trả tối thiểu", "view": "loan", "id", "open": "minimum"}}` (chỉ mở hộp xác nhận, không tự chọn). Nhắc kỳ (`reminder`) cùng ngày khi đó bỏ câu "Số dư chưa đủ". | "Còn 7 ngày đến kỳ 1 (10/11): phải trả 20.395 tệ. Số dư 4.000 tệ; với nhịp tiền về 18 ngày qua, đến ngày trả dự kiến có khoảng 0 tệ, thiếu khoảng 20.400 tệ. Bạn có thể nộp thêm vào tài khoản WeBank hoặc chọn trả tối thiểu 6.395 tệ cho kỳ này." |
+| `dsr_high` (`warn`, "Tiền trả nợ đang nặng") | Vòng đầu của tháng mới, cho tháng trước: tiền trả nợ (Σ `BuRepayment.swept` theo ngày mô phỏng + phần kỳ đến hạn trong tháng còn quá hạn) / doanh thu ước tính `max(tiền về WeBank, doanh thu thuế của tháng đó trong monthly_12m — thiếu thì forecast_monthly)` (`cashflow.coverage(...)["estimate"]`) > `early_warning.dsr_max` (0,20). Kết quả lưu `loan.doc.dsr` `{month, payments, revenue_base, ratio, max, high, coverage, as_of}`; cán bộ thấy tín hiệu `dsr_high` trọng số 0 trong `early_warning.signals` suốt tháng (không đổi màu). Khóa `dsr_high:{YYYY-MM}` (và `dsr_checked:{YYYY-MM}`). | "Tháng 12/2026: tiền trả nợ 20.329 tệ bằng 34 % doanh thu ước tính (60.000 tệ, theo tờ khai thuế; tiền hàng về WeBank mới tính được 0 % doanh thu này). Trên 20 % là mức BuoyUp coi là nặng. Để tiền hàng về WeBank đầy đủ sẽ cho con số chính xác hơn." |
+| `spend_below_due` (`warn`, "Số dư thấp hơn kỳ tới") | Ngay trong request `simulate-transfer` / `POST /v4/webank/outflows` (và luồng chi demo): khoản chi ≥ `repay.large_spend_share` (0,30) × khoản phải trả kỳ tới và số dư sau chi < khoản đó. Khóa `spend_below_due:{k}`. Không hỏi nguyên nhân. Sau commit, khi autopilot bật, Agent 4 đánh giá lại khoản vay ngay (`autopilot.assess_loan(..., "chi tiền")`). | "Bạn vừa chi 56.000 tệ (Trả nhà cung cấp). Số dư còn 4.000 tệ, thấp hơn 20.395 tệ phải trả ngày 10/11. Nhớ để tiền hàng về WeBank trước ngày đó." |
+
+Tham số mới (`/v4/params`, nhãn nguồn `DAT_TAY`): `repay.forecast_days` [7, 3], `repay.forecast_lookback_days` 30, `repay.large_spend_share` 0,30, `early_warning.dsr_max` 0,20.
+Ảnh cửa hàng hằng tháng (§6.3): vòng đầu mỗi tháng sau tháng giải ngân, Agent 4b đọc lại trang cửa hàng công khai (`sources.lookup_public_store`, dữ liệu mẫu) và ghi `loan.doc.store_snapshots` (tối đa 24) `{"month", "on", "rating", "followers", "returns_rate", "simulated": true}`; nguồn chưa có trường nào thì `null` (báo cáo quý ghi "chưa có").
+
+Kế hoạch (`PUT /plan`): `supplier`, `brand`, `auth` thành tùy chọn; thêm `group_other` (mô tả khi chọn “khác”); `declaration: true` bắt buộc (`PLAN_DECLARATION_REQUIRED`): lời cam đoan, thời điểm và các ảnh doanh thu được ghi lên chuỗi (`declaration`). Nhóm hàng hiệu lực = nhóm khai hoặc nhóm nghiêm hơn nhận ra từ tên hàng / mô tả (hàng cấm, hàng cần giấy phép không lách được bằng “khác”).
+Sản phẩm: `borrower_type` thêm `individual` (cá nhân; trần 50.000; không cần đăng ký kinh doanh hoặc là hộ kinh doanh của chính người vay); kỳ hạn doanh nghiệp bỏ 36 tháng; `product.borrower_picks_tenor: false` → `/select` dùng kỳ hạn hệ thống (dài nhất của loại người vay, có thể bỏ `tenor_m`); `product.methods: ["installment"]`; `repay.pay_supplier_direct: false` → toàn bộ tiền vay về tài khoản WeBank.
 
 ## 5b. Khiếu nại — `/v4/complaints`  (bàn khiếu nại, rà soát 16/10/2026 mục 4)
 
@@ -438,7 +621,7 @@ Agent 3 lưu kết quả truy xuất theo từng hồ sơ ở `control.retrieval
 ## 8. Chuỗi — `/v4/chain`  (đã đăng nhập; mô phỏng FISCO BCOS 4 node nếu không cấu hình chuỗi thật)
 | Method | Path | Ra |
 |---|---|---|
-| GET | `/v4/chain/status` | local: `{"mode":"local","nodes":[{"id":"node0","status":"up","leader":true}],"height":15,"group":1,"consensus":"PBFT","hash_alg":"sha3-256 (mô phỏng)","simulated":true,"withdrawals":2}`. remote: `{"mode":"remote","url":"https://fs.buoyup.app","backend":"fisco-bcos","height":120,"group":1,"consensus":"PBFT","nodes":[{"id":"node0","status":"up|down","leader":false,"sealer":true,"block":120}],"contracts":{"AuditTrail":"0x…","WithdrawalLedger":"0x…"},"explorer_url":"https://fs.buoyup.app/explorer/","catalog_sync":{"at","ok","banks","keys","changed","error"},"hash_alg":"keccak256","outbox_pending":false,"simulated":false,"withdrawals":n}`; remote không trả lời → 503 `CHAIN_UNAVAILABLE` |
+| GET | `/v4/chain/status` | local: `{"mode":"local","nodes":[{"id":"node0","status":"up","leader":true}],"height":15,"group":1,"consensus":"PBFT","hash_alg":"sha3-256","simulated":true,"withdrawals":2}`. remote: `{"mode":"remote","url":"https://fs.buoyup.app","backend":"fisco-bcos","height":120,"group":1,"consensus":"PBFT","nodes":[{"id":"node0","status":"up|down","leader":false,"sealer":true,"block":120}],"contracts":{"AuditTrail":"0x…","WithdrawalLedger":"0x…"},"explorer_url":"https://fs.buoyup.app/explorer/","catalog_sync":{"at","ok","banks","keys","changed","error"},"hash_alg":"keccak256","outbox_pending":false,"simulated":false,"withdrawals":n}`; remote không trả lời → 503 `CHAIN_UNAVAILABLE` |
 | GET | `/v4/chain/blocks?limit=20` | `{"items":[{"height","hash","prev","sealer","txs":[{"tx","kind","ref"}],"at"}]}` |
 | GET | `/v4/chain/withdrawals` | `{"items":[{"id","at","pieces":4,"size":3600,"tx","block","merkle_root","piece_fingerprints":["0x…"]}]}` công khai: không lộ ngân hàng |
 | GET | `/v4/chain/withdrawals/{id}` | như trên + `slots: n` (+ `remote: {"sealedBy","submittedTo","confirmedNodes","totalNodes","explorerUrl","verifyUrl",…}` và `explorer_url` khi lệnh nằm trên chuỗi remote; `simulated` theo từng lệnh) |
@@ -517,4 +700,6 @@ thấy kết quả), sàn lũy kế và cảnh báo vẫn theo ngày.
 | `FACE_SAVE_CROPS`, `FACE_DET_SIZE`, `FACE_WARMUP` | `true`, 320, `true` | lưu ảnh mặt 112×112 đã căn chỉnh; cỡ ảnh dò SCRFD; nạp mô hình khi khởi động |
 | `banks.require_signoff` | `false` | bật gói phê duyệt cho ngân hàng (§7) |
 | `legal.rate_cap`, `legal.ltr_threshold` | 0.24; 2.000.000 / 500.000 | LAW-02, AML-LTR-01 |
+| `legal.individual_registration_threshold`, `legal.individual_registration_warn_share` | 100.000; 0,8 | LAW-REG-01: nhắc người bán cá nhân đăng ký kinh doanh (§5a báo cáo `registration`) |
+| `BUOYUP_REPORTS_INTERVAL_SECONDS` | 3600 | chu kỳ Agent 5 tìm báo cáo đến hạn cho người bán (tháng/quý/năm/tất toán/nhắc đăng ký) |
 | `consent.ttl_days`, `chat.max_per_minute`, `use_of_funds.days` | 90, 12, 15 | |

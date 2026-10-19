@@ -3,6 +3,7 @@
 #   ./run-local.sh            cài môi trường (lần đầu) rồi chạy server ở cổng 8000 (PORT=… để đổi)
 #   ./run-local.sh test       chạy toàn bộ test backend + kiểm tra giao diện (cần Node 18+)
 #   ./run-local.sh reset-lan  làm mới tài khoản demo chị Lan (APP_ENV dev/demo)
+#   ./run-local.sh demo-evidence  nhật ký demo dịch vụ sau khi vay → TestBench/evidence/seller_services-*.json/.md
 # Dữ liệu (SQLite) nằm ở ./data/buoyup.db; cấu hình ở BackEnd/API_config/.env.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -28,6 +29,10 @@ case "${1:-run}" in
     (cd "$ROOT" && "$VENV/bin/python" -B Frontend/tests/v4-api-check.py >/dev/null && echo "v4 API check: PASS")
     (cd "$ROOT/Frontend/tests" && node v4-ui-check.mjs | tail -1 && node c1-check.mjs | tail -1)
     ;;
+  demo-evidence)
+    # DB tạm riêng, LLM tắt, chuỗi local: không đụng ./data/buoyup.db hay chuỗi FISCO.
+    (cd "$SRC" && BUOYUP_RAG_DENSE=0 "$VENV/bin/python" scripts/demo_seller_services.py)
+    ;;
   reset-lan)
     "$VENV/bin/python" "$SRC/scripts/reset_demo_seller.py"
     ;;
@@ -36,5 +41,5 @@ case "${1:-run}" in
     echo "BuoyUp: http://localhost:${PORT:-8000}/   (Ctrl+C để dừng)"
     exec "$VENV/bin/uvicorn" app.main:app --app-dir "$SRC" --host "${HOST:-0.0.0.0}" --port "${PORT:-8000}"
     ;;
-  *) sed -n '2,6p' "$0"; exit 1 ;;
+  *) sed -n '2,7p' "$0"; exit 1 ;;
 esac

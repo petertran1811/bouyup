@@ -23,8 +23,10 @@ time); a real deployment replaces :func:`bank_decides` with a call to the bank's
 
 from __future__ import annotations
 
+import hashlib
+
 import secrets
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -92,10 +94,22 @@ def max_tenor_m(policy: dict[str, Any]) -> int:
     return months
 
 
+def answer_ms(bank: BuBank, case: dict[str, Any]) -> int:
+    """The bank's answer time for this case: its policy ``response_ms`` × a steady 0,6–1,4 factor per case and
+    bank, so a slow bank (Bank of China) misses the 30 s window on some cases and answers on others. A case
+    without an id (unit tests) uses the policy figure as it is."""
+    base = int((bank.policy or {}).get("response_ms", 2000))
+    key = str(case.get("case_id") or "")
+    if not key:
+        return base
+    factor = 0.6 + int(hashlib.sha256(f"{key}:{bank.code}".encode()).hexdigest()[:6], 16) % 801 / 1000
+    return round(base * factor)
+
+
 def bank_decides(bank: BuBank, case: dict[str, Any], amount: int) -> dict[str, Any]:
     """The bank's own credit decision (simulated from its policy) and its answer time."""
     policy = bank.policy or {}
-    ms = int(policy.get("response_ms", 2000))
+    ms = answer_ms(bank, case)
     reason = None
     if not grade_ok(case["grade"], str(policy.get("min_grade", "C"))):
         reason = f"Chỉ nhận hạng {policy.get('min_grade', 'C')} trở lên"
@@ -105,7 +119,9 @@ def bank_decides(bank: BuBank, case: dict[str, Any], amount: int) -> dict[str, A
         reason = f"Khoản vay tối đa {vn_number(int(policy['max_amount']))} {bank.currency}"
     elif case["industry"] in (policy.get("exclude_industries") or []):
         reason = f"Không cho vay ngành {case['industry']}"
-    elif case["borrower_type"] not in (policy.get("borrower_types") or ["individual_business", "company"]):
+    # A personal seller counts with household businesses for the banks' retail policies (both are people).
+    elif ("individual_business" if case["borrower_type"] == "individual" else case["borrower_type"]) \
+            not in (policy.get("borrower_types") or ["individual_business", "company"]):
         reason = "Không cho vay loại người vay này"
     elif case["late_max_days_24m"] > int(policy.get("max_late_days", 30)):
         reason = "Báo cáo tín dụng có trễ hạn vượt mức ngân hàng chấp nhận"
@@ -122,7 +138,7 @@ def bank_decides(bank: BuBank, case: dict[str, Any], amount: int) -> dict[str, A
 
 def _case(doc: dict[str, Any], offer: dict[str, Any]) -> dict[str, Any]:
     data = (doc.get("internal") or {}).get("data") or {}
-    return {"grade": offer["grade"], "industry": (data.get("store") or {}).get("industry") or "khác",
+    return {"case_id": doc.get("code") or doc.get("id") or "", "grade": offer["grade"], "industry": (data.get("store") or {}).get("industry") or "khác",
             "borrower_type": doc.get("borrower_type") or "individual_business",
             "late_max_days_24m": int((data.get("credit") or {}).get("late_max_days_24m") or 0),
             "tenor_max": int(offer["tenor_max"]), "tenor_min": min(offer.get("tenors") or [offer["tenor_max"]]),
@@ -163,6 +179,29 @@ def _split(params: dict[str, Any], lead: str, agreed: list[dict[str, Any]]) -> l
         pcts = syn["split_one"]
         banks = [lead, agreed[0]["bank"]]
     return [{"bank": b, "pct": float(p), "role": "lead" if b == lead else "partner"} for b, p in zip(banks, pcts)]
+
+
+def _solo(session: Session, doc: dict[str, Any], params: dict[str, Any], amount: int,
+          rounds: list[dict[str, Any]], lead: BuBank | None) -> dict[str, Any] | None:
+    """No partner agreed at any step: WeBank lends alone up to ``syndicate.solo_max`` when its own policy and
+    hard rules accept that amount (its on-chain policy: "a 100 % WeBank split is acceptable")."""
+    syn = params["syndicate"]
+    cap = int(syn.get("solo_max") or 0)
+    if not cap or lead is None or not lead.active:
+        return None
+    amt = floor_to(min(amount, cap), 100)
+    if amt < int(params["product"]["min_amount"]):
+        return None
+    answer = bank_decides(lead, _case(doc, doc["offer"]), amt)
+    problem = hard_rule_problem(lead, province=str(doc.get("province") or ""), share=amt, params=params)
+    if answer["decision"] != "approve" or problem:
+        return {"solo_blocked": {"amount": amt, "reason": problem or answer["reason"]}}
+    expires = utcnow() + timedelta(days=int(params["product"]["limit_valid_days"]))
+    split = [{"bank": lead.code, "pct": 1.0, "role": "lead", "name": lead.name}]
+    return {"status": "approved", "lead": lead.code, "rounds": rounds, "limit": amt, "split": split,
+            "reduced": amt < amount, "solo": True, "approved_at": utcnow().isoformat() + "Z",
+            "tenor_cap": max_tenor_m(lead.policy or {}), "expires_at": expires.isoformat() + "Z",
+            "id": "SYN-" + secrets.token_hex(4)}
 
 
 def run(session: Session, app_row: Any, doc: dict[str, Any], params: dict[str, Any], amount: int) -> dict[str, Any]:
@@ -206,11 +245,24 @@ def run(session: Session, app_row: Any, doc: dict[str, Any], params: dict[str, A
                   "reduced": amt < amount, "approved_at": utcnow().isoformat() + "Z", "tenor_cap": tenor_cap,
                   "expires_at": expires.isoformat() + "Z", "id": "SYN-" + secrets.token_hex(4)}
         break
+    if result["status"] != "approved":
+        solo = _solo(session, doc, params, amount, rounds, lead) or {}
+        result = solo if solo.get("status") == "approved" else {**result, **solo}
     entry = chain.record(session, app_row.id, "syndicate", {k: v for k, v in result.items()})
     result["hash"], result["chain_tx"] = entry.fingerprint, entry.tx
+    if result["status"] == "approved":  # SELLER_SERVICES_PLAN §3.1.b: the seller hears it in her notices
+        from app.agents import notify
+
+        unit = "tệ" if str(doc.get("currency") or "CNY") == "CNY" else str(doc.get("currency"))
+        valid = datetime.fromisoformat(str(result["expires_at"]).rstrip("Z"))
+        notify.push_app_notice(doc, "limit_approved",
+                               f"Ngân hàng đã duyệt hạn mức {vn_number(result['limit'])} {unit}, hiệu lực đến "
+                               f"{valid.strftime('%d/%m')}. Mời {notify.SELLER_ADDRESS} chọn số tiền và ngày trả.",
+                               "info", {"view": "apply"})
     events.log(session, app_row.id, "orchestrator", "syndicate",
                ("Các ngân hàng duyệt song song: " + ", ".join(f"{s['name']} {s['pct'] * 100:.0f}%" for s in result["split"])
                 + (f" (hạn mức giảm còn {vn_number(result['limit'])})" if result.get("reduced") else ""))
+               + (" (không đối tác nào đồng ý: WeBank cho vay một mình)" if result.get("solo") else "")
                if result["status"] == "approved" else "Không ngân hàng đối tác nào đồng ý, kể cả ở hạn mức thấp hơn",
                {"status": result["status"], "rounds": len(rounds)}, entry.fingerprint)
     return result

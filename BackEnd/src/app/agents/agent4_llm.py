@@ -20,8 +20,8 @@ from app.platform.db.tables import utcnow
 
 NOTICE_SYSTEM = (
     "Bạn là Agent 4 (giám sát khoản vay) của BuoyUp. Viết MỘT thông báo ngắn (tối đa 3 câu), tiếng Việt, xưng "
-    "'BuoyUp', gọi người bán là 'chị', gửi người bán về tình hình khoản vay, dựa trên dữ liệu JSON. Nói điều hệ thống "
-    "thấy bằng lời thường, không nêu ngưỡng, điểm số, trọng số hay mã nội bộ. Mức 'yellow': kết thúc bằng lời mời chị "
+    "'BuoyUp', gọi người bán là 'bạn', gửi người bán về tình hình khoản vay, dựa trên dữ liệu JSON. Nói điều hệ thống "
+    "thấy bằng lời thường, không nêu ngưỡng, điểm số, trọng số hay mã nội bộ. Mức 'yellow': kết thúc bằng lời mời bạn "
     "cho biết nguyên nhân (giao diện sẽ hiện các lựa chọn). Mức 'red': nói cán bộ tín dụng sẽ liên hệ. Không hứa "
     "gia hạn, giảm lãi hay xóa nợ. Chỉ dùng con số có trong dữ liệu. Chỉ trả về đoạn văn."
 )
@@ -65,9 +65,9 @@ def _allowed(loan: BuLoan, doc: dict[str, Any]) -> set[float]:
 def _template(level: str, reasons: list[str]) -> str:
     what = "; ".join(reasons) or "khoản vay cần chú ý"
     if level == "red":
-        return (f"BuoyUp thấy khoản vay của chị cần chú ý: {what}. Cán bộ tín dụng sẽ liên hệ chị sớm để cùng "
+        return (f"BuoyUp thấy khoản vay của bạn cần chú ý: {what}. Cán bộ tín dụng sẽ liên hệ bạn sớm để cùng "
                 "tìm cách xử lý.")
-    return f"BuoyUp nhận thấy {what}. Chị cho BuoyUp biết nguyên nhân để cùng tìm cách trả nợ thuận lợi nhé."
+    return f"BuoyUp nhận thấy {what}. Bạn cho BuoyUp biết nguyên nhân để cùng tìm cách trả nợ thuận lợi nhé."
 
 
 def write_notice(loan: BuLoan, doc: dict[str, Any], level: str, signals: list[dict[str, Any]],

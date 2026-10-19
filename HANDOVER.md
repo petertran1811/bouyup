@@ -394,6 +394,7 @@ cd /opt/buoyup/data && FRONTEND_DIR=/opt/buoyup/Frontend \
 | Backend (pytest) | `cd BackEnd/src && ../.venv/bin/python -m pytest -q` | **177 passed** |
 | Hợp đồng API, 9 kịch bản demo | `BackEnd/.venv/bin/python -B Frontend/tests/v4-api-check.py` | PASS (ghi `/tmp/v4-qa-api-evidence.json`) |
 | Giao diện v4 (Node) | `cd Frontend/tests && node v4-ui-check.mjs` | **32 nhóm passed** (cần bằng chứng ở dòng trên) |
+| Nhật ký demo dịch vụ sau khi vay (8 bước, SELLER_SERVICES_PLAN mục 8) | `./run-local.sh demo-evidence` (hoặc `cd BackEnd/src && ../.venv/bin/python scripts/demo_seller_services.py`) | PASS, ghi `TestBench/evidence/seller_services-<ngày-giờ>.json` và `.md`; kiểm tra cuối: 0 BuRepayment do `agent5`, 0 vi phạm `capabilities` |
 | Giao diện đăng nhập/ngân hàng | `BackEnd/.venv/bin/python -B Frontend/tests/c1-api-check.py && cd Frontend/tests && C1_API_EVIDENCE=/tmp/c1-api-evidence.json node c1-check.mjs` | **14 nhóm passed** |
 
 Hoặc chạy gộp: `./run-local.sh test`.
@@ -447,7 +448,7 @@ Test luôn chạy với cơ sở dữ liệu tạm, tắt LLM, ép chuỗi `loca
 Chưa nối. Điểm liên ngân hàng lấy từ dữ liệu mẫu, và giao diện ghi rõ "Dữ liệu mẫu".
 
 ### 15.4 Nguồn dữ liệu người bán
-Sáu nguồn (trang cửa hàng, đăng ký kinh doanh, dòng tiền, thuế 银税互动, tín dụng, FATE) hiện là **dữ liệu mẫu** (`app/data_sources/`). Hồ sơ chị Lan sinh tất định bằng `scripts/gen_lan_profile.py` và nằm trong `profiles/lan.json`. Nối nguồn thật thì thay các hàm trong `app/data_sources/sources.py`; agent và giải thuật không phải đổi.
+Sáu nguồn (trang cửa hàng, đăng ký kinh doanh, dòng tiền, thuế 银税互动, tín dụng, FATE) hiện là **dữ liệu mẫu** (`app/data_sources/`). Quyền sở hữu cửa hàng được chứng minh qua kết nối cửa hàng (mục 16.7). Hồ sơ chị Lan sinh tất định bằng `scripts/gen_lan_profile.py` và nằm trong `profiles/lan.json`. Nối nguồn thật thì thay các hàm trong `app/data_sources/sources.py`; agent và giải thuật không phải đổi.
 
 ---
 
@@ -505,6 +506,145 @@ Thiết kế và quyết định: `docs/SellerGraph_core_tech_v5.html`. Tham s�
 | 6 Doanh thu khoản đầu | `algorithm.seed_ratio` (trần `seed_cap`), `agent1_verify.borrower_history` (dòng tiền TK WeBank), cờ `RISK_INFLOW_GAP`, `RISK_PASS_THROUGH` | `seed.ratio` 0,5 / 0,75 / 1,0 · `min_webank_months` 3 · `min_inflow_share` 0,8 |
 
 Lưu ý vận hành: mô hình thách thức hiện huấn luyện trên dữ liệu **tổng hợp** (`simulated: true`); huấn luyện lại bằng `python scripts/train_challenger.py` khi có nhãn trả nợ thật. Dịch vụ FATE cần trả thêm `coverage` (`{"banks", "months"}`); dịch vụ cũ không trả thì hành vi như trước. Ở môi trường `production`, nếu bật LLM thì `LLM_AGENT3_MODEL_NAME` phải khác `LLM_MODEL_NAME`, nếu không server từ chối khởi động.
+
+### 16.2 Thay đổi ngày 17/10/2026
+
+- **CCCD:** `BackEnd/src/CCCD` (từ `Backend_CCCD` của nhóm): OCR căn cước Trung Quốc, chạy RapidOCR (mô hình PaddleOCR
+  tiếng Trung trên onnxruntime, vì PaddlePaddle không có bản cho Python 3.12). Route `POST /v4/applications/{id}/cccd`;
+  `/identity` cần mặt trước đã quét. Agent 1 kiểm checksum GB 11643, đủ 18 tuổi, còn hạn, tên khớp chủ cửa hàng (tên chữ
+  Hán). Ảnh CCCD mẫu: `Frontend/giaodien/mau-cccd/` (thẻ giả lập, số hợp lệ) và `CCCD/data/ocr_demo/`.
+- **Sản phẩm:** thêm tư cách vay **cá nhân** (trần 50.000); bỏ kỳ hạn 36 tháng; người vay không chọn kỳ hạn (hệ thống
+  lấy kỳ hạn dài nhất) và chỉ trả góp; toàn bộ tiền vay về tài khoản WeBank. Tham số: `product.borrower_picks_tenor`,
+  `product.methods`, `repay.pay_supplier_direct`, `product.type_cap.individual`.
+- **Kế hoạch:** bỏ ô nhãn hiệu và nhà cung cấp; “hàng khác” cho nhập mô tả; hàng cấm / cần giấy phép / hàng nhái được
+  nhận ra từ tên hàng và mô tả (`sources.effective_group`, `sources.ip_signals`); bắt buộc tích “Tôi cam đoan” (ghi lên
+  chuỗi `declaration`); tải ảnh chụp doanh thu (`/statement-images`, lưu ở `data/uploads`), OCR đối chiếu số đã nhập.
+- **Ngân hàng của tôi:** `GET /v4/me/bank` và mục trong thanh bên trang người bán.
+- **Wizard:** đánh số bước không còn nhảy (mỗi màn chờ / kết quả thuộc đúng bước), bước kế hoạch có số phụ 1/4–4/4,
+  “Chờ chút nhé” thay cho “Cán bộ sẽ xem hồ sơ”, tiêu đề “Cho phép BuoyUp kiểm tra hồ sơ” thay cho “Ba ô đồng ý”.
+- **TestBench 50 hồ sơ:** `TestBench/cases/06_dossiers_bypass`, báo cáo `TestBench/results/TestBench_50_ho_so.xlsx`.
+
+### 16.3 Thay đổi 17/10/2026 · sau khi vay
+
+Theo `SELLER_SERVICES_PLAN.md` (pha A–D). Mọi phần mới chỉ đọc và báo tin: không hàm nào gọi `_collect`, `_pay_banks`,
+`prepay`; Agent 4b chạy với vai `agent4b`, báo cáo chạy với vai mới `agent5` (`platform/capabilities.py`: cả hai không được
+`debit`, không được `payout`).
+
+- **Trung tâm thông báo:** `GET /v4/me/notices`, `POST /v4/me/notices/read`, trang "Thông báo" (badge chưa đọc). Gộp
+  thông báo khoản vay (`loan.doc.notices`), thông báo hồ sơ (`application.doc.seller_notices`: kết quả xét, ngân hàng duyệt
+  hạn mức, cần bổ sung chứng từ, lời giải thích của Agent 3) và báo cáo (`bu_seller_reports`). Tiêu đề theo `notify.NOTICE_TITLES`;
+  câu mới xưng "bạn".
+- **Xác nhận trả tiền:** `POST /v4/loans/{id}/minimum` và `/prepay` cần `{"confirm": true, "method": "otp|face",
+  "face_verify_id"?}` (thiếu → 400 `CONFIRM_REQUIRED`); giao diện mở hộp xác nhận (số tiền, lãi/gốc, ô tích, OTP mô phỏng
+  hoặc khuôn mặt); sự kiện `payment_confirmed`.
+- **3 cảnh báo (Agent 4b):** `shortfall_forecast` (7 và 3 ngày trước kỳ, dự báo số dư thiếu), `dsr_high` (đầu tháng: tiền trả
+  nợ tháng trước > 20 % doanh thu ước tính), `spend_below_due` (ngay sau một khoản chi lớn làm số dư thấp hơn kỳ tới). Mỗi
+  loại một lần (`loan.doc.sent_alerts`). Thêm ảnh cửa hàng hằng tháng `loan.doc.store_snapshots`.
+- **Webhook tiền ra:** `POST /v4/webank/outflows` (chữ ký HMAC `X-WeBank-Signature` như `/inflows`, `transfer_id` chống
+  trùng): trừ số dư mô phỏng, phân nhóm chi phí (`core/cashflow.py`: hàng hóa, phí sàn, tiếp thị, vận chuyển, nhân sự, thuế;
+  không rõ → "Chưa phân loại"). Demo: `PLATFORM_PAYOUT_FEED=true` cũng nạp vài khoản chi mẫu.
+- **Báo cáo cho người bán (Agent 5, `app/agents/agent5_seller_reports.py`):** báo cáo tháng (ngày 1 tháng sau), quý,
+  năm (1/1), tất toán (ngay khi khoản vay đóng) và nhắc đăng ký kinh doanh cho người bán **cá nhân** khi doanh thu từ đầu năm
+  ≥ 80 % của 100.000 tệ (quy tắc `LAW-REG-01` trong `core/legal.py`, trích NETTRADE-2021 Điều 8 và ECOM-2018 Điều 10, kiểm
+  nguyên văn). Mỗi báo cáo có độ phủ ("báo cáo tính được 45 % doanh thu"), chi theo 6 nhóm, dòng tiền, khoản vay, tóm tắt 3 câu
+  (mẫu; có LLM thì viết lại qua bộ lọc số), hash và `chain_tx` trên chuỗi. API: `GET /v4/me/reports`, `GET /v4/me/reports/{id}`,
+  cán bộ `GET /v4/officer/sellers/{user_id}/reports`. Trang "Báo cáo" (thanh bên, ô trang chủ, nút trong thông báo; nút "In"
+  dùng in của trình duyệt, chưa có PDF). Thẻ "Tiền hàng về tháng này" có thêm "≈ X % doanh thu của bạn".
+- **Biến mới:** `BUOYUP_REPORTS_INTERVAL_SECONDS` (mặc định 3600): chu kỳ autopilot tìm báo cáo đến hạn; `GET
+  /v4/autopilot/status` có khối `reports`. Tham số mới: `legal.individual_registration_threshold` 100.000,
+  `legal.individual_registration_warn_share` 0,8. Bảng `bu_seller_reports` tự tạo khi khởi động (không migration).
+- **Kiểm thử:** `tests/test_seller_services.py`, `tests/test_seller_alerts.py`, `tests/test_seller_reports.py`; giao diện:
+  nhóm "notices" và "reports" trong `Frontend/tests/v4-ui-check.mjs`.
+
+### 16.4 Gian hàng mẫu ra đúng "expect" (18/10/2026)
+
+Ở môi trường demo (`APP_ENV` dev/demo), mỗi "Gian hàng mẫu" (`sources.SCENARIOS`, `GET /v4/public/demo-stores`) phải ra
+đúng `expect` với tư cách vay đúng của cửa hàng, với mọi tài khoản và mỗi lần chạy lại.
+
+- **Tư cách vay:** `demo-stores` trả thêm `borrower_type` (personal → Cá nhân, company → Doanh nghiệp, còn lại → Hộ
+  kinh doanh) và `check` (dạng máy đọc của `expect`). Chọn sai tư cách → `POL_BORROWER_TYPE` với lý do nói rõ cửa hàng
+  đăng ký gì và chọn tư cách nào; hộ kinh doanh chọn Cá nhân vẫn được (trần cá nhân) nhưng có `borrower_type_hint`.
+- **POL-07 không đổi.** Thêm `POST /v4/demo/reset-my-loans` (chỉ demo, chỉ seller; `GET` để xem trước): tất toán các
+  khoản vay mở từ gian hàng mẫu bằng trả trước như nút "Trả hết" (thiếu số dư thì nạp mô phỏng, ghi riêng
+  `account.demo_topups`, không tính là tiền hàng), rút hồ sơ mẫu đang chờ ký; ghi sự kiện và chuỗi `demo_reset`, không
+  xóa gì; khoản vay từ cửa hàng thật không bị động tới. Giao diện cần nút **"Làm mới khoản vay mẫu"** (chưa làm).
+- **Sample guard** (`DEMO_SAMPLE_GUARD`, mặc định bật; chỉ hồ sơ từ gian hàng mẫu ở dev/demo/test,
+  `sources.sample_guard`): kết luận theo đường code, mô hình chỉ thêm cảnh báo. Cụ thể: Agent 3 pha 1 lỗi mô hình →
+  cảnh báo `AGENT3` (không chuyển cán bộ); mối lo mô hình nêu → mức `warn`; LAW-IP-02 xét như đường code; RISK-06 quét
+  phần ghi chú do code viết (câu mô hình viết thêm chỉ cảnh báo); Agent 2 trả lời Agent 3 ở pha 2 bằng code. Kịch bản
+  `notes` vẫn bị bắt bằng code. Hồ sơ cửa hàng thật không đổi hành vi.
+- **Expect sửa cho đúng sự thật** (danh mục ngân hàng trên chuỗi 2026.10-1): `lan` 100.000, WeBank + CCB, BOC tham gia
+  nếu trả lời trong 30 giây (thời gian trả lời 26 s × hệ số 0,6–1,4 theo mã hồ sơ); `noevid` 70.000 (70 % của khoản vay
+  mồi); `electronics` WeBank 30 / BOC 70 hoặc WeBank một mình 50.000; `thin`, `personal` WeBank một mình 25.000. `shoes`:
+  tín hiệu hàng nhái nằm trong tên hàng ("Giày thể thao Nike hàng nhái") vì form kế hoạch không gửi nhãn hiệu nữa.
+  Khoản vay mồi tăng 75 %/100 % theo lịch sử thật của tài khoản (`seed_note`), `check` tính theo `B8.seed.ratio`.
+- **Kiểm:** `cd BackEnd/src && ../.venv/bin/python scripts/check_demo_samples.py --base URL --account email:mật_khẩu
+  [--account …] --rounds 2` chạy mọi gian hàng mẫu (quét CCCD mẫu, kế hoạch gợi ý, vay, vòng 1 tất toán, vòng 2 dùng
+  "Làm mới"), in bảng và trả mã ≠ 0 khi có FAIL. Test offline: `tests/test_demo_samples.py`.
+
+### 16.5 Gian hàng mẫu Tmall (18/10/2026)
+
+- **Hư cấu hoàn toàn:** cửa hàng "Nhã Cầm Gia Dụng" (chủ 周雅琴, Zhōu Yǎqín, đọc Chu Nhã Cầm), số đăng ký, nhà cung cấp và mọi
+  số liệu đều dựng; chỉ định dạng link là của Tmall:
+  `https://zhouyaqinjujia.tmall.com/shop/view_shop.htm?shop_id=990072615`. Đứng đầu danh sách gian hàng mẫu (`tmall`).
+- **Hồ sơ riêng** (không phải biến thể của Lan): `profiles/tmall.json`, sinh tất định bằng
+  `cd BackEnd/src && ../.venv/bin/python scripts/gen_tmall_profile.py` (tự kiểm trước khi ghi). Hộ kinh doanh ở Hàng Châu
+  (CN-ZJ), đồ gia dụng nhà bếp, điểm 4,8, 43 tháng có doanh số (từ 03/2023, 3 mùa 11.11), bình quân 12 tháng ≈ 170.300,
+  lãi gộp 39 %, giá nhập nồi chống dính 68 = giá trong kế hoạch 11.11, tín dụng sạch (vay BOCOM, thẻ CMB), FATE 2 trên
+  3 ngân hàng / 30 tháng → hạng A, lãi 8 %. Sao kê chi có ghi chú đủ 6 nhóm (货款, 直通车/巨量千川, 快递/仓储, lương, 增值税).
+- **Kết quả:** duyệt tự động, khoản vay mồi 100.000 (50 % của 200.000); CMB, ICBC, CCB đều đồng ý, hai ngân hàng trả lời
+  sớm nhất vào 40/30/30 (thường CMB + ICBC, kỳ hạn 6 tháng; có CCB thì 3 tháng vì CCB tối đa 120 ngày).
+- **Link:** `resolve_store` nhận host `zhouyaqinjujia.tmall.com` hoặc `shop_id=990072615` trên tmall.com.
+- **CCCD:** dùng chung ảnh mẫu `mau-cccd` (tên 示例用户). Tên chủ trong đăng ký ghi theo âm Hán-Việt như hồ sơ Lan, tên chữ
+  Hán để riêng ở `owner_hanzi`, nên phép so tên cho kết quả "không so được" thay vì "lệch" (không mở `RISK_ID_REVIEW`).
+- **Kiểm:** `tests/test_demo_samples.py` (`-k tmall`): link, hồ sơ, hai nhánh chia vốn, luồng ký → giải ngân → tiền về,
+  chi tiêu → ngày 1 tháng sau có báo cáo tháng đủ 6 nhóm và thống kê.
+
+### 16.6 Mã OTP qua SMS thay khuôn mặt (18/10/2026)
+
+- **Khi nào:** ở mọi chỗ dùng khuôn mặt (đăng ký, bước Danh tính, ký ủy quyền, ký hợp đồng, xác nhận trả tiền), nếu không
+  quét được (không có camera, từ chối quyền camera, trang không phải HTTPS/localhost, máy chủ chưa có mô hình, không nhận ra /
+  không qua kiểm tra người thật / quá giờ, hoặc người dùng bấm "Dùng mã OTP thay thế") thì hộp "Xác thực bằng mã OTP" mở ra
+  (`Frontend/src/xac-thuc-khuon-mat/otp-sms.js` + `.css`). "Khuôn mặt" chỉ hiện khi tài khoản đã đăng ký khuôn mặt.
+- **Đăng nhập không có OTP:** khuôn mặt không được thì quay về form email + mật khẩu (nút "Đăng nhập bằng mật khẩu").
+  Không làm đăng nhập chỉ bằng OTP vì chưa có SMS thật — mã kiểm ở trình duyệt sẽ thành lối vào không cần mật khẩu.
+- **Chưa có SMS thật:** mã 6 số sinh và kiểm ở trình duyệt, hiện trong hộp như tin nhắn đến; máy chủ chỉ nhận cờ
+  `otp_verified` và ghi phương thức (`register_otp`, `identity.method = "otp"`, `sign_method`, `signer_verified`).
+  Cờ này **không** chứng minh gì về số điện thoại — ai gọi API trực tiếp cũng gửi được. Chấp nhận được cho thí điểm,
+  không cho vận hành thật.
+- **TODO khi có nhà cung cấp SMS:** chuyển sinh/kiểm mã về máy chủ (`POST /v4/otp/send`, `POST /v4/otp/verify` → `otp_proof`
+  dùng một lần), các endpoint nhận `otp_proof` và từ chối cờ trần. Chi tiết: `API_CONTRACT_V4.md` §1b, chỗ sửa đánh dấu `TODO(SMS)`.
+- **Kiểm:** `BackEnd/src/tests/test_otp.py`; giao diện: `Frontend/tests/v4-ui-check.mjs`, `c1-check.mjs` (nhóm OTP).
+
+### 16.7 Kết nối cửa hàng: chứng minh chủ cửa hàng (18/10/2026)
+
+- **Vì sao:** trước đây link chỉ được khớp tên miền, link lạ nhận bản sao hồ sơ chị Lan, `entity_match` gán sẵn trong
+  dữ liệu. Nay hồ sơ vay chỉ tạo từ **cửa hàng đã kết nối** (`bu_shop_connections`), tức người bán đã chứng minh sở hữu.
+- **Kiến trúc** (`app/data_sources/shop_connect.py`, `app/api/shops.py`, API_CONTRACT §2b):
+  - `ShopConnector` (`authorize_url` → `exchange_code` → `fetch_shop` → `ShopProfile`). Connector thật: Taobao/Tmall
+    (淘宝开放平台, dùng chung `TAOBAO_*`), JD, Pinduoduo, Douyin (抖店), Kuaishou. Chỉ bật khi có `<SÀN>_APP_KEY` +
+    `<SÀN>_APP_SECRET`; chưa có khóa thì nút ẩn và API trả 503 "Sàn này chưa được kết nối với BuoyUp". Token không lưu.
+  - `DemoShopConnector` (chỉ dev/demo/test): 14 gian hàng mẫu; chứng minh bằng mã 6 số gửi tới **số điện thoại đăng ký
+    của cửa hàng** (dữ liệu mẫu `data["shop"]` trong `sources.py`). Mã sinh/kiểm ở máy chủ (sha256, 5 phút, sai 5 lần
+    khóa); chưa có SMS nên dev/demo trả `dev_code` để giao diện hiện như tin nhắn, trừ "other" (số •••• 451 của Trần Vũ).
+  - `SHOP_CONNECT_REQUIRED` (mặc định true; `conftest` đặt false cho test cũ), `SHOP_CONNECTION_TTL_DAYS` 30,
+    `SHOP_OAUTH_REDIRECT_BASE` (URL callback công khai).
+- **Agent 1:** bước 1 ghi `connect_shop`; `verification.evidence` = mức kiểm chứng từng nguồn (`platform_oauth`,
+  `registered_phone_otp`, `registry_lookup`, `self_declared`, `sample_data`), cũng nằm trong biên bản trên chuỗi và tab
+  Agent 1 trang Quản trị ("Mức kiểm chứng"). Bước 3 tính `entity_match` = đã chứng minh sở hữu **và** CCCD không trái với
+  chủ cửa hàng (tên chữ Hán; 4 số cuối, chỉ từ CCCD có số kiểm hợp lệ; không so được → `not_comparable`). Không khớp →
+  `LAW_ID_MISMATCH`. Chủ gian hàng mẫu có 4 số cuối CCCD `1235` = ảnh CCCD mẫu (示例用户); Trần Vũ `6620`.
+  Cửa hàng kết nối qua OAuth (không phải mẫu) chưa có nguồn thuế/tín dụng → `/verify` chuyển cán bộ `DATA_SOURCE_GAP`.
+- **"other" đổi expect:** dừng ở bước kết nối (không có hồ sơ), cả khi nhập số đăng ký. `LAW_ID_MISMATCH` vẫn còn cho
+  CCCD không phải của chủ cửa hàng, và cho "other" khi `SHOP_CONNECT_REQUIRED=false` mà quét CCCD mẫu.
+- **Giao diện:** bước 2 "Kết nối cửa hàng": nút "Kết nối qua <sàn>" (chỉ sàn có khóa), ô dán link, "Dùng gian hàng mẫu"
+  → "Xác nhận bạn là chủ cửa hàng" (xem trước, chủ thể che bớt, "Gửi mã tới số đăng ký của cửa hàng •••• 812", nhập mã)
+  → "Đây có phải cửa hàng của bạn?" có nhãn "Đã xác minh quyền sở hữu…". Link lạ → `SHOP_NOT_CONNECTED` kèm nút gian hàng mẫu.
+- **Khi có khóa API sàn:** điền khóa vào `.env`, đặt `SHOP_OAUTH_REDIRECT_BASE` trùng callback đã đăng ký với sàn
+  (`<base>/v4/shops/connect/oauth/<sàn>/callback`), rồi làm các `TODO(<sàn>)` trong `shop_connect.py` (Douyin/Kuaishou:
+  link cấp quyền và API cửa hàng; mọi sàn: API chủ thể/giấy phép/tài khoản quyết toán). Khi có SMS: gửi mã thật, bỏ `dev_code`.
+- **Kiểm:** `tests/test_shop_connect.py`; `scripts/check_demo_samples.py` đi qua bước kết nối; giao diện: nhóm "store
+  connection" trong `Frontend/tests/v4-ui-check.mjs`.
 
 ## 17. Bảo mật và giới hạn hiện tại
 

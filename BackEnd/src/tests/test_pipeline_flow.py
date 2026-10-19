@@ -170,11 +170,14 @@ def test_access_control(bu_client, as_seller, as_webank, as_officer):
 def test_link_errors_and_custom_store(bu_client, as_seller):
     r = bu_client.post("/v4/applications", headers=as_seller, json={"tier": 2, "store_urls": ["https://example.com/x"]})
     assert r.status_code == 400 and r.json()["error"]["details"]["fallback"] == "reg_no"
+    # 18/10/2026 (HANDOVER 16.7): an unknown store on a supported platform is no longer chị Lan's copy.
     r = bu_client.post("/v4/applications", headers=as_seller,
                        json={"tier": 2, "store_urls": ["https://shop.taobao.com/shop/view_shop.htm?user=9"]})
-    assert r.status_code == 201 and r.json()["stores"][0]["entity"] == "Hộ kinh doanh Lâm Lan"
+    assert r.status_code == 400 and r.json()["error"]["code"] == "SHOP_NOT_CONNECTED"
     r = bu_client.post("/v4/applications", headers=as_seller, json={"tier": 2, "reg_no": "92440106MA9KLAN58P"})
     assert r.status_code == 201 and r.json()["stores"][0]["via"] == "reg_no"
+    r = bu_client.post("/v4/applications", headers=as_seller, json={"tier": 2, "reg_no": "91110000UNKNOWN01X"})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "SHOP_NOT_CONNECTED"
 
 
 def test_request_human_and_officer_approve(bu_client, as_seller, as_officer):
@@ -222,7 +225,7 @@ def test_public_endpoints(bu_client):
     assert ov["stats"]["banks"] == 11 and len(ov["agents"]) == 5
     assert all(b["code"] != "MASTER" for b in ov["banks"])
     stores = bu_client.get("/v4/public/demo-stores").json()["stores"]
-    assert len(stores) == len(sources.SCENARIOS) == 12 and stores[0]["url"] == sources.demo_url("lan")
+    assert len(stores) == len(sources.SCENARIOS) == 14 and stores[0]["url"] == sources.demo_url("tmall")
     assert "pass" not in {s["scenario"] for s in stores}
 
 

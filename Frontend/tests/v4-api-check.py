@@ -8,7 +8,7 @@ The 20-second contract reading clock is rewound in the temporary DB (as BackEnd/
 import os,sys,json,asyncio,uuid
 from datetime import date,datetime,timedelta
 from pathlib import Path
-os.environ.update(DATABASE_URL=f'sqlite:////tmp/v4-qa-{uuid.uuid4().hex}.db',APP_ENV='dev',CREDIT_LEDGER_KEY='devkey',LLM_ENABLED='false',BUOYUP_AUTOPILOT='false',PYTHONDONTWRITEBYTECODE='1',BUOYUP_CHAIN_BACKEND='local',BUOYUP_CHAIN_URL='',BUOYUP_AGENT5_MIN_SAMPLE='20')
+os.environ.update(DATABASE_URL=f'sqlite:////tmp/v4-qa-{uuid.uuid4().hex}.db',APP_ENV='dev',CREDIT_LEDGER_KEY='devkey',LLM_ENABLED='false',BUOYUP_AUTOPILOT='false',PYTHONDONTWRITEBYTECODE='1',BUOYUP_CHAIN_BACKEND='local',BUOYUP_CHAIN_URL='',BUOYUP_AGENT5_MIN_SAMPLE='20',CCCD_OCR_REQUIRED='false',PLAN_DECLARATION_REQUIRED='false')
 sys.dont_write_bytecode=True
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'BackEnd'/'src'))
 import httpx,anyio.to_thread
@@ -18,7 +18,7 @@ from app.main import app
 from app.platform.db.session import session_scope
 from app.platform.tables import BuApplication,save_json
 BOXES=['credit_inquiry','share_partners','data_processing']
-EXPECTED={'lan':'offered','noevid':'offered','notes':'escalated','ecig':'rejected','tea':'escalated','shoes':'escalated','company':'escalated','young':'out_of_scope','other':'rejected','electronics':'offered','thin':'offered','nobank':'rejected'}
+EXPECTED={'tmall':'offered','lan':'offered','noevid':'offered','notes':'escalated','ecig':'rejected','tea':'escalated','shoes':'escalated','company':'escalated','young':'out_of_scope','other':'not_connected','electronics':'offered','thin':'offered','personal':'offered','nobank':'rejected'}
 def rewind_contract(app_id,seconds=30):
  """The disclosure's reading clock, moved back instead of sleeping 20 s."""
  with session_scope() as s:
@@ -38,8 +38,20 @@ async def main():
    seller=(await req('POST','/auth/login',{'email':'lan@buoyup.vn','password':'BuoyUp@2026'}))['token']
    admin=(await req('POST','/auth/login',{'email':'admin@buoyup.vn','password':'BuoyUp@2026'}))['token']
    stores=(await req('GET','/public/demo-stores'))['stores'];assert sorted(s['scenario'] for s in stores)==sorted(EXPECTED),[s['scenario'] for s in stores]
+   # HANDOVER 16.7: an application is made from a connected store. Sample stores: lookup → code to the store's
+   # registered phone (dev_code in dev) → verify → create with shop_connection_id. "other" never gets the code.
+   connect_records={}
+   async def connect(url):
+    look=await req('POST','/shops/connect/lookup',{'url':url},seller)
+    s=await req('POST','/shops/connect/start',{'url':url},seller)
+    assert s['phone_masked']==look['phone_masked'] and s['shop']==look['shop'],(s,look)
+    if 'dev_code' not in s:return None,{'lookup':look,'start':s}
+    v=await req('POST','/shops/connect/'+s['connect_id']+'/verify',{'code':s['dev_code']},seller)
+    return v['connection'],{'lookup':look,'start':s,'verify':v}
    async def start(url,borrower_type='individual_business',statements=None,trail=None):
-    a=await req('POST','/applications',{'tier':2,'borrower_type':borrower_type,'store_urls':[url]},seller);p='/applications/'+a['id']
+    conn,rec=await connect(url);connect_records.setdefault(url,rec)
+    if conn is None:return {'status':'not_connected','connect':rec,'id':None}
+    a=await req('POST','/applications',{'tier':2,'borrower_type':borrower_type,'shop_connection_id':conn['id']},seller);p='/applications/'+a['id']
     if trail is not None:trail.append(a['status'])
     assert a['borrower_type']==borrower_type if 'borrower_type' in a else True
     if a['status']=='rejected':return a
@@ -65,8 +77,16 @@ async def main():
    lan_loan=None
    for store in stores:
     name=store['scenario'];r={'statuses':[]}
-    a=await start(store['url'],'company' if name=='company' else 'individual_business',trail=r['statuses']);p='/applications/'+a['id'];r['id']=a['id']
+    a=await start(store['url'],{'company':'company','personal':'individual'}.get(name,'individual_business'),trail=r['statuses'])
     assert a['status']==EXPECTED[name],(name,a['status'],a.get('decision'))
+    if a['status']=='not_connected':
+     # Someone else's store: the code goes to •••• 451, so nothing can be created, by link or registration number.
+     assert a['connect']['start']['phone_masked']=='•••• 451' and 'dev_code' not in a['connect']['start'],a['connect']
+     for body in ({'store_urls':[store['url']]},{'reg_no':'92440106MA9TRANV2Q'}):
+      e=await raw('POST','/applications',body,seller);assert e.status_code==400 and e.json()['error']['code']=='SHOP_NOT_CONNECTED',e.text
+     r['connect']=a['connect'];r['refused']=e.json();records[name]=r;print(name,'not_connected',flush=True);continue
+    p='/applications/'+a['id'];r['id']=a['id']
+    if a['next_action']['key']=='identity' or a['status']!='draft':assert (a.get('shop_connection') or {}).get('verified_via')=='otp_registered_phone',a.get('shop_connection')
     if a['status']=='offered':
      o=a['offer'];assert o['limit']>0 and o['expires_at'] and a['next_action']['key']=='select'
      assert a['syndicate']['status']=='approved' and a['syndicate']['split'],a['syndicate']
@@ -74,7 +94,9 @@ async def main():
      r['offer']=await req('GET',p+'/offer',token=seller)
      r['quote']=await req('POST',p+'/quote',{'amount':o['suggested'] or o['limit'],'tenor_m':o['tenor_max'],'method':'installment','due_day':10},seller)
      assert r['quote']['schedule'] and r['quote']['total_due']>r['quote']['amount']
-     r['quote_revenue']=await req('POST',p+'/quote',{'amount':o['limit'],'tenor_m':o['tenors'][0],'method':'revenue','due_day':28},seller)
+     # Review 17/10/2026: instalments only, and the tenor is the system's (the longest of the type).
+     bad=await raw('POST',p+'/quote',{'amount':o['limit'],'tenor_m':o['tenors'][0],'method':'revenue','due_day':28},seller);assert bad.status_code==400,bad.text
+     r['quote_revenue']=None
     if name=='lan':
      # Seed loan (review 16/10/2026): first loan = 50% of the computed 200.000.
      assert a['offer']['limit']==100000 and a['offer']['suggested']==100000 and a['offer']['blocks']['B8']['computed']==200000,a['offer']
@@ -103,22 +125,32 @@ async def main():
      assert l['clock']==to and l['schedule'][0]['status']!='upcoming' and l['repayments'],(l['clock'],l['schedule'][0],l.get('repayments'))
      assert l['principal_outstanding']<100000,l['principal_outstanding']
      r['loan']=l;r['flow']=await req('GET',p+'/flow',token=admin);r['staff_loan']=await req('GET',lid,token=admin)
+     # SELLER_SERVICES_PLAN §6.5: crossing the 1st of a month made Agent 5's monthly report (simulate-advance runs it).
+     rep=await req('GET','/me/reports',token=seller);assert any(x['kind']=='month' for x in rep['items']),rep
+     r['reports']=rep;r['report_month']=await req('GET','/me/reports/'+next(x['id'] for x in rep['items'] if x['kind']=='month'),token=seller)
+     assert r['report_month']['data']['expenses']['groups'] and r['report_month']['chain_tx'],r['report_month']
+     assert (await req('GET','/autopilot/status',token=admin))['reports']['interval_seconds']>0
      assert r['flow']['b12'] and r['flow']['b12']['rounds'] and r['flow']['b11'] and r['flow']['b11']['schedule'],list(r['flow'])
      back=await raw('POST',lid+'/simulate-advance',{'to':first},seller);assert back.status_code==400
      # Prepay is paid from the business account: refused while it is short, accepted once money arrives.
      # The seller pays the supplier from the business account (≤ 100.000 loans pay no supplier directly).
      await req('POST',lid+'/simulate-transfer',{'amount':max(1,l['account']['balance']-1000),'kind':'supplier'},seller)
-     short=await raw('POST',lid+'/prepay',{},seller);assert short.status_code==400 and short.json()['error']['details']['needed']>short.json()['error']['details']['balance'],short.text
+     short=await raw('POST',lid+'/prepay',{'confirm':True},seller);assert short.status_code==400 and short.json()['error']['details']['needed']>short.json()['error']['details']['balance'],short.text
      need=short.json()['error']['details']['needed']-short.json()['error']['details']['balance']
      await req('POST',lid+'/simulate-inflow',{'amount':need+1000},seller)
-     l=await req('POST',lid+'/prepay',{},seller);r['loan_prepaid']=l
+     l=await req('POST',lid+'/prepay',{'confirm':True},seller);r['loan_prepaid']=l
      assert l['status']=='closed' and l['principal_outstanding']==0 and l['prepay'],(l['status'],l['principal_outstanding'])
+     from app.autopilot import loop as autopilot  # the loop is off here: run the closing report it would run
+     autopilot.run_reports('closing')
+     rep=await req('GET','/me/reports',token=seller);closing=[x for x in rep['items'] if x['kind']=='closing']
+     assert closing,rep;r['report_closing']=await req('GET','/me/reports/'+closing[0]['id'],token=seller)
+     assert r['report_closing']['data']['loan_summary']['status']=='closed',r['report_closing']['data']['loan_summary']
      l=await req('PUT',lid+'/receiving-account',{'bank':'CMB','number':'62220000999'},seller)
      assert l['receiving_account']['bank']=='CMB'
      a=await req('GET',p,token=seller);r['statuses'].append(a['status']);assert a['status']=='closed',a['status']
      lan_loan=a['loan_id']
     if name=='noevid':assert a['offer']['limit']==70000,a['offer']  # step70 of the 100.000 seed loan
-    if name=='electronics':assert {(b['bank'],round(b['pct'],2)) for b in a['syndicate']['split']}=={('WEBANK',.3),('ICBC',.7)},a['syndicate']['split']
+    if name=='electronics':banks={b['bank'] for b in a['syndicate']['split']};assert 'WEBANK' in banks and not {'CMB','CCB'}&banks and len(banks)>=1,a['syndicate']['split']  # CMB/CCB exclude electronics; Bank of China joins when it answers in time
     if name=='nobank':assert (a.get('decision') or {}).get('reason') is not None
     r['staff_application']=await req('GET',p,token=admin)
     if name in ('lan','electronics','nobank'):assert r['staff_application']['syndicate']['rounds'],name
@@ -131,6 +163,14 @@ async def main():
     records[name]=r
     print(name,r['statuses'],flush=True)
    assert lan_loan
+   # A link nobody connected is refused with SHOP_NOT_CONNECTED (no copy of chị Lan's dossier).
+   unknown=await raw('POST','/shops/connect/lookup',{'url':'https://shop.tmall.com/abc'},seller)
+   assert unknown.status_code==400 and unknown.json()['error']['code']=='SHOP_NOT_CONNECTED',unknown.text
+   unsupported=await raw('POST','/shops/connect/lookup',{'url':'https://example.com/shop'},seller)
+   assert unsupported.status_code==400 and unsupported.json()['error']['details']['fallback']=='reg_no',unsupported.text
+   records['connect']={'tmall':connect_records[stores[0]['url']],'other':records['other']['connect'],'unknown':unknown.json(),
+                       'unsupported':unsupported.json(),'platforms':await req('GET','/shops/platforms')}
+   assert not any(x['oauth'] for x in records['connect']['platforms']['platforms'])
    # Optional revenue statements (plan step 4) are accepted with the plan.
    month=lambda i:(date.today().replace(day=1)-timedelta(days=28*i)).strftime('%Y-%m')
    a=await start(stores[0]['url'],statements=[{'month':month(i),'revenue':180000,'cost':0} for i in (1,2,3)])

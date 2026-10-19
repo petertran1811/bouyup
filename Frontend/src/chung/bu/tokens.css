@@ -24,7 +24,7 @@
  --bu-shadow-1: 0 1px 2px rgb(43 29 38 / .05), 0 4px 12px rgb(43 29 38 / .04);
  --bu-shadow-2: 0 2px 4px rgb(43 29 38 / .06), 0 16px 36px -20px rgb(43 29 38 / .22);
  --bu-page-gutter: clamp(16px,2.4vw,32px); --bu-numeric: lining-nums tabular-nums; --bu-tracking-tight: -.025em;
- --bu-font: "Be Vietnam Pro", sans-serif; --bu-font-display: "Be Vietnam Pro", sans-serif; --bu-mono: "JetBrains Mono", monospace;
+ --bu-font: "Be Vietnam Pro", "Noto Sans SC", sans-serif; --bu-font-display: "Be Vietnam Pro", "Noto Sans SC", sans-serif; --bu-mono: "JetBrains Mono", monospace;
  --bu-text-xs: .75rem; --bu-text-sm: .875rem; --bu-text-md: 1rem; --bu-text-lg: 1.25rem; --bu-text-xl: 1.5rem; --bu-text-2xl: 2rem; --bu-display: clamp(2.5rem, 5vw, 4rem);
  --bu-space-1: 4px; --bu-space-2: 8px; --bu-space-3: 12px; --bu-space-4: 16px; --bu-space-5: 20px; --bu-space-6: 24px; --bu-space-8: 32px; --bu-space-10: 40px; --bu-space-12: 48px; --bu-space-16: 64px; --bu-space-24: 96px;
  --bu-radius-sm: 10px; --bu-radius: 18px; --bu-radius-lg: 28px; --bu-radius-pill: 999px;

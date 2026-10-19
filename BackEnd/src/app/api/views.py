@@ -71,7 +71,7 @@ def _next_action(app_row: BuApplication, doc: dict[str, Any]) -> dict[str, str]:
     if s in ("verified", "in_control"):
         return {"key": "wait_banks", "label": "Chờ kiểm soát và các ngân hàng duyệt hạn mức"}
     if s == "offered":
-        return {"key": "select", "label": "Chọn số tiền, kỳ hạn, hình thức và ngày trả"}
+        return {"key": "select", "label": "Chọn số tiền và ngày trả"}
     if s == "selected":
         return {"key": "sign", "label": "Đọc bảng chi phí, hợp đồng và ký"}
     if s == "signed":
@@ -126,6 +126,34 @@ def _seller_control(c: dict[str, Any] | None) -> dict[str, Any] | None:
     return out
 
 
+def _seller_decision(d: dict[str, Any] | None) -> dict[str, Any] | None:
+    """SELLER_SERVICES_PLAN §4: the seller reads Agent 3's explanation (headline, reasons, what to do)
+    without the internal pointers (``ref``); staff see the decision as stored."""
+    if not d or not isinstance(d.get("explanation"), dict):
+        return d
+    from app.agents.agent3_control import template_wording
+
+    d = copy.deepcopy(d)
+    exp = d["explanation"] = template_wording(d["explanation"])
+    exp.pop("template", None)
+    exp["because"] = [{"text": b.get("text")} for b in exp.get("because") or []]
+    exp["improve"] = [{"text": i.get("text"), "action": i.get("action")} for i in exp.get("improve") or []]
+    return d
+
+
+def _seller_offer(offer: dict[str, Any] | None) -> dict[str, Any] | None:
+    from app.agents.agent2_advise import seller_offer
+
+    return seller_offer(offer)
+
+
+def demo_sample(app_row: BuApplication) -> bool:
+    """A case opened from one of the demo "Gian hàng mẫu" links, in a demo environment."""
+    from app.data_sources import sources
+
+    return sources.is_demo_sample(app_row.scenario)
+
+
 def application_view(app_row: BuApplication, seller: BuUser | None, viewer: BuUser,
                      review_days: int = 2) -> dict[str, Any]:
     doc = app_row.doc or {}
@@ -145,15 +173,28 @@ def application_view(app_row: BuApplication, seller: BuUser | None, viewer: BuUs
         "seller": {"id": app_row.seller_user_id, "display_name": seller.display_name if seller else ""},
         "region": doc.get("region"), "currency": doc.get("currency"), "category": doc.get("category"),
         "stores": doc.get("stores", []), "identity": doc.get("identity"), "consent": doc.get("consent"),
-        "plan": doc.get("plan"), "verification": verification, "offer": doc.get("offer"),
-        "proposal": doc.get("proposal"), "control": control, "decision": doc.get("decision"),
+        # HANDOVER 16.7: the store connection the case was made from (how ownership was proven).
+        "shop_connection": doc.get("shop_connection"),
+        "plan": doc.get("plan"), "verification": verification,
+        "offer": doc.get("offer") if full else _seller_offer(doc.get("offer")),
+        "proposal": doc.get("proposal"), "control": control,
+        "decision": doc.get("decision") if full else _seller_decision(doc.get("decision")),
         "payee": doc.get("payee"), "human_request": doc.get("human_request"),
         "data_requests": doc.get("data_requests"),
         "loan_id": app_row.loan_id, "borrower_type": doc.get("borrower_type"),
+        # 18/10/2026: a registered household business borrowing as "Cá nhân" (allowed, lower cap) is told why.
+        "borrower_type_hint": doc.get("borrower_type_hint"),
+        # A case made from a "Gian hàng mẫu" link in the demo (scenario data): the demo reset applies to it.
+        "demo_sample": demo_sample(app_row),
         "statements": doc.get("statements"),
         "syndicate": doc.get("syndicate") if full else _seller_syndicate(doc.get("syndicate")),
         "selection": doc.get("selection"), "contract": doc.get("contract"),
         "next_action": _next_action(app_row, doc), "simulated": True,
+        # Review 17/10/2026: the CCCD fields the OCR read (never the image) and the revenue screenshots.
+        "cccd_scans": {side: {k: s.get(k) for k in ("side", "fields", "warnings", "at")}
+                       for side, s in (doc.get("cccd_scans") or {}).items()} or None,
+        "statement_images": [{k: i.get(k) for k in ("id", "month", "at", "ocr_read", "bytes")}
+                             for i in doc.get("statement_images") or []],
     }
     escalation = doc.get("escalation") or {}
     if app_row.status == "escalated" and escalation.get("at"):
@@ -188,6 +229,8 @@ def summary_view(app_row: BuApplication, seller: BuUser | None) -> dict[str, Any
         "amount_requested": doc.get("requested"), "amount_offered": full["amount"] if full else None,
         "grade": offer.get("grade"), "updated_at": iso(app_row.updated_at),
         "flags_open": sum(1 for f in flags if f["status"] == "open"),
+        "deletable": not app_row.loan_id and app_row.status not in (
+            "verifying", "in_control", "signed", "disbursed", "repaying", "closed", "withdrawn"),
     }
 
 

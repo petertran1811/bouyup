@@ -34,3 +34,9 @@
 .auth-face-button:hover{background:color-mix(in srgb,var(--bu-primary,#9b4d6b) 12%,transparent)}
 .auth-face-note{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.6;color:var(--bu-muted,#6f5d6a);margin:0 0 16px}
 @media(prefers-reduced-motion:reduce){.face-seg.is-next{animation:none}}
+.face-alt{display:block;width:100%;margin-top:12px;min-height:44px;border:1px dashed var(--bu-border-strong,#d4c4d0);border-radius:12px;background:transparent;color:var(--bu-primary,#9b4d6b);font:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.face-alt:hover{background:color-mix(in srgb,var(--bu-primary,#9b4d6b) 6%,transparent)}
+.face-alt.is-suggested{border-style:solid;border-color:var(--bu-primary,#9b4d6b);background:color-mix(in srgb,var(--bu-primary,#9b4d6b) 10%,transparent)}
+.face-alt:focus-visible{outline:2px solid var(--bu-focus,#9b4d6b);outline-offset:2px}
+.face-alt-note{margin:14px 0 0;font-size:13px!important;line-height:1.6!important;color:var(--bu-text,#2b1d26);font-weight:600}
+.face-alt-note+.face-alt{margin-top:8px}

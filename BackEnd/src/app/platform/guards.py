@@ -29,6 +29,9 @@ FORBIDDEN: dict[str, list[str]] = {
         "sẽ được giải ngân ngay", "giải ngân ngay cho chị", "em sẽ giải ngân",
         "giảm lãi cho chị", "hạ lãi cho chị", "giảm lãi suất cho chị", "chị được giảm lãi", "em xin giảm lãi",
         "lãi suất ưu đãi hơn cho chị", "cam kết lãi", "đảm bảo lãi",
+        # The same promises with the seller called "bạn" (notify.SELLER_ADDRESS, 17/10/2026).
+        "bạn sẽ được vay", "giải ngân ngay cho bạn", "giảm lãi cho bạn", "hạ lãi cho bạn", "giảm lãi suất cho bạn",
+        "bạn được giảm lãi", "lãi suất ưu đãi hơn cho bạn",
     ],
     "underwriter": ["tự phê duyệt", "đã phê duyệt", "vượt trần"],
     "challenger": ["sửa tờ trình", "chỉnh sửa tờ trình"],

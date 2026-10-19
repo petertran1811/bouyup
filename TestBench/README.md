@@ -63,3 +63,21 @@ def test_credit_m3_undeclared_account_not_counted(bu_client):
 
 Demo users (password `BuoyUp@2026`): `lan@buoyup.vn` (seller), `officer@buoyup.vn`,
 `admin@buoyup.vn`, `webank@buoyup.vn` / `cmb@buoyup.vn` / `icbc@buoyup.vn` (banks).
+
+
+## 06 · 50 hồ sơ vay (17/10/2026)
+
+`cases/06_dossiers_bypass/`: 50 người bán dựng từ 4 hồ sơ chuẩn của nhóm (`Backend_CCCD/chuan_ho_so`: thời trang, mỹ
+phẩm, tạp hóa, linh kiện; quy đổi 3.600 VND = 1 tệ), mỗi hồ sơ chạy trọn luồng thật qua API với sản phẩm đang chạy
+(bắt buộc quét CCCD bằng OCR và tích ô cam đoan). Độ khó 1–5, ba loại: trung thực, khai gian, lạm dụng luồng.
+
+```bash
+cd TestBench
+../BackEnd/.venv/bin/python -m pytest -q cases/06_dossiers_bypass
+cp results/dossiers.jsonl results/dossiers_round2.jsonl
+../BackEnd/.venv/bin/python make_dossier_sheet.py     # → results/TestBench_50_ho_so.xlsx
+```
+
+`results/dossiers_round1.jsonl` là lần chạy trước khi vá (47/50); ba lỗ hổng tìm thấy (DS-07 bẫy khởi động lạnh,
+DS-29 khai lố doanh thu trong ngưỡng chịu đựng, DS-40 hàng nhái khi form không còn ô nhãn hiệu) đã vá, lần 2: 50/50.
+Ghi chú: 19 ca cũ trong nhóm 01–05 viết cho API trước loan circle và fail y hệt trên bản code trước 17/10.

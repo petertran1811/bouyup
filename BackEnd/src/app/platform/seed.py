@@ -44,7 +44,7 @@ BANKS: list[tuple[str, str, str, str, int, dict[str, Any]]] = [
         "min_grade": "C", "min_amount": 10_000, "max_amount": 3_000_000, "response_ms": 2500,
         "tier1_capital": 80_000_000, "total_loans": 600_000_000, "monthly_budget": 5_000_000, "max_tenor_m": 36}),
     ("BOC", "Bank of China", "CN", "CNY", 6_000_000, {
-        "min_grade": "B", "min_amount": 50_000, "max_amount": 3_000_000, "response_ms": 35_000,
+        "min_grade": "B", "min_amount": 50_000, "max_amount": 3_000_000, "response_ms": 26_000,
         "tier1_capital": 60_000_000, "total_loans": 500_000_000, "monthly_budget": 2_000_000}),
     ("CCB", "China Construction Bank", "CN", "CNY", 6_000_000, {
         "min_grade": "C", "min_amount": 50_000, "max_amount": 5_000_000, "response_ms": 2800,
@@ -88,6 +88,10 @@ def ensure_banks(session: Session) -> None:
         if existing is not None:
             # A database seeded before the loan circle gains the new policy keys (its own values stay).
             missing = {k: v for k, v in overrides.items() if k not in (existing.policy or {})}
+            # 18/10/2026: Bank of China answered in 35 s (always past the 30 s window); now 26 s × a per-case
+            # factor, so it misses the window on some cases only. Only the old seeded value is replaced.
+            if code == "BOC" and int((existing.policy or {}).get("response_ms") or 0) == 35_000:
+                missing["response_ms"] = 26_000
             if missing:
                 save_json(existing, "policy", {**(existing.policy or {}), **missing})
             continue

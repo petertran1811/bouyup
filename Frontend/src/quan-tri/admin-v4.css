@@ -25,3 +25,5 @@
 .v4-law-text{white-space:pre-wrap;word-break:break-word;font-size:.88rem;line-height:1.6}
 @media (max-width:640px){.v4-law-form{grid-template-columns:minmax(0,1fr)}.v4-law-form label,.v4-law-form input,.v4-law-form select,.v4-law-form button{grid-row:auto;grid-column:1}}
 .complaint-answer{display:grid;gap:6px;min-width:220px}.complaint-answer textarea{font:inherit;padding:6px 8px;border:1px solid var(--bu-border-strong);border-radius:8px;background:var(--bu-surface);color:var(--bu-text)}
+/* SELLER_SERVICES_PLAN §4: Agent 3 tab, what the seller was told. */
+.v4-seller-told{border:1px solid var(--bu-border);border-radius:12px;padding:12px 16px;margin:0 0 16px;min-width:0}.v4-seller-told h3{margin:0 0 8px}.v4-seller-told li,.v4-seller-told p{overflow-wrap:anywhere}.v4-seller-told code{font-size:12px;color:var(--bu-muted)}

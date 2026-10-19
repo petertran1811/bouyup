@@ -53,7 +53,9 @@ def test_lan_limit_and_parallel_banks(bu_client, as_seller):
 
 def test_electronics_single_partner_30_70(bu_client, as_seller):
     app = lc.offered(bu_client, as_seller, "electronics")
-    assert [(s["bank"], s["pct"]) for s in app["syndicate"]["split"]] == [("WEBANK", 0.3), ("ICBC", 0.7)]
+    split = [s["bank"] for s in app["syndicate"]["split"]]
+    # CMB and CCB do not lend to electronics; ICBC does, and Bank of China when it answers in time.
+    assert split[0] == "WEBANK" and "ICBC" in split and not {"CMB", "CCB"} & set(split)
 
 
 def test_nobank_retries_then_rejects(bu_client, as_seller, as_officer):
@@ -63,7 +65,9 @@ def test_nobank_retries_then_rejects(bu_client, as_seller, as_officer):
     rounds = full["syndicate"]["rounds"]
     assert len(rounds) == 3 and rounds[1]["amount"] < rounds[0]["amount"] and not any(r["agreed"] for r in rounds)
     boc = next(x for x in rounds[0]["responses"] if x["bank"] == "BOC")
-    assert boc["decision"] == "timeout"  # answers after 30 s count as a decline
+    assert boc["decision"] in ("timeout", "decline")  # grade D: declined, or late (after 30 s counts as a decline)
+    # Grade D is under WeBank's own floor too, so it does not lend alone either.
+    assert "solo" not in full["syndicate"] and full["syndicate"]["solo_blocked"]["reason"]
 
 
 def test_smaller_limit_is_sent_to_banks(bu_client, as_seller):
@@ -163,7 +167,7 @@ def test_instalment_due_dates_minimum_and_prepay(bu_client, as_seller):
     loan = lc.loan_for(c, h, amount=60_000, tenor_m=6, due_day=10)
     assert loan["account"]["balance"] == 60_000 and loan["method"] == "installment"
     first = loan["schedule"][0]
-    loan = lc.ok(c.post(f"/v4/loans/{loan['id']}/minimum", headers=h))
+    loan = lc.ok(c.post(f"/v4/loans/{loan['id']}/minimum", headers=h, json={"confirm": True}))
     q = loan["schedule"][0]
     assert q["choice"] == "minimum"
     loan = lc.advance(c, h, loan, first["due_date"])
@@ -173,13 +177,13 @@ def test_instalment_due_dates_minimum_and_prepay(bu_client, as_seller):
     assert row["interest"] == round(60_000 * 0.10 * days / 365)
     assert loan["principal_outstanding"] == 57_000
     # Second minimum in a row is allowed, a third is not.
-    loan = lc.ok(c.post(f"/v4/loans/{loan['id']}/minimum", headers=h))
+    loan = lc.ok(c.post(f"/v4/loans/{loan['id']}/minimum", headers=h, json={"confirm": True}))
     loan = lc.advance(c, h, loan, loan["schedule"][1]["due_date"])
     assert loan["minimum"]["allowed"] is False and "2 kỳ" in loan["minimum"]["why"]
     pq = loan["prepay_quote"]
     assert pq["fee"] == 0 and pq["interest"] == 0  # interest charged to the due date just processed
     loan = lc.ok(c.post(f"/v4/loans/{loan['id']}/simulate-inflow", headers=h, json={"amount": 60_000}))
-    loan = lc.ok(c.post(f"/v4/loans/{loan['id']}/prepay", headers=h, json={}))
+    loan = lc.ok(c.post(f"/v4/loans/{loan['id']}/prepay", headers=h, json={"confirm": True}))
     assert loan["status"] == "closed" and loan["principal_outstanding"] == 0
     assert loan["bureau"][-1]["kind"] == "closed" and loan["receiving_account"]["locked"] is False
     assert sum(s["repaid"] for s in loan["shares"]) == loan["repaid"]
@@ -210,7 +214,7 @@ def test_overdue_grace_penalty_and_bureau(bu_client, as_seller, as_officer):
     assert loan["owed_now"] == 0 and loan["status"] == "active" and loan["schedule"][0]["status"] == "paid_late"
     # Stage 10: a borrower once 30 days overdue is group 4 next time.
     loan = lc.ok(c.post(f"/v4/loans/{loan['id']}/simulate-inflow", headers=h, json={"amount": 70_000}))
-    lc.ok(c.post(f"/v4/loans/{loan['id']}/prepay", headers=h, json={}))
+    lc.ok(c.post(f"/v4/loans/{loan['id']}/prepay", headers=h, json={"confirm": True}))
     app = lc.answer_all(c, h, lc.start(c, h))
     assert app["status"] == "rejected" and "nhóm khách hàng 4" in app["decision"]["reason"]["law"]
 
@@ -253,7 +257,7 @@ def test_reminders_before_due(bu_client, as_seller):
 def test_good_history_raises_group(bu_client, as_seller):
     c, h = bu_client, as_seller
     loan = lc.loan_for(c, h, amount=60_000, tenor_m=6)
-    lc.ok(c.post(f"/v4/loans/{loan['id']}/prepay", headers=h, json={}))
+    lc.ok(c.post(f"/v4/loans/{loan['id']}/prepay", headers=h, json={"confirm": True}))
     app = lc.offered(c, h)
     assert app["offer"]["group"] == 1
 
@@ -262,3 +266,48 @@ def test_bank_sees_its_syndicate_answers(bu_client, as_seller):
     lc.offered(bu_client, as_seller)
     items = lc.ok(bu_client.get("/v4/bank/syndicate", headers=login(bu_client, "webank@buoyup.vn")))["items"]
     assert items and items[0]["share"]["pct"] == 0.4 and items[0]["result"] == "approved"
+
+
+def _pause_partners():
+    from app.platform.db.session import session_scope
+    from app.platform.tables import BuBank
+
+    with session_scope() as session:
+        for bank in session.query(BuBank).filter(BuBank.region == "CN", BuBank.code != "WEBANK"):
+            bank.active = False
+
+
+def test_webank_lends_alone_when_no_partner_agrees(bu_client, as_seller, as_officer):
+    """18/10/2026: no partner at any step → WeBank alone up to ``syndicate.solo_max`` (50.000), 100 % its share."""
+    _pause_partners()
+    app = lc.offered(bu_client, as_seller, "lan")
+    syn = app["syndicate"]
+    assert app["status"] == "offered" and syn["limit"] == 50_000
+    assert [(s["bank"], s["pct"]) for s in syn["split"]] == [("WEBANK", 1.0)]
+    assert app["offer"]["limit"] == 50_000
+    exp = app["decision"]["explanation"]
+    assert any("WeBank cho vay một mình" in b["text"] for b in exp["because"])
+    # Signing works with a one-bank split: the whole loan is WeBank's share.
+    app = lc.select(bu_client, as_seller, app, amount=40_000)
+    lc.contract(bu_client, as_seller, app)
+    signed = lc.ok(lc.sign(bu_client, as_seller, app))
+    loan = lc.ok(bu_client.get(f"/v4/loans/{signed['loan_id']}", headers=as_seller))
+    assert signed["status"] == "disbursed" and [(s["bank"], s["amount"]) for s in loan["shares"]] == [("WEBANK", 40_000)]
+
+
+def test_no_solo_when_switched_off(bu_client, as_seller, monkeypatch):
+    import copy
+
+    from app.agents import agent3_control
+
+    real = agent3_control.active_params
+
+    def no_solo(session):
+        p = copy.deepcopy(real(session))
+        p["syndicate"]["solo_max"] = 0
+        return p
+
+    _pause_partners()
+    monkeypatch.setattr(agent3_control, "active_params", no_solo)
+    app = lc.answer_all(bu_client, as_seller, lc.start(bu_client, as_seller, "lan"))
+    assert app["status"] == "rejected" and app["decision"]["by"] == "orchestrator"

@@ -1,0 +1,57 @@
+/* Language switcher (VI · EN · 中文) injected by i18n.js next to each theme toggle. */
+.bu-lang { position: relative; display: inline-flex; flex-shrink: 0; }
+.bu-lang-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; cursor: pointer; font: inherit; }
+.bu-lang-btn .bu-lang-icon { flex-shrink: 0; opacity: .85; }
+.bu-lang-code { font-weight: 600; font-size: 12px; letter-spacing: .02em; min-width: 2.2ch; text-align: left; }
+.bu-lang-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 1000; display: grid; gap: 2px; min-width: 176px; padding: 6px; border-radius: 14px;
+  background: var(--bu-surface, #fff); color: var(--bu-text, #2b1d26); border: 1px solid var(--bu-border, #eadfe7);
+  box-shadow: 0 2px 4px rgb(43 29 38 / .08), 0 18px 40px -16px rgb(43 29 38 / .35); font-family: var(--bu-font, "Be Vietnam Pro", "Noto Sans SC", sans-serif); }
+.bu-lang-menu[hidden] { display: none; }
+.bu-lang.is-up .bu-lang-menu { top: auto; bottom: calc(100% + 8px); }
+.bu-lang.is-left .bu-lang-menu { right: auto; left: 0; }
+.bu-lang-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 9px; background: transparent; color: inherit; font: 500 14px/1.3 inherit; font-family: inherit; text-align: left; cursor: pointer; }
+.bu-lang-menu button:hover, .bu-lang-menu button:focus-visible { background: var(--bu-surface-soft, #f3ecf2); outline: none; }
+.bu-lang-menu button[aria-checked="true"] { background: var(--bu-accent, #efc3d3); color: var(--bu-accent-ink, #2b1d26); }
+.bu-lang-opt-code { display: inline-block; min-width: 3ch; font-weight: 700; font-size: 12px; opacity: .8; }
+.bu-lang-btn:focus-visible { outline: 3px solid var(--bu-accent, #ecc6dd); outline-offset: 2px; }
+
+/* Homepage header: dark pill like "Đăng nhập". */
+.bu-lang-slot { display: inline-flex; flex-shrink: 0; }
+.bu-lang-pill { height: clamp(44px, 5.2vw, 48px); padding: 0 14px; border: 0; border-radius: 999px; background: var(--pill-dark, #2a2829); color: var(--sign-in-text, #e8e1e5); box-shadow: var(--nav-shadow, none); transition: background .2s ease, color .2s ease; }
+.bu-lang-pill:hover { background: #323234; color: #fff; }
+/* Homepage footer: matches the light/dark pill. */
+.bu-lang-foot { border: 1px solid var(--m-border, #eadfe7); background: var(--m-surface, #fff); color: var(--m-text, #2b1d26); padding: 9px 13px; border-radius: 999px; }
+.marketing .site-footer .bu-lang { margin-left: -20px; }
+/* Login / register: matches the translucent theme pill. */
+.bu-lang-auth { border: 1px solid #ffffff40; border-radius: 24px; background: #ffffff0c; color: #f5edf2; padding: 9px 14px; font-size: 12px; }
+.auth-top .bu-lang { margin-left: -8px; }
+.auth-top { flex-wrap: nowrap; }
+.auth-top .auth-brand { margin-right: auto; }
+/* Legal pages have no toolbar: a small floating control. */
+.bu-lang-float { position: fixed; top: 12px; right: 12px; z-index: 50; }
+.bu-lang-float .bu-lang-pill { height: 38px; background: var(--bg, #fff); color: var(--fg, #1a1618); border: 1px solid color-mix(in srgb, currentColor 22%, transparent); box-shadow: none; }
+
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bu-lang-menu { background: var(--bu-surface, #161114); color: var(--bu-text, #f5edf2); border-color: var(--bu-border, #3b2c36); } }
+:root[data-theme="dark"] .bu-lang-menu { background: var(--bu-surface, #161114); color: var(--bu-text, #f5edf2); border-color: var(--bu-border, #3b2c36); }
+
+@media (max-width: 720px) {
+  .marketing .header .bu-lang-slot { margin-left: auto; }
+  .marketing .header .bu-lang-slot + .sign-in + .header-register { margin-left: 0; }
+  .bu-lang-pill { padding: 0 11px; }
+  .marketing .site-footer .bu-lang { margin-left: 0; }
+}
+@media (max-width: 420px) {
+  .bu-lang-btn .bu-lang-icon { display: none; }
+  .marketing .header { gap: 8px; }
+}
+/* Chinese and English copy can be longer: let compact controls wrap rather than overflow. */
+html[data-lang="en"] .topbar-caption, html[data-lang="zh"] .topbar-caption { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* Seller wizard (modal): the switcher sits just left of the close button. */
+.wizard-top-actions { display: flex; align-items: center; gap: 6px; }
+.wizard-lang .bu-lang-btn { min-height: 34px; padding: 6px 10px; }
+@media (max-width: 560px) { .wizard-lang .bu-lang-icon { display: none; } .wizard-lang .bu-lang-btn { padding: 6px 8px; } }
+/* Chinese: make sure every page (legal pages included) falls back to Noto Sans SC, loaded on demand by i18n.js. */
+html[data-lang="zh"] body { font-family: "Be Vietnam Pro", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+/* The switcher's own box lifts above neighbouring sections while its menu is open. */
+.bu-lang { position: relative; }
+.bu-lang:has(.bu-lang-menu:not([hidden])) { z-index: 1000; }

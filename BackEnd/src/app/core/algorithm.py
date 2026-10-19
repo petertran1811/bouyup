@@ -297,7 +297,9 @@ def limit_caps(params: dict[str, Any], *, prudent: float, sweep_usable: float, r
     ratio = float((seed or {}).get("ratio", 1.0))
     limit = computed
     if ratio < 1.0:
-        limit = floor_to(computed * ratio, 100)
+        # Never below the product minimum when the computed limit reaches it (testbench DS-07: a small
+        # seller with a thin FATE signal would otherwise never get a first loan to build history with).
+        limit = max(floor_to(computed * ratio, 100), min(computed, int(params["product"]["min_amount"])))
         binding = "seed_cap"
     return {"caps": caps, "binding": binding, "computed": computed, "seed_ratio": ratio, "limit": limit}
 

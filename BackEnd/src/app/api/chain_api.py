@@ -217,7 +217,7 @@ def demo_keys(
     session: Session = Depends(get_session),
 ) -> dict:
     if settings.app_env not in _DEMO_ENVS:
-        raise api_error(404, "NOT_FOUND", "Khóa demo chỉ có ở môi trường dev/demo.")
+        raise api_error(404, "NOT_FOUND", "Không hiển thị khóa ở môi trường hiện tại.")
     rows = session.scalars(select(BuBank).order_by(BuBank.region, BuBank.code))
     held = {k.bank: k for k in session.scalars(select(BuChainKey))}
 
@@ -229,5 +229,5 @@ def demo_keys(
         "items": [{"code": b.code, "name": b.name, "region": b.region, "master": b.code == MASTER_CODE,
                    "public_key": b.public_key, "private_key_hex": b.private_key_demo, **chain_keys(b.code)}
                   for b in rows],
-        "warning": "Khóa demo: khi chạy thật ngân hàng tự giữ khóa riêng, khóa chủ nằm trong HSM/KMS.",
+        "warning": "Lưu ý: khi vận hành chính thức, ngân hàng tự giữ khóa riêng, khóa chủ nằm trong HSM/KMS.",
     }

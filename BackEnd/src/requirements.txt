@@ -17,3 +17,6 @@ fastembed==0.4.2
 
 # Face authentication (BackEnd/src/Reid)
 -r Reid/requirements.txt
+
+# CCCD OCR (BackEnd/src/CCCD, from the team's Backend_CCCD)
+-r CCCD/requirements.txt

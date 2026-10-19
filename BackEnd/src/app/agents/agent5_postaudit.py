@@ -112,7 +112,7 @@ def backtest_prudence(session: Session, params: dict[str, Any]) -> list[dict[str
             "simulated": synthetic > 0, "enough_sample": enough,
             "text": (f"Ngành {segment}: {hit * 100:.0f}% người bán đạt mức thận trọng {factor:.2f} × dự báo "
                      f"(mục tiêu {TARGET_HIT_RATE * 100:.0f}%); phân vị 20% là {p20:.2f} "
-                     f"trên {len(ratios)} mẫu ({real} khoản vay thật, {synthetic} mẫu tổng hợp)."
+                     f"trên {len(ratios)} mẫu ({real} khoản vay thật, {synthetic} mẫu bổ sung)."
                      + ("" if enough else f" Chưa đủ mẫu ({len(ratios)}/{need}): không đề xuất.")),
         })
     return findings
